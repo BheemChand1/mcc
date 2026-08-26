@@ -81,9 +81,9 @@ foreach ($parametersList as $p) {
     $monthlyParamData[$pId] = [
         'name' => $p['parameter_name'],
         'units' => $p['units'] ?? 'Nos',
-        'qty_ml' => floatval($displayTargets[$pId]['qty_ml'] ?? 0),
-        'penalty_rate' => floatval($displayTargets[$pId]['penalty'] ?? 0),
-        'penalty_qty_ml' => floatval($displayTargets[$pId]['penalty_qty_ml'] ?? 0),
+        'qty_ml' => isset($displayTargets[$pId]['qty_ml']) ? floatval($displayTargets[$pId]['qty_ml']) : 0,
+        'penalty_rate' => isset($displayTargets[$pId]['penalty']) ? floatval($displayTargets[$pId]['penalty']) : 0,
+        'penalty_qty_ml' => isset($displayTargets[$pId]['penalty_qty_ml']) ? floatval($displayTargets[$pId]['penalty_qty_ml']) : 0,
         'monthly_target' => 0.0,
         'total_consumed' => 0.0,
         'total_penalty' => 0.0
@@ -148,7 +148,7 @@ foreach ($tokensList as $t) {
 
     foreach ($parametersList as $p) {
         $pId = $p['parameter_id'];
-        $targetPerCoach = floatval($targets[$pId]['qty_ml'] ?? 0);
+        $targetPerCoach = isset($targets[$pId]['qty_ml']) ? floatval($targets[$pId]['qty_ml']) : 0;
         $targetTotal = $targetPerCoach * $coachesCount;
         $consumedTotal = $tokenParamQty[$pId] ?? 0.0;
 
@@ -165,11 +165,11 @@ foreach ($tokensList as $t) {
 
         if ($consumedTotal < $targetTotal) {
             $deficit = $targetTotal - $consumedTotal;
-            $penaltyQty = floatval($targets[$pId]['penalty_qty_ml'] ?? 0);
+            $penaltyQty = isset($targets[$pId]['penalty_qty_ml']) ? floatval($targets[$pId]['penalty_qty_ml']) : 0;
             if ($penaltyQty <= 0) {
-                $penaltyQty = floatval($targets[$pId]['qty_ml'] ?? 0);
+                $penaltyQty = $targetPerCoach;
             }
-            $basePenalty = floatval($targets[$pId]['penalty'] ?? 0);
+            $basePenalty = isset($targets[$pId]['penalty']) ? floatval($targets[$pId]['penalty']) : 0;
             if ($penaltyQty > 0 && $basePenalty > 0) {
                 $penaltyVal = ceil($deficit / $penaltyQty) * $basePenalty;
                 $tokenPenalty += $penaltyVal;

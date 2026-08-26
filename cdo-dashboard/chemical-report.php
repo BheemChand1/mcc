@@ -101,7 +101,7 @@ if (!empty($tokensList)) {
         
         foreach ($parametersList as $param) {
             $pId = $param['parameter_id'];
-            $targetPerCoach = floatval($targets[$pId]['qty_ml'] ?? 0);
+            $targetPerCoach = isset($targets[$pId]['qty_ml']) ? floatval($targets[$pId]['qty_ml']) : 0;
             $targetTotal = $targetPerCoach * $totalCoaches;
             
             $rowTotalUsed = $reportData[$pId] ?? 0;
@@ -115,11 +115,11 @@ if (!empty($tokensList)) {
             
             if ($rowTotalUsed < $targetTotal) {
                 $deficit = $targetTotal - $rowTotalUsed;
-                $penaltyQty = floatval($targets[$pId]['penalty_qty_ml'] ?? 0);
+                $penaltyQty = isset($targets[$pId]['penalty_qty_ml']) ? floatval($targets[$pId]['penalty_qty_ml']) : 0;
                 if ($penaltyQty <= 0) {
-                    $penaltyQty = floatval($targets[$pId]['qty_ml'] ?? 0);
+                    $penaltyQty = $targetPerCoach;
                 }
-                $basePenalty = floatval($targets[$pId]['penalty'] ?? 0);
+                $basePenalty = isset($targets[$pId]['penalty']) ? floatval($targets[$pId]['penalty']) : 0;
                 if ($penaltyQty > 0 && $basePenalty > 0) {
                     $totalPenalty += ceil($deficit / $penaltyQty) * $basePenalty;
                 }
@@ -335,7 +335,7 @@ include 'sidebar.php';
                                     $serial = 1;
                                     foreach ($parametersList as $param): 
                                         $pId = $param['parameter_id'];
-                                        $targetPerCoach = floatval($sheet['targets'][$pId]['qty_ml'] ?? 0);
+                                        $targetPerCoach = isset($sheet['targets'][$pId]['qty_ml']) ? floatval($sheet['targets'][$pId]['qty_ml']) : 0;
                                         $totalTargetQty = $targetPerCoach * $sheet['total_coaches'];
                                         
                                         $rowTotalUsed = $sheet['report_data'][$pId] ?? 0;
@@ -344,11 +344,11 @@ include 'sidebar.php';
                                         $rowPenalty = 0;
                                         if ($diff < 0) {
                                             $deficitVal = abs($diff);
-                                            $penaltyQty = floatval($sheet['targets'][$pId]['penalty_qty_ml'] ?? 0);
+                                            $penaltyQty = isset($sheet['targets'][$pId]['penalty_qty_ml']) ? floatval($sheet['targets'][$pId]['penalty_qty_ml']) : 0;
                                             if ($penaltyQty <= 0) {
-                                                $penaltyQty = floatval($sheet['targets'][$pId]['qty_ml'] ?? 0);
+                                                $penaltyQty = $targetPerCoach;
                                             }
-                                            $basePenalty = floatval($sheet['targets'][$pId]['penalty'] ?? 0);
+                                            $basePenalty = isset($sheet['targets'][$pId]['penalty']) ? floatval($sheet['targets'][$pId]['penalty']) : 0;
                                             if ($penaltyQty > 0 && $basePenalty > 0) {
                                                 $rowPenalty = ceil($deficitVal / $penaltyQty) * $basePenalty;
                                             }

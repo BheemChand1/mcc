@@ -2,18 +2,16 @@
 require_once 'auth.php';
 
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
-$toDate = $_GET['to_date'] ?? date('Y-m-d');// Fetch all active parameters and their target values/penalties for station_id dynamically
+$toDate = $_GET['to_date'] ?? date('Y-m-d');
+
+// Fetch all active parameters dynamically
 $paramsStmt = $pdo->prepare("
-    SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
-    FROM mcc_normal_chemical_param p
-    LEFT JOIN mcc_normal_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target
-    WHERE p.station_id = :station_id_param
-    ORDER BY p.id ASC
+    SELECT id AS parameter_id, name AS parameter_name, units 
+    FROM mcc_normal_chemical_param
+    WHERE station_id = :station_id
+    ORDER BY id ASC
 ");
-$paramsStmt->execute([
-    'station_id_target' => $stationId,
-    'station_id_param' => $stationId
-]);
+$paramsStmt->execute(['station_id' => $stationId]);
 $parametersList = $paramsStmt->fetchAll();
 
 // Fetch distinct tokens in this date range and station for normal chemical report
@@ -27,6 +25,15 @@ $stmt->execute(['from_date' => $fromDate, 'to_date' => $toDate, 'station_id' => 
 $tokensList = $stmt->fetchAll();
 
 $sheetsData = [];
+
+// Target resolving statement
+$targetStmt = $pdo->prepare("
+    SELECT t.parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
+    FROM mcc_normal_chemical_target t
+    WHERE t.station_id = :station_id
+      AND :report_date >= t.effective_from 
+      AND (t.effective_to IS NULL OR :report_date <= t.effective_to)
+");
 
 if (!empty($tokensList)) {
     // Prepare queries to run inside the loop
@@ -44,6 +51,18 @@ if (!empty($tokensList)) {
 
     foreach ($tokensList as $t) {
         $tokenId = $t['token_id'];
+        $reportDate = $t['report_date'];
+
+        // Get targets active on this report date
+        $targetStmt->execute([
+            'station_id' => $stationId,
+            'report_date' => $reportDate
+        ]);
+        $targetsRaw = $targetStmt->fetchAll(PDO::FETCH_ASSOC);
+        $targets = [];
+        foreach ($targetsRaw as $tr) {
+            $targets[$tr['parameter_id']] = $tr;
+        }
         
         // Get distinct coaches count
         $coachesStmt->execute(['token_id' => $tokenId, 'station_id' => $stationId]);
@@ -82,7 +101,7 @@ if (!empty($tokensList)) {
         
         foreach ($parametersList as $param) {
             $pId = $param['parameter_id'];
-            $targetPerCoach = floatval($param['qty_ml'] ?? 0);
+            $targetPerCoach = floatval($targets[$pId]['qty_ml'] ?? 0);
             $targetTotal = $targetPerCoach * $totalCoaches;
             
             $rowTotalUsed = $reportData[$pId] ?? 0;
@@ -96,11 +115,11 @@ if (!empty($tokensList)) {
             
             if ($rowTotalUsed < $targetTotal) {
                 $deficit = $targetTotal - $rowTotalUsed;
-                $penaltyQty = floatval($param['penalty_qty_ml'] ?? 0);
+                $penaltyQty = floatval($targets[$pId]['penalty_qty_ml'] ?? 0);
                 if ($penaltyQty <= 0) {
-                    $penaltyQty = floatval($param['qty_ml'] ?? 0);
+                    $penaltyQty = floatval($targets[$pId]['qty_ml'] ?? 0);
                 }
-                $basePenalty = floatval($param['penalty'] ?? 0);
+                $basePenalty = floatval($targets[$pId]['penalty'] ?? 0);
                 if ($penaltyQty > 0 && $basePenalty > 0) {
                     $totalPenalty += ceil($deficit / $penaltyQty) * $basePenalty;
                 }
@@ -121,11 +140,22 @@ if (!empty($tokensList)) {
             'auditor_name_str' => $auditorNameStr,
             'chemical_score' => $chemicalScore,
             'total_penalty' => $totalPenalty,
+            'targets' => $targets,
             'is_fallback' => false
         ];
     }
 } else {
-    // Default fallback template sheet if no data exists
+    // Default fallback template sheet if no data exists, get current targets active at fromDate
+    $targetStmt->execute([
+        'station_id' => $stationId,
+        'report_date' => $fromDate
+    ]);
+    $targetsRaw = $targetStmt->fetchAll(PDO::FETCH_ASSOC);
+    $targets = [];
+    foreach ($targetsRaw as $tr) {
+        $targets[$tr['parameter_id']] = $tr;
+    }
+
     $sheetsData[] = [
         'token_id' => '',
         'report_date' => $fromDate,
@@ -134,10 +164,11 @@ if (!empty($tokensList)) {
         'auditor_name_str' => '',
         'chemical_score' => 100,
         'total_penalty' => 0,
+        'targets' => $targets,
         'is_fallback' => true
     ];
 }
-$pageTitle = 'Chemical Report | MCC';
+$pageTitle = 'Chemical Report | CDO';
 
 $extraStyles = "
 .chemical-sheet {
@@ -248,6 +279,7 @@ include 'sidebar.php';
                 
                 <button type="submit" class="btn-go">Go</button>
                 <a href="chemical-summary.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-summary">Summary</a>
+                <a href="chemical-targets.php" class="btn-summary" style="background: #10b981 !important; margin-left: 8px;">Targets</a>
                 <button type="button" class="btn-print" onclick="window.print()">Print</button>
             </form>
 
@@ -303,7 +335,7 @@ include 'sidebar.php';
                                     $serial = 1;
                                     foreach ($parametersList as $param): 
                                         $pId = $param['parameter_id'];
-                                        $targetPerCoach = floatval($param['qty_ml'] ?? 0);
+                                        $targetPerCoach = floatval($sheet['targets'][$pId]['qty_ml'] ?? 0);
                                         $totalTargetQty = $targetPerCoach * $sheet['total_coaches'];
                                         
                                         $rowTotalUsed = $sheet['report_data'][$pId] ?? 0;
@@ -312,11 +344,11 @@ include 'sidebar.php';
                                         $rowPenalty = 0;
                                         if ($diff < 0) {
                                             $deficitVal = abs($diff);
-                                            $penaltyQty = floatval($param['penalty_qty_ml'] ?? 0);
+                                            $penaltyQty = floatval($sheet['targets'][$pId]['penalty_qty_ml'] ?? 0);
                                             if ($penaltyQty <= 0) {
-                                                $penaltyQty = floatval($param['qty_ml'] ?? 0);
+                                                $penaltyQty = floatval($sheet['targets'][$pId]['qty_ml'] ?? 0);
                                             }
-                                            $basePenalty = floatval($param['penalty'] ?? 0);
+                                            $basePenalty = floatval($sheet['targets'][$pId]['penalty'] ?? 0);
                                             if ($penaltyQty > 0 && $basePenalty > 0) {
                                                 $rowPenalty = ceil($deficitVal / $penaltyQty) * $basePenalty;
                                             }

@@ -9,19 +9,35 @@ $selectedYear = $_GET['year'] ?? date('Y');
 $selectedMonth = str_pad($selectedMonth, 2, '0', STR_PAD_LEFT);
 $selectedYear = intval($selectedYear);
 
-// Fetch chemical parameters and target values for this station
+// Fetch chemical parameters for this station dynamically
 $paramsStmt = $pdo->prepare("
-    SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
-    FROM mcc_normal_chemical_param p
-    LEFT JOIN mcc_normal_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target
-    WHERE p.station_id = :station_id_param
-    ORDER BY p.id ASC
+    SELECT id AS parameter_id, name AS parameter_name, units 
+    FROM mcc_normal_chemical_param
+    WHERE station_id = :station_id
+    ORDER BY id ASC
 ");
-$paramsStmt->execute([
-    'station_id_target' => $stationId,
-    'station_id_param' => $stationId
-]);
+$paramsStmt->execute(['station_id' => $stationId]);
 $parametersList = $paramsStmt->fetchAll();
+
+// Fetch active target values for display/initialization (as of end of month or today)
+$displayTargetsStmt = $pdo->prepare("
+    SELECT t.parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
+    FROM mcc_normal_chemical_target t
+    WHERE t.station_id = :station_id 
+      AND :date_ref >= t.effective_from
+      AND (t.effective_to IS NULL OR :date_ref <= t.effective_to)
+");
+// Use last day of selected month or today as date reference
+$dateRef = date('Y-m-d', strtotime("$selectedYear-$selectedMonth-01 +1 month -1 day"));
+if (strtotime($dateRef) > time()) {
+    $dateRef = date('Y-m-d');
+}
+$displayTargetsStmt->execute(['station_id' => $stationId, 'date_ref' => $dateRef]);
+$displayTargetsRaw = $displayTargetsStmt->fetchAll(PDO::FETCH_ASSOC);
+$displayTargets = [];
+foreach ($displayTargetsRaw as $dt) {
+    $displayTargets[$dt['parameter_id']] = $dt;
+}
 
 // Fetch all reports (distinct tokens) in the selected month
 $tokensStmt = $pdo->prepare("
@@ -61,12 +77,13 @@ while ($row = $coachesStmt->fetch()) {
 // Initialize parameters list for aggregation
 $monthlyParamData = [];
 foreach ($parametersList as $p) {
-    $monthlyParamData[$p['parameter_id']] = [
+    $pId = $p['parameter_id'];
+    $monthlyParamData[$pId] = [
         'name' => $p['parameter_name'],
         'units' => $p['units'] ?? 'Nos',
-        'qty_ml' => floatval($p['qty_ml'] ?? 0),
-        'penalty_rate' => floatval($p['penalty'] ?? 0),
-        'penalty_qty_ml' => floatval($p['penalty_qty_ml'] ?? 0),
+        'qty_ml' => floatval($displayTargets[$pId]['qty_ml'] ?? 0),
+        'penalty_rate' => floatval($displayTargets[$pId]['penalty'] ?? 0),
+        'penalty_qty_ml' => floatval($displayTargets[$pId]['penalty_qty_ml'] ?? 0),
         'monthly_target' => 0.0,
         'total_consumed' => 0.0,
         'total_penalty' => 0.0
@@ -80,12 +97,33 @@ $dailyReportStmt = $pdo->prepare("
     WHERE token_id = :token_id AND station_id = :station_id
 ");
 
+// Target resolving statement
+$targetStmt = $pdo->prepare("
+    SELECT t.parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
+    FROM mcc_normal_chemical_target t
+    WHERE t.station_id = :station_id
+      AND :report_date >= t.effective_from 
+      AND (t.effective_to IS NULL OR :report_date <= t.effective_to)
+");
+
 $dailyScores = [];
 $totalMonthlyPenalty = 0.0;
 
 foreach ($tokensList as $t) {
     $tokenId = $t['token_id'];
     $coachesCount = $tokenCoaches[$tokenId] ?? 24;
+    $reportDate = $t['report_date'];
+
+    // Get targets active on this report date
+    $targetStmt->execute([
+        'station_id' => $stationId,
+        'report_date' => $reportDate
+    ]);
+    $targetsRaw = $targetStmt->fetchAll(PDO::FETCH_ASSOC);
+    $targets = [];
+    foreach ($targetsRaw as $tr) {
+        $targets[$tr['parameter_id']] = $tr;
+    }
 
     $dailyReportStmt->execute(['token_id' => $tokenId, 'station_id' => $stationId]);
     $rows = $dailyReportStmt->fetchAll();
@@ -110,7 +148,7 @@ foreach ($tokensList as $t) {
 
     foreach ($parametersList as $p) {
         $pId = $p['parameter_id'];
-        $targetPerCoach = floatval($p['qty_ml'] ?? 0);
+        $targetPerCoach = floatval($targets[$pId]['qty_ml'] ?? 0);
         $targetTotal = $targetPerCoach * $coachesCount;
         $consumedTotal = $tokenParamQty[$pId] ?? 0.0;
 
@@ -127,11 +165,11 @@ foreach ($tokensList as $t) {
 
         if ($consumedTotal < $targetTotal) {
             $deficit = $targetTotal - $consumedTotal;
-            $penaltyQty = floatval($p['penalty_qty_ml'] ?? 0);
+            $penaltyQty = floatval($targets[$pId]['penalty_qty_ml'] ?? 0);
             if ($penaltyQty <= 0) {
-                $penaltyQty = floatval($p['qty_ml'] ?? 0);
+                $penaltyQty = floatval($targets[$pId]['qty_ml'] ?? 0);
             }
-            $basePenalty = floatval($p['penalty'] ?? 0);
+            $basePenalty = floatval($targets[$pId]['penalty'] ?? 0);
             if ($penaltyQty > 0 && $basePenalty > 0) {
                 $penaltyVal = ceil($deficit / $penaltyQty) * $basePenalty;
                 $tokenPenalty += $penaltyVal;

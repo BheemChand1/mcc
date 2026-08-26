@@ -2135,7 +2135,8 @@ CREATE TABLE `mcc_normal_chemical_target` (
   `penalty` decimal(10,2) DEFAULT NULL,
   `penalty_qty(ml)` decimal(10,2) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
-  `input_type` varchar(50) DEFAULT 'cleaning',
+  `effective_from` date NOT NULL DEFAULT (current_date()),
+  `effective_to` date DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -2144,15 +2145,15 @@ CREATE TABLE `mcc_normal_chemical_target` (
 -- Dumping data for table `mcc_normal_chemical_target`
 --
 
-INSERT INTO `mcc_normal_chemical_target` (`id`, `parameter_id`, `qty(ml)`, `penalty`, `penalty_qty(ml)`, `station_id`, `created_at`, `updated_at`) VALUES
-(25, 1, 50.00, 200.00, 50.00, 1, '2026-05-25 12:34:12', '2026-05-27 10:40:34'),
-(26, 2, 50.00, 200.00, 50.00, 1, '2026-05-25 12:34:38', '2026-05-27 10:38:16'),
-(27, 3, 20.00, 50.00, 20.00, 1, '2026-05-25 12:34:54', '2026-05-27 10:38:16'),
-(28, 4, 50.00, 100.00, 50.00, 1, '2026-05-25 12:35:06', '2026-05-27 10:38:16'),
-(29, 5, 10.00, 25.00, 10.00, 1, '2026-05-25 12:35:26', '2026-05-27 10:38:16'),
-(30, 6, 10.00, 25.00, 10.00, 1, '2026-05-25 12:35:42', '2026-05-27 10:38:16'),
-(31, 7, 10.00, 25.00, 10.00, 1, '2026-05-25 12:35:55', '2026-05-27 10:38:16'),
-(32, 8, 10.00, 25.00, 10.00, 1, '2026-05-25 12:36:08', '2026-05-27 10:38:16');
+INSERT INTO `mcc_normal_chemical_target` (`id`, `parameter_id`, `qty(ml)`, `penalty`, `penalty_qty(ml)`, `station_id`, `effective_from`, `effective_to`, `created_at`, `updated_at`) VALUES
+(25, 1, 50.00, 200.00, 50.00, 1, '2026-05-22', NULL, '2026-05-25 12:34:12', '2026-05-27 10:40:34'),
+(26, 2, 50.00, 200.00, 50.00, 1, '2026-05-22', NULL, '2026-05-25 12:34:38', '2026-05-27 10:38:16'),
+(27, 3, 20.00, 50.00, 20.00, 1, '2026-05-22', NULL, '2026-05-25 12:34:54', '2026-05-27 10:38:16'),
+(28, 4, 50.00, 100.00, 50.00, 1, '2026-05-22', NULL, '2026-05-25 12:35:06', '2026-05-27 10:38:16'),
+(29, 5, 10.00, 25.00, 10.00, 1, '2026-05-22', NULL, '2026-05-25 12:35:26', '2026-05-27 10:38:16'),
+(30, 6, 10.00, 25.00, 10.00, 1, '2026-05-22', NULL, '2026-05-25 12:35:42', '2026-05-27 10:38:16'),
+(31, 7, 10.00, 25.00, 10.00, 1, '2026-05-22', NULL, '2026-05-25 12:35:55', '2026-05-27 10:38:16'),
+(32, 8, 10.00, 25.00, 10.00, 1, '2026-05-22', NULL, '2026-05-25 12:36:08', '2026-05-27 10:38:16');
 
 -- --------------------------------------------------------
 
@@ -2424,7 +2425,6 @@ CREATE TABLE `mcc_normal_scorecard_report` (
   `id` int(11) NOT NULL,
   `sub_parameter_id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
-  `input_type` varchar(50) DEFAULT 'cleaning',
   `token_id` varchar(100) NOT NULL,
   `train_no` varchar(50) NOT NULL,
   `coach_no` varchar(20) NOT NULL,
@@ -4739,8 +4739,7 @@ ALTER TABLE `mcc_normal_scorecard_report`
   ADD KEY `idx_normal_sc_rep_sub_param` (`sub_parameter_id`),
   ADD KEY `idx_normal_sc_rep_station` (`station_id`),
   ADD KEY `idx_normal_sc_rep_token` (`token_id`),
-  ADD KEY `idx_normal_sc_rep_date` (`report_date`),
-  ADD KEY `fk_normal_sc_rep_user` (`submitted_by`);
+  ADD KEY `idx_normal_sc_rep_date` (`report_date`);
 
 --
 -- Indexes for table `mcc_normal_scorecard_sub_param`

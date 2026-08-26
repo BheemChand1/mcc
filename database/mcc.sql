@@ -2428,7 +2428,7 @@ CREATE TABLE `mcc_normal_scorecard_report` (
   `token_id` varchar(100) NOT NULL,
   `train_no` varchar(50) NOT NULL,
   `coach_no` varchar(20) NOT NULL,
-  `score_value` varchar(10) NOT NULL,
+  `score_value` varchar(10) DEFAULT NULL,
   `auditor_name` varchar(255) DEFAULT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),

@@ -2787,6 +2787,30 @@ INSERT INTO `mcc_normal_score_card` (`id`, `sub_report_id`, `sub_parameter_id`, 
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `mcc_normal_rating`
+--
+
+CREATE TABLE `mcc_normal_rating` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `rating_name` varchar(50) NOT NULL,
+  `rating_value` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `mcc_normal_rating`
+--
+
+INSERT INTO `mcc_normal_rating` (`id`, `rating_name`, `rating_value`) VALUES
+(1, 'Very Good', 3),
+(2, 'Satisfactory', 2),
+(3, 'Poor', 1),
+(4, 'Not attended', 0);
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `mcc_parameters`
 --
 

@@ -10,6 +10,15 @@ $stationId = $_SESSION['station_id'] ?? 1;
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
 
+// Fetch normal rating values from database
+$ratingStmt = $pdo->query("SELECT rating_name, rating_value FROM mcc_normal_rating ORDER BY rating_value DESC");
+$ratings = $ratingStmt->fetchAll(PDO::FETCH_ASSOC);
+$ratingStrings = [];
+foreach ($ratings as $r) {
+    $ratingStrings[] = htmlspecialchars($r['rating_name']) . "-" . htmlspecialchars($r['rating_value']);
+}
+$ratingText = implode(', ', $ratingStrings);
+
 // Fetch the current station's name for meta info
 $stationQuery = $pdo->prepare("SELECT station_name FROM mcc_stations WHERE station_id = :station_id");
 $stationQuery->execute(['station_id' => $stationId]);
@@ -413,10 +422,6 @@ include 'sidebar.php';
                         <div class="report-meta-section">
                             <div class="meta-row">
                                 <div class="meta-item">
-                                    <span>Agreement No & date:</span>
-                                    AGR_2026-99-02 & 01-04-2026
-                                </div>
-                                <div class="meta-item">
                                     <span>Date of Inspection:</span>
                                     <?= htmlspecialchars(date('d-m-Y', strtotime($sheet['report_date']))) ?>
                                 </div>
@@ -526,12 +531,11 @@ include 'sidebar.php';
                             <strong>Scoring Guidelines:</strong>
                             <ul>
                                 <li>
-                                    Maximum Marks will be 12 for internal cleaning. This will be counted as under: Very
-                                    Good- 3, Satisfactory-2, Poor-1,Not attended-0
+                                    Maximum Marks will be 12 for internal cleaning. This will be counted as under: <?= $ratingText ?>
                                 </li>
                                 <li>
                                     Maximum Marks will be 3 for exterior cleaning & washing. This will be counted as under:
-                                    Very Good-3, Satisfactory-2, Poor-1, Not attended-0. % can be derived as per the marks
+                                    <?= $ratingText ?>. % can be derived as per the marks
                                     separately.
                                 </li>
                             </ul>

@@ -50,7 +50,7 @@ try {
 
     // 3. Fetch active parameters and subparameters
     $paramsStmt = $pdo->prepare("
-        SELECT p.id AS parameter_id, p.parameter_name, sp.id AS sub_parameter_id, sp.sub_parameter_name
+        SELECT p.id AS parameter_id, p.parameter_name, sp.id AS sub_parameter_id, sp.sub_parameter_name, sp.input_type
         FROM mcc_normal_scorecard_param p
         JOIN mcc_normal_scorecard_sub_param sp ON p.id = sp.parameter_id
         WHERE p.station_id = ? AND sp.station_id = ? AND p.status = 'Active' AND sp.status = 'Active'
@@ -58,6 +58,22 @@ try {
     ");
     $paramsStmt->execute([$meta['station_id'], $meta['station_id']]);
     $paramsRows = $paramsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Fetch all rating options grouped by rating_group
+    $ratingsStmt = $pdo->query("SELECT rating_group, rating_name, rating_value FROM mcc_normal_rating ORDER BY id ASC");
+    $ratingsRows = $ratingsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $ratingGroups = [];
+    foreach ($ratingsRows as $r) {
+        $group = $r['rating_group'] ?: 'cleaning';
+        if (!isset($ratingGroups[$group])) {
+            $ratingGroups[$group] = [];
+        }
+        $ratingGroups[$group][] = [
+            'label' => $r['rating_name'],
+            'value' => $r['rating_value']
+        ];
+    }
 
     // Group subparameters by parameter
     $parameters = [];
@@ -70,9 +86,15 @@ try {
                 'sub_parameters' => []
             ];
         }
+
+        $inputType = $row['input_type'] ?: 'cleaning';
+        $options = $ratingGroups[$inputType] ?? [];
+
         $parameters[$pId]['sub_parameters'][] = [
             'sub_parameter_id' => $row['sub_parameter_id'],
-            'sub_parameter_name' => $row['sub_parameter_name']
+            'sub_parameter_name' => $row['sub_parameter_name'],
+            'input_type' => $inputType,
+            'options' => $options
         ];
     }
     $parameters = array_values($parameters);

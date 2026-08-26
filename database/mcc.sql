@@ -30,6 +30,7 @@ SET time_zone = "+00:00";
 CREATE TABLE `mcc_billing_conditions` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `min_score` decimal(5,2) NOT NULL,
   `max_score` decimal(5,2) NOT NULL,
   `deduction_percentage` decimal(5,2) NOT NULL,
@@ -55,6 +56,7 @@ INSERT INTO `mcc_billing_conditions` (`id`, `station_id`, `min_score`, `max_scor
 CREATE TABLE `mcc_billing_earnings` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `earning_name` varchar(255) NOT NULL,
   `score_type` varchar(255) NOT NULL,
   `weightage` decimal(5,2) NOT NULL DEFAULT 0.00,
@@ -91,6 +93,7 @@ INSERT INTO `mcc_billing_earnings` (`id`, `station_id`, `earning_name`, `score_t
 CREATE TABLE `mcc_billing_setup` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `sanctioned_amount` decimal(15,2) NOT NULL DEFAULT 1000000.00,
   `gst_percentage` decimal(5,2) NOT NULL DEFAULT 18.00,
   `contract_start_date` date NOT NULL,
@@ -117,6 +120,7 @@ INSERT INTO `mcc_billing_setup` (`id`, `station_id`, `sanctioned_amount`, `gst_p
 CREATE TABLE `mcc_cleanliness_report` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `report_date` date NOT NULL,
   `score` decimal(10,2) DEFAULT 0.00,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
@@ -317,6 +321,7 @@ INSERT INTO `mcc_employee` (`id`, `employee_id`, `full_name`, `designation`, `ag
 CREATE TABLE `mcc_imposed_penalties` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `penalty_date` date NOT NULL,
   `penalty_reason` varchar(255) NOT NULL,
   `description` text NOT NULL,
@@ -342,6 +347,7 @@ CREATE TABLE `mcc_intensive_chemical_param` (
   `name` varchar(255) NOT NULL,
   `units` varchar(100) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -373,6 +379,7 @@ CREATE TABLE `mcc_intensive_chemical_report` (
   `qty_used` decimal(10,2) DEFAULT NULL,
   `auditor_name` varchar(255) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `token_id` varchar(100) NOT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
@@ -731,6 +738,7 @@ CREATE TABLE `mcc_intensive_chemical_shifts` (
   `id` int(11) NOT NULL,
   `shift` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -757,6 +765,7 @@ CREATE TABLE `mcc_intensive_chemical_target` (
   `penalty` decimal(10,2) DEFAULT NULL,
   `penalty_qty(ml)` decimal(10,2) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -786,6 +795,7 @@ CREATE TABLE `mcc_intensive_machine_param` (
   `machine_no` varchar(100) NOT NULL,
   `machine_name` varchar(255) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -838,6 +848,7 @@ CREATE TABLE `mcc_intensive_machine_report` (
   `used_status` varchar(50) DEFAULT NULL,
   `token_id` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -904,6 +915,7 @@ CREATE TABLE `mcc_intensive_machine_shifts` (
   `id` int(11) NOT NULL,
   `shift` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -929,6 +941,7 @@ INSERT INTO `mcc_intensive_machine_shifts` (`id`, `shift`, `station_id`, `create
 CREATE TABLE `mcc_intensive_machine_target` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `machine_id` int(11) NOT NULL,
   `target_month` date NOT NULL,
   `nominated_area` varchar(50) DEFAULT NULL,
@@ -1012,6 +1025,7 @@ CREATE TABLE `mcc_intensive_scorecard_param` (
   `id` int(11) NOT NULL,
   `parameter_name` varchar(255) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `status` enum('Active','Inactive') DEFAULT 'Active',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -1039,6 +1053,7 @@ CREATE TABLE `mcc_intensive_scorecard_report` (
   `id` int(11) NOT NULL,
   `sub_parameter_id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `token_id` varchar(100) NOT NULL,
   `train_no` varchar(50) NOT NULL,
   `coach_no` varchar(20) NOT NULL,
@@ -1090,6 +1105,7 @@ CREATE TABLE `mcc_intensive_scorecard_sub_param` (
   `sub_parameter_name` varchar(255) NOT NULL,
   `parameter_id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `status` enum('Active','Inactive') DEFAULT 'Active',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -1124,6 +1140,7 @@ CREATE TABLE `mcc_intensive_score_card` (
   `sub_report_id` int(11) NOT NULL,
   `sub_parameter_id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `token_id` varchar(100) NOT NULL,
   `train_no` varchar(50) NOT NULL,
   `coach_no` varchar(20) NOT NULL,
@@ -1363,6 +1380,7 @@ INSERT INTO `mcc_intensive_score_card` (`id`, `sub_report_id`, `sub_parameter_id
 CREATE TABLE `mcc_manpower_categories` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `category_name` varchar(255) NOT NULL,
   `order_no` int(11) NOT NULL DEFAULT 0,
   `status` enum('Active','Inactive') DEFAULT 'Active',
@@ -1400,6 +1418,7 @@ INSERT INTO `mcc_manpower_categories` (`id`, `station_id`, `category_name`, `ord
 CREATE TABLE `mcc_manpower_log` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `report_date` date NOT NULL,
   `manpower_type_id` int(11) NOT NULL,
   `provided_qty` int(11) DEFAULT NULL,
@@ -1462,6 +1481,7 @@ INSERT INTO `mcc_manpower_log` (`id`, `station_id`, `report_date`, `manpower_typ
 CREATE TABLE `mcc_manpower_penalties` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `effective_month` date NOT NULL,
   `manpower_type_id` int(11) NOT NULL,
   `absent_penalty` decimal(10,2) NOT NULL DEFAULT 0.00,
@@ -1544,6 +1564,7 @@ INSERT INTO `mcc_manpower_shifts` (`id`, `category_id`, `shift_name`, `order_no`
 CREATE TABLE `mcc_manpower_shift_type_map` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `manpower_type_id` int(11) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -1608,6 +1629,7 @@ INSERT INTO `mcc_manpower_shift_type_map` (`id`, `station_id`, `manpower_type_id
 CREATE TABLE `mcc_manpower_targets` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `target_date` date NOT NULL,
   `manpower_type_id` int(11) NOT NULL,
   `manpower_type` varchar(255) NOT NULL,
@@ -1675,6 +1697,7 @@ INSERT INTO `mcc_manpower_targets` (`id`, `station_id`, `target_date`, `manpower
 CREATE TABLE `mcc_manpower_types` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `role_name` varchar(255) NOT NULL,
   `order_no` int(11) NOT NULL DEFAULT 0,
   `status` enum('Active','Inactive') DEFAULT 'Active',
@@ -1712,6 +1735,7 @@ CREATE TABLE `mcc_normal_chemical_param` (
   `name` varchar(255) NOT NULL,
   `units` varchar(100) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -1743,6 +1767,7 @@ CREATE TABLE `mcc_normal_chemical_report` (
   `qty_used` decimal(10,2) DEFAULT NULL,
   `auditor_name` varchar(255) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `token_id` varchar(100) NOT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
@@ -2110,6 +2135,7 @@ CREATE TABLE `mcc_normal_chemical_target` (
   `penalty` decimal(10,2) DEFAULT NULL,
   `penalty_qty(ml)` decimal(10,2) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -2139,6 +2165,7 @@ CREATE TABLE `mcc_normal_machine_param` (
   `machine_no` varchar(100) NOT NULL,
   `machine_name` varchar(255) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -2191,6 +2218,7 @@ CREATE TABLE `mcc_normal_machine_report` (
   `used_status` varchar(50) DEFAULT NULL,
   `token_id` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -2257,6 +2285,7 @@ CREATE TABLE `mcc_normal_machine_shifts` (
   `id` int(11) NOT NULL,
   `shift` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -2282,6 +2311,7 @@ INSERT INTO `mcc_normal_machine_shifts` (`id`, `shift`, `station_id`, `created_a
 CREATE TABLE `mcc_normal_machine_target` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `machine_id` int(11) NOT NULL,
   `target_month` date NOT NULL,
   `nominated_area` varchar(50) DEFAULT NULL,
@@ -2365,6 +2395,7 @@ CREATE TABLE `mcc_normal_scorecard_param` (
   `id` int(11) NOT NULL,
   `parameter_name` varchar(255) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `status` enum('Active','Inactive') DEFAULT 'Active',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -2393,6 +2424,7 @@ CREATE TABLE `mcc_normal_scorecard_report` (
   `id` int(11) NOT NULL,
   `sub_parameter_id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `token_id` varchar(100) NOT NULL,
   `train_no` varchar(50) NOT NULL,
   `coach_no` varchar(20) NOT NULL,
@@ -2564,6 +2596,7 @@ CREATE TABLE `mcc_normal_scorecard_sub_param` (
   `sub_parameter_name` varchar(255) NOT NULL,
   `parameter_id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `status` enum('Active','Inactive') DEFAULT 'Active',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -2573,19 +2606,19 @@ CREATE TABLE `mcc_normal_scorecard_sub_param` (
 -- Dumping data for table `mcc_normal_scorecard_sub_param`
 --
 
-INSERT INTO `mcc_normal_scorecard_sub_param` (`id`, `sub_parameter_name`, `parameter_id`, `station_id`, `status`, `created_at`, `updated_at`) VALUES
-(1, 'Cleaning and wiping of toilet area and fittings including wash basins, mirrors. Cleaning of mugs in AC coaches', 1, 2, 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
-(2, 'Interior Cleaning of compartments, doorways, gang ways, vestibules, Window glass, window shutter etc.', 1, 2, 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
-(3, 'Cleaning & wiping of all berths, Panels, Rexene & amenity fittings.', 1, 2, 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
-(4, 'Floor including area under seats/berths etc.', 1, 2, 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
-(5, 'Exterior Cleaning / washing including end panel', 2, 2, 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
-(6, 'Please mention Yes/ No', 3, 2, 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
-(7, 'Cleaning and wiping of toilet area and fittings including wash basins, mirrors. Cleaning of mugs in AC coaches', 4, 1, 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
-(8, 'Interior Cleaning of compartments, doorways, gang ways, vestibules, Window glass, window shutter etc.', 4, 1, 'Active', '2026-06-12 06:32:00', '2026-07-07 10:59:56'),
-(9, 'Cleaning & wiping of all berths, Panels, Rexene & amenity fittings.', 4, 1, 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
-(10, 'Floor including area under seats/berths etc.', 4, 1, 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
-(11, 'Exterior Cleaning / washing including end panel', 5, 1, 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
-(12, 'Please mention Yes/ No', 6, 1, 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00');
+INSERT INTO `mcc_normal_scorecard_sub_param` (`id`, `sub_parameter_name`, `parameter_id`, `station_id`, `input_type`, `status`, `created_at`, `updated_at`) VALUES
+(1, 'Cleaning and wiping of toilet area and fittings including wash basins, mirrors. Cleaning of mugs in AC coaches', 1, 2, 'cleaning', 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
+(2, 'Interior Cleaning of compartments, doorways, gang ways, vestibules, Window glass, window shutter etc.', 1, 2, 'cleaning', 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
+(3, 'Cleaning & wiping of all berths, Panels, Rexene & amenity fittings.', 1, 2, 'cleaning', 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
+(4, 'Floor including area under seats/berths etc.', 1, 2, 'cleaning', 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
+(5, 'Exterior Cleaning / washing including end panel', 2, 2, 'cleaning', 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
+(6, 'Please mention Yes/ No', 3, 2, 'watering', 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
+(7, 'Cleaning and wiping of toilet area and fittings including wash basins, mirrors. Cleaning of mugs in AC coaches', 4, 1, 'cleaning', 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
+(8, 'Interior Cleaning of compartments, doorways, gang ways, vestibules, Window glass, window shutter etc.', 4, 1, 'cleaning', 'Active', '2026-06-12 06:32:00', '2026-07-07 10:59:56'),
+(9, 'Cleaning & wiping of all berths, Panels, Rexene & amenity fittings.', 4, 1, 'cleaning', 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
+(10, 'Floor including area under seats/berths etc.', 4, 1, 'cleaning', 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
+(11, 'Exterior Cleaning / washing including end panel', 5, 1, 'cleaning', 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00'),
+(12, 'Please mention Yes/ No', 6, 1, 'watering', 'Active', '2026-06-12 06:32:00', '2026-06-12 06:32:00');
 
 -- --------------------------------------------------------
 
@@ -2598,6 +2631,7 @@ CREATE TABLE `mcc_normal_score_card` (
   `sub_report_id` int(11) NOT NULL,
   `sub_parameter_id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `token_id` varchar(100) NOT NULL,
   `train_no` varchar(50) NOT NULL,
   `coach_no` varchar(20) NOT NULL,
@@ -2767,7 +2801,8 @@ INSERT INTO `mcc_normal_score_card` (`id`, `sub_report_id`, `sub_parameter_id`, 
 CREATE TABLE `mcc_normal_rating` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `rating_name` varchar(50) NOT NULL,
-  `rating_value` int(11) NOT NULL,
+  `rating_value` varchar(50) NOT NULL,
+  `rating_group` varchar(50) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -2776,11 +2811,13 @@ CREATE TABLE `mcc_normal_rating` (
 -- Dumping data for table `mcc_normal_rating`
 --
 
-INSERT INTO `mcc_normal_rating` (`id`, `rating_name`, `rating_value`) VALUES
-(1, 'Very Good', 3),
-(2, 'Satisfactory', 2),
-(3, 'Poor', 1),
-(4, 'Not attended', 0);
+INSERT INTO `mcc_normal_rating` (`id`, `rating_group`, `rating_name`, `rating_value`) VALUES
+(1, 'cleaning', 'Very Good', '3'),
+(2, 'cleaning', 'Satisfactory', '2'),
+(3, 'cleaning', 'Poor', '1'),
+(4, 'cleaning', 'Not attended', '0'),
+(5, 'watering', 'Yes', 'Y'),
+(6, 'watering', 'No', 'N');
 
 -- --------------------------------------------------------
 
@@ -2824,6 +2861,7 @@ INSERT INTO `mcc_parameters` (`parameter_id`, `parameter_name`, `subreport_id`, 
 CREATE TABLE `mcc_photo_report` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `report_date` date NOT NULL,
   `before_photo` varchar(255) DEFAULT NULL,
   `after_photo` varchar(255) DEFAULT NULL,
@@ -2853,6 +2891,7 @@ CREATE TABLE `mcc_pldc_chemical_param` (
   `name` varchar(255) NOT NULL,
   `units` varchar(100) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -2895,6 +2934,7 @@ CREATE TABLE `mcc_pldc_chemical_report` (
   `qty_used` decimal(10,2) DEFAULT NULL,
   `auditor_name` varchar(255) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `token_id` varchar(100) NOT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
@@ -3097,6 +3137,7 @@ CREATE TABLE `mcc_pldc_chemical_shifts` (
   `id` int(11) NOT NULL,
   `shift` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -3127,6 +3168,7 @@ CREATE TABLE `mcc_pldc_chemical_target` (
   `penalty` decimal(10,2) DEFAULT NULL,
   `penalty_qty(ml)` decimal(10,2) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -3188,6 +3230,7 @@ CREATE TABLE `mcc_pldc_machine_param` (
   `machine_no` varchar(100) NOT NULL,
   `machine_name` varchar(255) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -3213,6 +3256,7 @@ CREATE TABLE `mcc_pldc_machine_report` (
   `used_status` varchar(50) DEFAULT NULL,
   `token_id` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp()
@@ -3306,6 +3350,7 @@ CREATE TABLE `mcc_pldc_machine_shifts` (
   `id` int(11) NOT NULL,
   `shift` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -3328,6 +3373,7 @@ INSERT INTO `mcc_pldc_machine_shifts` (`id`, `shift`, `station_id`, `created_at`
 CREATE TABLE `mcc_pldc_machine_target` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `machine_id` int(11) NOT NULL,
   `target_month` date NOT NULL,
   `nominated_area` varchar(50) DEFAULT NULL,
@@ -3379,6 +3425,7 @@ CREATE TABLE `mcc_pldc_param` (
   `id` int(11) NOT NULL,
   `parameter_name` varchar(255) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -3411,6 +3458,7 @@ CREATE TABLE `mcc_pldc_report` (
   `rating` int(11) DEFAULT NULL,
   `token_id` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -3462,6 +3510,7 @@ CREATE TABLE `mcc_pldc_shifts` (
   `id` int(11) NOT NULL,
   `shift` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -3486,6 +3535,7 @@ CREATE TABLE `mcc_prt_chemical_param` (
   `name` varchar(255) NOT NULL,
   `units` varchar(100) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -3522,6 +3572,7 @@ CREATE TABLE `mcc_prt_chemical_report` (
   `qty_used` decimal(10,2) DEFAULT NULL,
   `auditor_name` varchar(255) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `token_id` varchar(100) NOT NULL,
   `train_no` varchar(50) NOT NULL,
   `report_date` date NOT NULL,
@@ -3671,6 +3722,7 @@ CREATE TABLE `mcc_prt_chemical_shifts` (
   `id` int(11) NOT NULL,
   `shift` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -3701,6 +3753,7 @@ CREATE TABLE `mcc_prt_chemical_target` (
   `penalty` decimal(10,2) DEFAULT NULL,
   `penalty_qty(ml)` decimal(10,2) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -3749,6 +3802,7 @@ CREATE TABLE `mcc_prt_scorecard_param` (
   `id` int(11) NOT NULL,
   `parameter_name` varchar(255) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `status` enum('Active','Inactive') DEFAULT 'Active',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -3776,6 +3830,7 @@ CREATE TABLE `mcc_prt_scorecard_report` (
   `id` int(11) NOT NULL,
   `sub_parameter_id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `token_id` varchar(100) NOT NULL,
   `train_no` varchar(50) NOT NULL,
   `coach_no` varchar(20) NOT NULL,
@@ -4013,6 +4068,7 @@ CREATE TABLE `mcc_prt_scorecard_sub_param` (
   `sub_parameter_name` varchar(255) NOT NULL,
   `parameter_id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `status` enum('Active','Inactive') DEFAULT 'Active',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -4048,6 +4104,7 @@ CREATE TABLE `mcc_reports` (
   `report_id` int(11) NOT NULL,
   `report_name` varchar(255) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `status` enum('Active','Inactive') DEFAULT 'Active',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -4071,6 +4128,7 @@ INSERT INTO `mcc_reports` (`report_id`, `report_name`, `station_id`, `status`, `
 
 CREATE TABLE `mcc_stations` (
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `station_name` varchar(120) NOT NULL,
   `division_id` int(11) NOT NULL,
   `status` enum('Active','Inactive') DEFAULT 'Active',
@@ -4097,6 +4155,7 @@ INSERT INTO `mcc_stations` (`station_id`, `station_name`, `division_id`, `status
 CREATE TABLE `mcc_station_reports` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `report_key` varchar(100) NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -4230,6 +4289,7 @@ CREATE TABLE `mcc_surprise_parameters` (
   `id` int(11) NOT NULL,
   `category` enum('pit_office','pf_trains') NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `item_name` varchar(255) NOT NULL,
   `max_marks` int(11) NOT NULL DEFAULT 5,
   `parameter_desc` varchar(255) NOT NULL,
@@ -4275,6 +4335,7 @@ CREATE TABLE `mcc_surprise_reports` (
   `id` int(11) NOT NULL,
   `category` enum('pit_office','pf_trains') NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `token_id` varchar(100) NOT NULL,
   `report_date` date NOT NULL,
   `submitted_by` int(11) NOT NULL,
@@ -4332,6 +4393,7 @@ CREATE TABLE `mcc_users` (
   `address` text DEFAULT NULL,
   `role` enum('DM','ADMIN','CDO','DO','AUDITOR') NOT NULL DEFAULT 'AUDITOR',
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `start_date` date DEFAULT NULL,
   `end_date` date DEFAULT NULL,
   `status` enum('Active','Inactive') DEFAULT 'Active',
@@ -5721,6 +5783,7 @@ CREATE TABLE `mcc_vb_scorecard_param` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `parameter_name` varchar(255) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `status` enum('Active','Inactive') DEFAULT 'Active',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
@@ -5750,6 +5813,7 @@ CREATE TABLE `mcc_vb_scorecard_sub_param` (
   `sub_parameter_name` varchar(255) NOT NULL,
   `parameter_id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `status` enum('Active','Inactive') DEFAULT 'Active',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
@@ -5784,6 +5848,7 @@ CREATE TABLE `mcc_vb_scorecard_report` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `sub_parameter_id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `token_id` varchar(100) NOT NULL,
   `train_no` varchar(50) NOT NULL,
   `coach_no` varchar(20) NOT NULL,
@@ -6111,6 +6176,7 @@ CREATE TABLE `mcc_vb_chemical_param` (
   `name` varchar(255) NOT NULL,
   `units` varchar(100) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
@@ -6148,6 +6214,7 @@ CREATE TABLE `mcc_vb_chemical_shifts` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `shift` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
@@ -6173,6 +6240,7 @@ CREATE TABLE `mcc_vb_chemical_target` (
   `penalty` decimal(10,2) DEFAULT NULL,
   `penalty_qty(ml)` decimal(10,2) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
@@ -6214,6 +6282,7 @@ CREATE TABLE `mcc_vb_chemical_report` (
   `qty_used` decimal(10,2) DEFAULT NULL,
   `auditor_name` varchar(255) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `token_id` varchar(100) NOT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
@@ -7392,6 +7461,7 @@ CREATE TABLE `mcc_vb_machine_param` (
   `machine_no` varchar(100) NOT NULL,
   `machine_name` varchar(255) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
@@ -7450,6 +7520,7 @@ CREATE TABLE `mcc_vb_machine_shifts` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `shift` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
@@ -7471,6 +7542,7 @@ DROP TABLE IF EXISTS `mcc_vb_machine_target`;
 CREATE TABLE `mcc_vb_machine_target` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `machine_id` int(11) NOT NULL,
   `target_month` date NOT NULL,
   `nominated_area` varchar(50) DEFAULT NULL,
@@ -7537,6 +7609,7 @@ CREATE TABLE `mcc_vb_machine_report` (
   `used_status` varchar(50) DEFAULT NULL,
   `token_id` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
+  `input_type` varchar(50) DEFAULT 'cleaning',
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),

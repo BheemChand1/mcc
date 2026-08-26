@@ -26,54 +26,44 @@ if ($stationId === null || $stationId <= 0) {
 }
 
 try {
-    // 1. Fetch assigned report keys for this station
-    $stmt = $pdo->prepare("
-        SELECT report_key 
-        FROM mcc_station_reports 
-        WHERE station_id = :station_id
+    // 1. Fetch active reports for the station
+    $reportsStmt = $pdo->prepare("
+        SELECT report_id, report_name 
+        FROM mcc_reports 
+        WHERE station_id = :station_id AND status = 'Active'
+        ORDER BY report_id ASC
     ");
-    $stmt->execute(['station_id' => $stationId]);
-    $assignedKeys = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $reportsStmt->execute(['station_id' => $stationId]);
+    $reportsList = $reportsStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 2. Map keys to human-readable names
-    $reportNamesMap = [
-        'normal_audit' => 'Normal Audit Scorecard',
-        'normal_chem' => 'Normal Chemical Consumption',
-        'normal_mach' => 'Normal Machine Log',
-        'int_audit' => 'Intensive Audit Scorecard',
-        'int_chem' => 'Intensive Chemical Report',
-        'int_mach' => 'Intensive Machine Log',
-        'int_scorecard_2' => 'Intensive Scorecard 2',
-        'int_pantry' => 'Pantry Car Score Card',
-        'pldc_audit' => 'PLDC Audit Scorecard',
-        'pldc_chem' => 'PLDC Chemical Report',
-        'pldc_mach' => 'PLDC Machine Log',
-        'sur_pit' => 'Pit & Office Inspection',
-        'sur_pf' => 'PF Return Trains Audit',
-        'prt_audit' => 'PRT ScoreCard',
-        'prt_chem' => 'PRT Chemical Report',
-        'vb_audit' => 'Vande Bharat Score Card',
-        'vb_chem' => 'Vande Bharat Chemical Report',
-        'vb_mach' => 'Vande Bharat Machine Report',
-        'manpower' => 'Man Power Log',
-        'cleanliness' => 'Cleanliness Scorecard',
-        'photo_report' => 'Photo Report (Before/After)'
-    ];
+    // 2. Fetch active subreports for each report
+    $subreportsStmt = $pdo->prepare("
+        SELECT subreport_id, report_name AS subreport_name, report_url 
+        FROM mcc_subreports 
+        WHERE report_id = :report_id AND status = 'Active'
+        ORDER BY subreport_id ASC
+    ");
 
     $reports = [];
-    foreach ($assignedKeys as $key) {
-        $reports[] = [
-            "report_key" => $key,
-            "report_name" => $reportNamesMap[$key] ?? ucfirst(str_replace('_', ' ', $key))
-        ];
+    foreach ($reportsList as $rep) {
+        $subreportsStmt->execute(['report_id' => $rep['report_id']]);
+        $subreports = $subreportsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Convert IDs to integer
+        $rep['report_id'] = intval($rep['report_id']);
+        foreach ($subreports as &$sub) {
+            $sub['subreport_id'] = intval($sub['subreport_id']);
+        }
+
+        $rep['subreports'] = $subreports;
+        $reports[] = $rep;
     }
 
     http_response_code(200);
     echo json_encode([
         "status" => "success",
         "station_id" => $stationId,
-        "assigned_reports_count" => count($reports),
-        "assigned_reports" => $reports
+        "reports" => $reports
     ]);
 
 } catch (Exception $e) {
@@ -83,4 +73,3 @@ try {
         "message" => "Database error: " . $e->getMessage()
     ]);
 }
-

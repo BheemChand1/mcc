@@ -19,7 +19,7 @@ if (empty($data)) {
 $auditorName = $data['auditor_name'] ?? null;
 $trainNo = $data['train_no'] ?? null;
 $stationId = isset($data['station_id']) ? intval($data['station_id']) : 1;
-$reportDate = $data['report_date'] ?? date('Y-m-d');
+$reportDate = date('Y-m-d');
 $coachNos = $data['coach_nos'] ?? null; // Expect array of coach numbers or comma-separated string
 
 if (empty($auditorName) || empty($trainNo) || empty($coachNos)) {

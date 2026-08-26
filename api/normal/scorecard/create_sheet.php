@@ -49,6 +49,11 @@ try {
     $paramsStmt->execute([$stationId, $stationId]);
     $subParams = $paramsStmt->fetchAll(PDO::FETCH_COLUMN);
 
+    // Fetch chemical parameters for the station
+    $chemParamsStmt = $pdo->prepare("SELECT id FROM mcc_normal_chemical_param WHERE station_id = :station_id");
+    $chemParamsStmt->execute(['station_id' => $stationId]);
+    $chemParams = $chemParamsStmt->fetchAll(PDO::FETCH_COLUMN);
+
     if (empty($subParams)) {
         http_response_code(400);
         echo json_encode([
@@ -92,6 +97,28 @@ try {
                 'auditor_name' => $auditorName,
                 'report_date' => $reportDate
             ]);
+        }
+    }
+
+    // 4. Insert initial chemical report records
+    if (!empty($chemParams)) {
+        $insertChemStmt = $pdo->prepare("
+            INSERT INTO mcc_normal_chemical_report 
+            (parameter_id, coach_no, qty_used, auditor_name, station_id, token_id, report_date)
+            VALUES (:parameter_id, :coach_no, 0.00, :auditor_name, :station_id, :token_id, :report_date)
+        ");
+
+        foreach ($coachNos as $coachNo) {
+            foreach ($chemParams as $paramId) {
+                $insertChemStmt->execute([
+                    'parameter_id' => $paramId,
+                    'coach_no' => trim($coachNo),
+                    'auditor_name' => $auditorName,
+                    'station_id' => $stationId,
+                    'token_id' => $tokenId,
+                    'report_date' => $reportDate
+                ]);
+            }
         }
     }
 

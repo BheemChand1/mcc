@@ -119,51 +119,106 @@ if (!isset($pdo)) {
     require_once '../connection.php';
 }
 
-$assigned_reports = [];
+$active_report_ids = [];
+$active_subreport_urls = [];
+$report_names = [];
+$subreport_names = [];
+
 if (isset($_SESSION['station_id'])) {
     try {
-        $stmt = $pdo->prepare("SELECT report_key FROM mcc_station_reports WHERE station_id = :station_id");
+        // Fetch active report ids for this station
+        $stmt = $pdo->prepare("SELECT report_id, report_name FROM mcc_reports WHERE station_id = :station_id AND status = 'Active'");
         $stmt->execute(['station_id' => $_SESSION['station_id']]);
-        $assigned_reports = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $active_reports_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $active_report_ids = array_column($active_reports_rows, 'report_id');
+
+        if (!empty($active_report_ids)) {
+            $inClause = implode(',', array_map('intval', $active_report_ids));
+            $subStmt = $pdo->query("SELECT report_url FROM mcc_subreports WHERE report_id IN ($inClause) AND status = 'Active'");
+            $active_subreport_urls = $subStmt->fetchAll(PDO::FETCH_COLUMN);
+        }
+
+        // Fetch report names dynamically for the current station
+        $stmtNames = $pdo->prepare("SELECT report_id, report_name FROM mcc_reports WHERE station_id = :station_id");
+        $stmtNames->execute(['station_id' => $_SESSION['station_id']]);
+        $report_names = $stmtNames->fetchAll(PDO::FETCH_KEY_PAIR);
+
+        // Fetch subreport names dynamically
+        $subreport_names = $pdo->query("SELECT subreport_id, report_name FROM mcc_subreports")->fetchAll(PDO::FETCH_KEY_PAIR);
     } catch (PDOException $e) {
         // Fail silently
     }
 }
 
+// Fallback arrays for safety
+$report_names[1] = $report_names[1] ?? 'Normal Cleaning';
+$report_names[2] = $report_names[2] ?? 'Intensive Cleaning';
+$report_names[3] = $report_names[3] ?? 'PLDC Cleaning';
+$report_names[4] = $report_names[4] ?? 'PRT Cleaning';
+$report_names[5] = $report_names[5] ?? 'Pantry Car';
+$report_names[6] = $report_names[6] ?? 'Surprise Visit Audits';
+$report_names[7] = $report_names[7] ?? 'Vande Bharat Modules';
+$report_names[8] = $report_names[8] ?? 'Attendance & Manpower';
+$report_names[9] = $report_names[9] ?? 'Cleanliness Modules';
+$report_names[10] = $report_names[10] ?? 'Photo Reports';
+
+$subreport_names[1] = $subreport_names[1] ?? 'Normal Report';
+$subreport_names[2] = $subreport_names[2] ?? 'Chemical Report';
+$subreport_names[3] = $subreport_names[3] ?? 'Machine Report';
+$subreport_names[4] = $subreport_names[4] ?? 'Intensive Report';
+$subreport_names[5] = $subreport_names[5] ?? 'Chemical Report';
+$subreport_names[6] = $subreport_names[6] ?? 'Machine Report';
+$subreport_names[7] = $subreport_names[7] ?? 'PLDC Scorecard';
+$subreport_names[8] = $subreport_names[8] ?? 'Chemical Report';
+$subreport_names[9] = $subreport_names[9] ?? 'Machine Report';
+$subreport_names[10] = $subreport_names[10] ?? 'PRT ScoreCard';
+$subreport_names[11] = $subreport_names[11] ?? 'Chemical Report';
+$subreport_names[12] = $subreport_names[12] ?? 'Intensive Scorecard 2';
+$subreport_names[13] = $subreport_names[13] ?? 'Pantry Car Score Card';
+$subreport_names[14] = $subreport_names[14] ?? 'Pit & Office Inspection';
+$subreport_names[15] = $subreport_names[15] ?? 'PF Return Trains Audit';
+$subreport_names[16] = $subreport_names[16] ?? 'Vande Bharat Score Card';
+$subreport_names[17] = $subreport_names[17] ?? 'Vande Bharat Chemical Report';
+$subreport_names[18] = $subreport_names[18] ?? 'Vande Bharat Machine Report';
+$subreport_names[19] = $subreport_names[19] ?? 'Man Power Log';
+$subreport_names[20] = $subreport_names[20] ?? 'Cleanliness Scorecard';
+$subreport_names[21] = $subreport_names[21] ?? 'Photo Report (Before/After)';
+
 // Access mapping helper variables
-$has_normal_audit = in_array('normal_audit', $assigned_reports);
-$has_normal_chem  = in_array('normal_chem', $assigned_reports);
-$has_normal_mach  = in_array('normal_mach', $assigned_reports);
-$has_normal_any   = $has_normal_audit || $has_normal_chem || $has_normal_mach;
+$has_normal_audit = in_array('normal-report.php', $active_subreport_urls);
+$has_normal_chem  = in_array('chemical-report.php', $active_subreport_urls);
+$has_normal_mach  = in_array('machine-report.php', $active_subreport_urls);
+$has_normal_any   = in_array(1, $active_report_ids) && ($has_normal_audit || $has_normal_chem || $has_normal_mach);
 
-$has_int_audit        = in_array('int_audit', $assigned_reports);
-$has_int_chem         = in_array('int_chem', $assigned_reports);
-$has_int_mach         = in_array('int_mach', $assigned_reports);
-$has_int_scorecard_2  = in_array('int_scorecard_2', $assigned_reports);
-$has_int_pantry       = in_array('int_pantry', $assigned_reports);
-$has_int_any          = $has_int_audit || $has_int_chem || $has_int_mach || $has_int_scorecard_2;
+$has_int_audit        = in_array('intensive-report.php', $active_subreport_urls);
+$has_int_chem         = in_array('intensive-chemical-report.php', $active_subreport_urls);
+$has_int_mach         = in_array('machine-report-intensive.php', $active_subreport_urls);
+$has_int_scorecard_2  = in_array('intensive_scorecard_2.php', $active_subreport_urls);
+$has_int_pantry       = in_array('intensive_pantry_scorecard.php', $active_subreport_urls);
+$has_int_any          = in_array(2, $active_report_ids) && ($has_int_audit || $has_int_chem || $has_int_mach || $has_int_scorecard_2);
 
-$has_pldc_audit   = in_array('pldc_audit', $assigned_reports);
-$has_pldc_chem    = in_array('pldc_chem', $assigned_reports);
-$has_pldc_mach    = in_array('pldc_mach', $assigned_reports);
-$has_pldc_any     = $has_pldc_audit || $has_pldc_chem || $has_pldc_mach;
+$has_pldc_audit   = in_array('PLDC-Scorecard.php', $active_subreport_urls);
+$has_pldc_chem    = in_array('pldc-chemical.php', $active_subreport_urls);
+$has_pldc_mach    = in_array('pldc-machine.php', $active_subreport_urls);
+$has_pldc_any     = in_array(3, $active_report_ids) && ($has_pldc_audit || $has_pldc_chem || $has_pldc_mach);
 
-$has_prt_audit    = in_array('prt_audit', $assigned_reports);
-$has_prt_chem     = in_array('prt_chem', $assigned_reports);
-$has_prt_any      = $has_prt_audit || $has_prt_chem;
+$has_prt_audit    = in_array('Platform-Return-TrainsScorecard.php', $active_subreport_urls);
+$has_prt_chem     = in_array('Platform-Return-Chemical.php', $active_subreport_urls);
+$has_prt_any      = in_array(4, $active_report_ids) && ($has_prt_audit || $has_prt_chem);
 
-$has_sur_pit      = in_array('sur_pit', $assigned_reports);
-$has_sur_pf       = in_array('sur_pf', $assigned_reports);
-$has_sur_any      = $has_sur_pit || $has_sur_pf;
+$has_sur_pit      = in_array('surprise-pit-office.php', $active_subreport_urls);
+$has_sur_pf       = in_array('surprise-pf-trains.php', $active_subreport_urls);
+$has_sur_any      = in_array(6, $active_report_ids) && ($has_sur_pit || $has_sur_pf);
 
-$has_vb_audit     = in_array('vb_audit', $assigned_reports);
-$has_vb_chem      = in_array('vb_chem', $assigned_reports);
-$has_vb_mach      = in_array('vb_mach', $assigned_reports);
-$has_vb_any       = $has_vb_audit || $has_vb_chem || $has_vb_mach;
+$has_vb_audit     = in_array('vande-bharat-report.php', $active_subreport_urls);
+$has_vb_chem      = in_array('vande-bharat-chemical.php', $active_subreport_urls);
+$has_vb_mach      = in_array('vande-bharat-machine.php', $active_subreport_urls);
+$has_vb_any       = in_array(7, $active_report_ids) && ($has_vb_audit || $has_vb_chem || $has_vb_mach);
 
-$has_manpower     = in_array('manpower', $assigned_reports);
-$has_cleanliness  = in_array('cleanliness', $assigned_reports);
-$has_photo_report = in_array('photo_report', $assigned_reports);
+$has_manpower     = in_array(8, $active_report_ids) && in_array('man-power-log.php', $active_subreport_urls);
+$has_cleanliness  = in_array(9, $active_report_ids) && in_array('cleanliness.php', $active_subreport_urls);
+$has_photo_report = in_array(10, $active_report_ids) && in_array('photo-report.php', $active_subreport_urls);
 ?>
 <aside class="app-sidebar shadow-lg" data-bs-theme="dark">
   <div class="sidebar-brand">
@@ -197,7 +252,7 @@ $has_photo_report = in_array('photo_report', $assigned_reports);
           <a href="#" class="nav-link <?= $isNormalActive ? 'active' : '' ?>">
             <i class="nav-icon bi bi-droplet-half"></i>
             <p>
-              Normal Cleaning
+              <?= htmlspecialchars($report_names[1]) ?>
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
@@ -205,21 +260,21 @@ $has_photo_report = in_array('photo_report', $assigned_reports);
             <?php if ($has_normal_audit): ?>
             <li class="nav-item">
               <a href="normal-report.php" class="nav-link <?= ($currentPage == 'normal-report.php') ? 'active' : '' ?>">
-                <p>Normal Report</p>
+                <p><?= htmlspecialchars($subreport_names[1]) ?></p>
               </a>
             </li>
             <?php endif; ?>
             <?php if ($has_normal_chem): ?>
             <li class="nav-item">
               <a href="chemical-report.php" class="nav-link <?= ($currentPage == 'chemical-report.php' && !isset($_GET['intensive'])) ? 'active' : '' ?>">
-                <p>Chemical Report</p>
+                <p><?= htmlspecialchars($subreport_names[2]) ?></p>
               </a>
             </li>
             <?php endif; ?>
             <?php if ($has_normal_mach): ?>
             <li class="nav-item">
               <a href="machine-report.php" class="nav-link <?= in_array($currentPage, ['machine-report.php', 'machine-target.php', 'machine-summary.php']) ? 'active' : '' ?>">
-                <p>Machine Report</p>
+                <p><?= htmlspecialchars($subreport_names[3]) ?></p>
               </a>
             </li>
             <?php endif; ?>
@@ -237,7 +292,7 @@ $has_photo_report = in_array('photo_report', $assigned_reports);
           <a href="#" class="nav-link <?= $isIntensiveActive ? 'active' : '' ?>">
             <i class="nav-icon bi bi-stars"></i>
             <p>
-              Intensive Cleaning
+              <?= htmlspecialchars($report_names[2]) ?>
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
@@ -245,28 +300,28 @@ $has_photo_report = in_array('photo_report', $assigned_reports);
             <?php if ($has_int_audit): ?>
             <li class="nav-item">
               <a href="intensive-report.php" class="nav-link <?= ($currentPage == 'intensive-report.php') ? 'active' : '' ?>">
-                <p>Intensive Report</p>
+                <p><?= htmlspecialchars($subreport_names[4]) ?></p>
               </a>
             </li>
             <?php endif; ?>
             <?php if ($has_int_scorecard_2): ?>
             <li class="nav-item">
               <a href="intensive_scorecard_2.php" class="nav-link <?= in_array($currentPage, ['intensive_scorecard_2.php', 'instensive_scorecard_2.php']) ? 'active' : '' ?>">
-                <p>Intensive Scorecard 2</p>
+                <p><?= htmlspecialchars($subreport_names[12]) ?></p>
               </a>
             </li>
             <?php endif; ?>
             <?php if ($has_int_chem): ?>
             <li class="nav-item">
               <a href="intensive-chemical-report.php" class="nav-link <?= in_array($currentPage, ['intensive-chemical-report.php', 'intensive-chemical-summary.php']) ? 'active' : '' ?>">
-                <p>Chemical Report</p>
+                <p><?= htmlspecialchars($subreport_names[5]) ?></p>
               </a>
             </li>
             <?php endif; ?>
             <?php if ($has_int_mach): ?>
             <li class="nav-item">
               <a href="machine-report-intensive.php" class="nav-link <?= in_array($currentPage, ['machine-report-intensive.php', 'machine-target-intensive.php', 'machine-summary-intensive.php']) ? 'active' : '' ?>">
-                <p>Machine Report</p>
+                <p><?= htmlspecialchars($subreport_names[6]) ?></p>
               </a>
             </li>
             <?php endif; ?>
@@ -284,14 +339,14 @@ $has_photo_report = in_array('photo_report', $assigned_reports);
           <a href="#" class="nav-link <?= $isPantryActive ? 'active' : '' ?>">
             <i class="nav-icon bi bi-cup-hot"></i>
             <p>
-              Pantry Car
+              <?= htmlspecialchars($report_names[5]) ?>
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
           <ul class="nav nav-treeview ms-3">
             <li class="nav-item">
               <a href="intensive_pantry_scorecard.php" class="nav-link <?= in_array($currentPage, ['intensive_pantry_scorecard.php', 'pantry_scorecard.php']) ? 'active' : '' ?>">
-                <p>Score Card</p>
+                <p><?= htmlspecialchars($subreport_names[13]) ?></p>
               </a>
             </li>
           </ul>
@@ -308,7 +363,7 @@ $has_photo_report = in_array('photo_report', $assigned_reports);
           <a href="#" class="nav-link <?= $isPldcActive ? 'active' : '' ?>">
             <i class="nav-icon bi bi-shield-check"></i>
             <p>
-              PLDC Cleaning
+              <?= htmlspecialchars($report_names[3]) ?>
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
@@ -316,21 +371,21 @@ $has_photo_report = in_array('photo_report', $assigned_reports);
             <?php if ($has_pldc_audit): ?>
             <li class="nav-item">
               <a href="PLDC-Scorecard.php" class="nav-link <?= ($currentPage == 'PLDC-Scorecard.php') ? 'active' : '' ?>">
-                <p>PLDC Scorecard</p>
+                <p><?= htmlspecialchars($subreport_names[7]) ?></p>
               </a>
             </li>
             <?php endif; ?>
             <?php if ($has_pldc_chem): ?>
             <li class="nav-item">
               <a href="pldc-chemical.php" class="nav-link <?= ($currentPage == 'pldc-chemical.php') ? 'active' : '' ?>">
-                <p>Chemical Report</p>
+                <p><?= htmlspecialchars($subreport_names[8]) ?></p>
               </a>
             </li>
             <?php endif; ?>
             <?php if ($has_pldc_mach): ?>
             <li class="nav-item">
               <a href="pldc-machine.php" class="nav-link <?= ($currentPage == 'pldc-machine.php') ? 'active' : '' ?>">
-                <p>Machine Report</p>
+                <p><?= htmlspecialchars($subreport_names[9]) ?></p>
               </a>
             </li>
             <?php endif; ?>
@@ -348,7 +403,7 @@ $has_photo_report = in_array('photo_report', $assigned_reports);
           <a href="#" class="nav-link <?= $isPrtActive ? 'active' : '' ?>">
             <i class="nav-icon bi bi-arrow-repeat"></i>
             <p>
-              PRT Cleaning
+              <?= htmlspecialchars($report_names[4]) ?>
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
@@ -356,14 +411,14 @@ $has_photo_report = in_array('photo_report', $assigned_reports);
             <?php if ($has_prt_audit): ?>
             <li class="nav-item">
               <a href="Platform-Return-TrainsScorecard.php" class="nav-link <?= ($currentPage == 'Platform-Return-TrainsScorecard.php') ? 'active' : '' ?>">
-                <p>PRT ScoreCard</p>
+                <p><?= htmlspecialchars($subreport_names[10]) ?></p>
               </a>
             </li>
             <?php endif; ?>
             <?php if ($has_prt_chem): ?>
             <li class="nav-item">
               <a href="Platform-Return-Chemical.php" class="nav-link <?= ($currentPage == 'Platform-Return-Chemical.php') ? 'active' : '' ?>">
-                <p>Chemical Report</p>
+                <p><?= htmlspecialchars($subreport_names[11]) ?></p>
               </a>
             </li>
             <?php endif; ?>
@@ -381,7 +436,7 @@ $has_photo_report = in_array('photo_report', $assigned_reports);
           <a href="#" class="nav-link <?= $isSurpriseActive ? 'active' : '' ?>">
             <i class="nav-icon bi bi-patch-check-fill"></i>
             <p>
-              Surprise Visit
+              <?= htmlspecialchars($report_names[6]) ?>
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
@@ -389,14 +444,14 @@ $has_photo_report = in_array('photo_report', $assigned_reports);
             <?php if ($has_sur_pit): ?>
             <li class="nav-item">
               <a href="surprise-pit-office.php" class="nav-link <?= ($currentPage == 'surprise-pit-office.php') ? 'active' : '' ?>">
-                <p>Pit & Office Cleaning</p>
+                <p><?= htmlspecialchars($subreport_names[14]) ?></p>
               </a>
             </li>
             <?php endif; ?>
             <?php if ($has_sur_pf): ?>
             <li class="nav-item">
               <a href="surprise-pf-trains.php" class="nav-link <?= ($currentPage == 'surprise-pf-trains.php') ? 'active' : '' ?>">
-                <p>PF Return Trains</p>
+                <p><?= htmlspecialchars($subreport_names[15]) ?></p>
               </a>
             </li>
             <?php endif; ?>
@@ -414,7 +469,7 @@ $has_photo_report = in_array('photo_report', $assigned_reports);
           <a href="#" class="nav-link <?= $isVbActive ? 'active' : '' ?>">
             <i class="nav-icon bi bi-lightning-charge-fill"></i>
             <p>
-              Vande Bharat
+              <?= htmlspecialchars($report_names[7]) ?>
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
@@ -422,21 +477,21 @@ $has_photo_report = in_array('photo_report', $assigned_reports);
             <?php if ($has_vb_audit): ?>
             <li class="nav-item">
               <a href="vande-bharat-report.php" class="nav-link <?= in_array($currentPage, ['vande-bharat-report.php', 'vande-bharat-summary.php']) ? 'active' : '' ?>">
-                <p>Score Card</p>
+                <p><?= htmlspecialchars($subreport_names[16]) ?></p>
               </a>
             </li>
             <?php endif; ?>
             <?php if ($has_vb_chem): ?>
             <li class="nav-item">
               <a href="vande-bharat-chemical.php" class="nav-link <?= in_array($currentPage, ['vande-bharat-chemical.php', 'vande-bharat-chemical-target.php', 'vande-bharat-chemical-summary.php']) ? 'active' : '' ?>">
-                <p>Chemical Report</p>
+                <p><?= htmlspecialchars($subreport_names[17]) ?></p>
               </a>
             </li>
             <?php endif; ?>
             <?php if ($has_vb_mach): ?>
             <li class="nav-item">
               <a href="vande-bharat-machine.php" class="nav-link <?= in_array($currentPage, ['vande-bharat-machine.php', 'vande-bharat-machine-target.php', 'vande-bharat-machine-summary.php']) ? 'active' : '' ?>">
-                <p>Machine Report</p>
+                <p><?= htmlspecialchars($subreport_names[18]) ?></p>
               </a>
             </li>
             <?php endif; ?>
@@ -449,7 +504,7 @@ $has_photo_report = in_array('photo_report', $assigned_reports);
         <li class="nav-item">
           <a href="cleanliness.php" class="nav-link <?= ($currentPage == 'cleanliness.php') ? 'active' : '' ?>">
             <i class="nav-icon bi bi-stars"></i>
-            <p>Cleanliness</p>
+            <p><?= htmlspecialchars($report_names[9]) ?></p>
           </a>
         </li>
         <?php endif; ?>
@@ -459,7 +514,7 @@ $has_photo_report = in_array('photo_report', $assigned_reports);
         <li class="nav-item">
           <a href="photo-report.php" class="nav-link <?= ($currentPage == 'photo-report.php') ? 'active' : '' ?>">
             <i class="nav-icon bi bi-camera"></i>
-            <p>Photo Report</p>
+            <p><?= htmlspecialchars($report_names[10]) ?></p>
           </a>
         </li>
         <?php endif; ?>
@@ -476,14 +531,14 @@ $has_photo_report = in_array('photo_report', $assigned_reports);
           <a href="#" class="nav-link <?= $isAttendanceActive ? 'active' : '' ?>">
             <i class="nav-icon bi bi-calendar-check"></i>
             <p>
-              Attendance
+              <?= htmlspecialchars($report_names[8]) ?>
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
           <ul class="nav nav-treeview ms-3">
             <li class="nav-item">
               <a href="man-power-log.php" class="nav-link <?= ($currentPage == 'man-power-log.php') ? 'active' : '' ?>">
-                <p>Man Power Log</p>
+                <p><?= htmlspecialchars($subreport_names[19]) ?></p>
               </a>
             </li>
           </ul>

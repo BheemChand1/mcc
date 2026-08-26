@@ -21,7 +21,10 @@ $selected_reports = [];
 // Handle POST submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $station_id = intval($_POST['station_id'] ?? 0);
-    $reports = $_POST['reports'] ?? [];
+    $report_names = $_POST['report_names'] ?? [];
+    $report_active = $_POST['report_active'] ?? [];
+    $subreport_names = $_POST['subreport_names'] ?? [];
+    $subreport_active = $_POST['subreport_active'] ?? [];
     
     if ($station_id <= 0) {
         $_SESSION['flash_message'] = 'Please select a station to map report profiles.';
@@ -30,46 +33,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->beginTransaction();
             
-            // Delete existing mappings for this station
-            $delStmt = $pdo->prepare("DELETE FROM mcc_station_reports WHERE station_id = :station_id");
-            $delStmt->execute(['station_id' => $station_id]);
+            // 1. Update main reports status and names
+            $repsStmt = $pdo->prepare("SELECT report_id FROM mcc_reports WHERE station_id = :station_id");
+            $repsStmt->execute(['station_id' => $station_id]);
+            $stationReportIds = $repsStmt->fetchAll(PDO::FETCH_COLUMN);
+
+            $updateRepStmt = $pdo->prepare("UPDATE mcc_reports SET report_name = :report_name, status = :status WHERE report_id = :report_id");
             
-              // Insert new mappings
-              if (!empty($reports)) {
-                  $insStmt = $pdo->prepare("INSERT INTO mcc_station_reports (station_id, report_key) VALUES (:station_id, :report_key)");
-                  foreach ($reports as $rep_key) {
-                      $insStmt->execute([
-                          'station_id' => $station_id,
-                          'report_key' => $rep_key
-                      ]);
-                  }
-              }
-              
-              // Seed default manpower categories if manpower is assigned and no categories exist
-              if (in_array('manpower', $reports)) {
-                  $chkCat = $pdo->prepare("SELECT COUNT(*) FROM mcc_manpower_categories WHERE station_id = :station_id");
-                  $chkCat->execute(['station_id' => $station_id]);
-                  if ($chkCat->fetchColumn() == 0) {
-                      $defaultCats = [
-                          ['NORMAL CLEANING', 1],
-                          ['EXTERNAL COACH CLEANING', 2],
-                          ['INTENSIVE COACH CLEANING', 3],
-                          ['PADLOCKING', 4],
-                          ['CLEANING OF PITLINES AND DEPOT PREMISES', 5],
-                          ['Watering and Internal dry cleaning of coaches for Platform Return Trains', 6],
-                          ['Manpower Required for Undergear Cleaning', 7],
-                          ['Changing & Cleaning of DB/IB at SCL Pit', 8]
-                      ];
-                      $insCat = $pdo->prepare("INSERT INTO mcc_manpower_categories (station_id, category_name, order_no, status) VALUES (:station_id, :category_name, :order_no, 'Active')");
-                      foreach ($defaultCats as $cat) {
-                          $insCat->execute([
-                              'station_id' => $station_id,
-                              'category_name' => $cat[0],
-                              'order_no' => $cat[1]
-                          ]);
-                      }
-                  }
-              }
+            foreach ($stationReportIds as $rid) {
+                $name = trim($report_names[$rid] ?? '');
+                if (empty($name)) continue;
+                $status = in_array($rid, $report_active) ? 'Active' : 'Inactive';
+                $updateRepStmt->execute([
+                    'report_name' => $name,
+                    'status' => $status,
+                    'report_id' => $rid
+                ]);
+            }
+
+            // 2. Update subreports status and names
+            if (!empty($stationReportIds)) {
+                $inClause = implode(',', array_map('intval', $stationReportIds));
+                $subsStmt = $pdo->query("SELECT subreport_id FROM mcc_subreports WHERE report_id IN ($inClause)");
+                $stationSubreportIds = $subsStmt->fetchAll(PDO::FETCH_COLUMN);
+
+                $updateSubStmt = $pdo->prepare("UPDATE mcc_subreports SET report_name = :report_name, status = :status WHERE subreport_id = :subreport_id");
+
+                foreach ($stationSubreportIds as $sid) {
+                    $name = trim($subreport_names[$sid] ?? '');
+                    if (empty($name)) continue;
+                    $status = in_array($sid, $subreport_active) ? 'Active' : 'Inactive';
+                    $updateSubStmt->execute([
+                        'report_name' => $name,
+                        'status' => $status,
+                        'subreport_id' => $sid
+                    ]);
+                }
+            }
+
+            // Seeder for manpower default categories if manpower subreport (subreport_id = 19) is activated
+            if (in_array(19, $subreport_active)) {
+                $chkCat = $pdo->prepare("SELECT COUNT(*) FROM mcc_manpower_categories WHERE station_id = :station_id");
+                $chkCat->execute(['station_id' => $station_id]);
+                if ($chkCat->fetchColumn() == 0) {
+                    $defaultCats = [
+                        ['NORMAL CLEANING', 1],
+                        ['EXTERNAL COACH CLEANING', 2],
+                        ['INTENSIVE COACH CLEANING', 3],
+                        ['PADLOCKING', 4],
+                        ['CLEANING OF PITLINES AND DEPOT PREMISES', 5],
+                        ['Watering and Internal dry cleaning of coaches for Platform Return Trains', 6],
+                        ['Manpower Required for Undergear Cleaning', 7],
+                        ['Changing & Cleaning of DB/IB at SCL Pit', 8]
+                    ];
+                    $insCat = $pdo->prepare("INSERT INTO mcc_manpower_categories (station_id, category_name, order_no, status) VALUES (:station_id, :category_name, :order_no, 'Active')");
+                    foreach ($defaultCats as $cat) {
+                        $insCat->execute([
+                            'station_id' => $station_id,
+                            'category_name' => $cat[0],
+                            'order_no' => $cat[1]
+                        ]);
+                    }
+                }
+            }
             
             $pdo->commit();
             
@@ -78,12 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $st->execute(['id' => $station_id]);
             $stn_name = $st->fetchColumn();
             
-            $count = count($reports);
-            if ($count > 0) {
-                $_SESSION['flash_message'] = "Success! Mapping configurations saved: $count report profiles successfully mapped to Station '$stn_name'.";
-            } else {
-                $_SESSION['flash_message'] = "Success! All report mappings removed for Station '$stn_name'.";
-            }
+            $_SESSION['flash_message'] = "Success! Mapping configurations and report names saved successfully for Station '$stn_name'.";
             $_SESSION['flash_message_type'] = 'success';
         } catch (PDOException $e) {
             if ($pdo->inTransaction()) {
@@ -98,13 +119,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit();
 }
 
+$selected_reports = [];
+$selected_subreports = [];
+$stationReports = [];
+
 // Handle GET request to load mappings for editing/pre-filling
 if (isset($_GET['edit_station'])) {
     $selected_station_id = intval($_GET['edit_station']);
     try {
-        $stmt = $pdo->prepare("SELECT report_key FROM mcc_station_reports WHERE station_id = :station_id");
+        // Auto-seed default report categories if they do not exist for the station
+        $chkStmt = $pdo->prepare("SELECT COUNT(*) FROM mcc_reports WHERE station_id = :station_id");
+        $chkStmt->execute(['station_id' => $selected_station_id]);
+        if ($chkStmt->fetchColumn() == 0) {
+            $pdo->beginTransaction();
+            $defaultReports = [
+                1 => 'Normal Cleaning',
+                2 => 'Intensive Cleaning',
+                3 => 'PLDC Cleaning',
+                4 => 'PRT Cleaning',
+                5 => 'Pantry Car',
+                6 => 'Surprise Visit Audits',
+                7 => 'Vande Bharat Modules',
+                8 => 'Attendance & Manpower',
+                9 => 'Cleanliness Modules',
+                10 => 'Photo Reports'
+            ];
+            
+            $insStmt = $pdo->prepare("INSERT INTO mcc_reports (report_id, report_name, station_id, status) VALUES (?, ?, ?, 'Inactive')");
+            foreach ($defaultReports as $rid => $name) {
+                // Insert default reports for the station
+                $insStmt->execute([$rid, $name, $selected_station_id]);
+            }
+            $pdo->commit();
+        }
+
+        // Fetch reports list
+        $stmt = $pdo->prepare("SELECT * FROM mcc_reports WHERE station_id = :station_id ORDER BY report_id ASC");
         $stmt->execute(['station_id' => $selected_station_id]);
-        $selected_reports = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $stationReports = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
         // Fail silently
     }
@@ -176,8 +228,8 @@ include 'sidebar.php';
                   
                   <!-- Station Selection -->
                   <div class="mb-4">
-                    <label for="station_id" class="form-label font-weight-bold text-secondary mb-1" style="font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.5px;">Select Target Depot Station</label>
-                    <select class="form-select rounded-3 p-2.5 font-weight-bold border-indigo-subtle" id="station_id" name="station_id" required>
+                    <label for="station_id_select" class="form-label font-weight-bold text-secondary mb-1" style="font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.5px;">Select Target Depot Station</label>
+                    <select class="form-select rounded-3 p-2.5 font-weight-bold border-indigo-subtle" id="station_id_select" name="station_id" onchange="window.location.href='assign-reports.php?edit_station=' + this.value" required>
                       <option value="">-- Choose Active Station --</option>
                       <?php foreach ($activeStations as $stn): ?>
                         <option value="<?php echo $stn['station_id']; ?>" <?php echo ($selected_station_id == $stn['station_id']) ? 'selected' : ''; ?>><?php echo htmlspecialchars($stn['station_name']); ?></option>
@@ -185,149 +237,50 @@ include 'sidebar.php';
                     </select>
                   </div>
 
-                  <!-- Reports Checklist -->
-                  <div class="mb-4">
-                    <label class="form-label font-weight-bold text-secondary mb-3" style="font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.5px;">Select Reports Profile to Assign</label>
-                    
-                    <!-- 1. Normal Cleaning Group -->
-                    <div class="report-group-container border rounded-3 p-3 mb-3 bg-light-subtle">
-                      <h6 class="font-weight-bold text-indigo mb-2" style="font-size: 0.9rem;"><i class="bi bi-droplet-half"></i> Normal Cleaning Modules</h6>
-                      <div class="form-check mb-1">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="normal_audit" id="rep_normal_audit" <?php echo in_array('normal_audit', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_normal_audit">Normal Audit Scorecard</label>
+                  <?php if ($selected_station_id > 0): ?>
+                    <!-- Reports Checklist -->
+                    <div class="mb-4">
+                      <label class="form-label font-weight-bold text-secondary mb-3" style="font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.5px;">Edit & Allocate Reports Profile</label>
+                      
+                      <?php foreach ($stationReports as $rep): 
+                          // Fetch subreports for this report
+                          $subStmt = $pdo->prepare("SELECT * FROM mcc_subreports WHERE report_id = :report_id ORDER BY subreport_id ASC");
+                          $subStmt->execute(['report_id' => $rep['report_id']]);
+                          $subreports = $subStmt->fetchAll(PDO::FETCH_ASSOC);
+                      ?>
+                      <div class="report-group-container border rounded-3 p-3 mb-3 bg-light-subtle shadow-sm">
+                        <div class="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom">
+                          <div class="d-flex align-items-center gap-2 flex-grow-1">
+                            <input class="form-check-input check-indigo" type="checkbox" name="report_active[]" value="<?= $rep['report_id'] ?>" id="rep_<?= $rep['report_id'] ?>" <?= $rep['status'] == 'Active' ? 'checked' : '' ?>>
+                            <input type="text" class="form-control form-control-sm font-weight-bold text-indigo border-0 bg-transparent p-0" name="report_names[<?= $rep['report_id'] ?>]" value="<?= htmlspecialchars($rep['report_name']) ?>" style="font-size: 0.9rem; max-width: 250px;" required>
+                          </div>
+                          <span class="badge <?= $rep['status'] == 'Active' ? 'bg-success' : 'bg-secondary' ?> small" style="font-size: 11px;"><?= $rep['status'] ?></span>
+                        </div>
+                        
+                        <div class="subreports-list ms-4 mt-2">
+                          <?php foreach ($subreports as $sub): ?>
+                          <div class="d-flex align-items-center justify-content-between mb-1 pb-1">
+                            <div class="d-flex align-items-center gap-2">
+                              <input class="form-check-input check-indigo" type="checkbox" name="subreport_active[]" value="<?= $sub['subreport_id'] ?>" id="sub_<?= $sub['subreport_id'] ?>" <?= $sub['status'] == 'Active' ? 'checked' : '' ?>>
+                              <input type="text" class="form-control form-control-sm text-dark border-0 bg-transparent p-0" name="subreport_names[<?= $sub['subreport_id'] ?>]" value="<?= htmlspecialchars($sub['report_name']) ?>" style="max-width: 200px;" required>
+                            </div>
+                            <span class="text-muted font-monospace" style="font-size: 10px;"><?= htmlspecialchars($sub['report_url']) ?></span>
+                          </div>
+                          <?php endforeach; ?>
+                        </div>
                       </div>
-                      <div class="form-check mb-1">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="normal_chem" id="rep_normal_chem" <?php echo in_array('normal_chem', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_normal_chem">Normal Chemical Consumption</label>
-                      </div>
-                      <div class="form-check">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="normal_mach" id="rep_normal_mach" <?php echo in_array('normal_mach', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_normal_mach">Normal Machine Log</label>
-                      </div>
+                      <?php endforeach; ?>
                     </div>
 
-                    <!-- 2. Intensive Cleaning Group -->
-                    <div class="report-group-container border rounded-3 p-3 mb-3 bg-light-subtle">
-                      <h6 class="font-weight-bold text-indigo mb-2" style="font-size: 0.9rem;"><i class="bi bi-stars"></i> Intensive Cleaning Modules</h6>
-                      <div class="form-check mb-1">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="int_audit" id="rep_int_audit" <?php echo in_array('int_audit', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_int_audit">Intensive Audit Scorecard</label>
-                      </div>
-                      <div class="form-check mb-1">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="int_chem" id="rep_int_chem" <?php echo in_array('int_chem', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_int_chem">Intensive Chemical Report</label>
-                      </div>
-                      <div class="form-check mb-1">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="int_mach" id="rep_int_mach" <?php echo in_array('int_mach', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_int_mach">Intensive Machine Log</label>
-                      </div>
-                      <div class="form-check">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="int_scorecard_2" id="rep_int_scorecard_2" <?php echo in_array('int_scorecard_2', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_int_scorecard_2">Intensive Scorecard 2</label>
-                      </div>
+                    <button type="submit" class="btn btn-indigo w-100 p-2.5 rounded-3 font-weight-bold shadow-sm mt-3">
+                      Save Dynamic Allocation & Names &nbsp;<i class="bi bi-shield-check"></i>
+                    </button>
+                  <?php else: ?>
+                    <div class="alert alert-info text-center small rounded-3 p-3 mb-0" role="alert">
+                      <i class="bi bi-info-circle-fill fs-5 d-block mb-2"></i>
+                      Please select a depot station to load and manage report profiles.
                     </div>
-
-                    <!-- 3. Pantry Car Group -->
-                    <div class="report-group-container border rounded-3 p-3 mb-3 bg-light-subtle">
-                      <h6 class="font-weight-bold text-indigo mb-2" style="font-size: 0.9rem;"><i class="bi bi-cup-hot"></i> Pantry Car Modules</h6>
-                      <div class="form-check">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="int_pantry" id="rep_int_pantry" <?php echo in_array('int_pantry', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_int_pantry">Pantry Car Score Card</label>
-                      </div>
-                    </div>
-
-                    <!-- 3. PLDC Group -->
-                    <div class="report-group-container border rounded-3 p-3 mb-3 bg-light-subtle">
-                      <h6 class="font-weight-bold text-indigo mb-2" style="font-size: 0.9rem;"><i class="bi bi-shield-check"></i> PLDC Audit Modules</h6>
-                      <div class="form-check mb-1">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="pldc_audit" id="rep_pldc_audit" <?php echo in_array('pldc_audit', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_pldc_audit">PLDC Audit Scorecard</label>
-                      </div>
-                      <div class="form-check mb-1">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="pldc_chem" id="rep_pldc_chem" <?php echo in_array('pldc_chem', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_pldc_chem">PLDC Chemical Report</label>
-                      </div>
-                      <div class="form-check">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="pldc_mach" id="rep_pldc_mach" <?php echo in_array('pldc_mach', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_pldc_mach">PLDC Machine Log</label>
-                      </div>
-                    </div>
-
-                    <!-- 4. Surprise Inspections Group -->
-                    <div class="report-group-container border rounded-3 p-3 bg-light-subtle">
-                      <h6 class="font-weight-bold text-indigo mb-2" style="font-size: 0.9rem;"><i class="bi bi-patch-check-fill"></i> Surprise Visit Audits</h6>
-                      <div class="form-check mb-1">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="sur_pit" id="rep_sur_pit" <?php echo in_array('sur_pit', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_sur_pit">Pit & Office Inspection</label>
-                      </div>
-                      <div class="form-check">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="sur_pf" id="rep_sur_pf" <?php echo in_array('sur_pf', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_sur_pf">PF Return Trains Audit</label>
-                      </div>
-                    </div>
-
-                    <!-- 5. PRT Cleaning Group -->
-                    <div class="report-group-container border rounded-3 p-3 bg-light-subtle mt-3">
-                      <h6 class="font-weight-bold text-indigo mb-2" style="font-size: 0.9rem;"><i class="bi bi-arrow-repeat"></i> PRT Cleaning Modules</h6>
-                      <div class="form-check mb-1">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="prt_audit" id="rep_prt_audit" <?php echo in_array('prt_audit', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_prt_audit">PRT ScoreCard</label>
-                      </div>
-                      <div class="form-check">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="prt_chem" id="rep_prt_chem" <?php echo in_array('prt_chem', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_prt_chem">PRT Chemical Report</label>
-                      </div>
-                    </div>
-
-                    <!-- 6. Vande Bharat Modules Group -->
-                    <div class="report-group-container border rounded-3 p-3 bg-light-subtle mt-3">
-                      <h6 class="font-weight-bold text-indigo mb-2" style="font-size: 0.9rem;"><i class="bi bi-lightning-charge-fill"></i> Vande Bharat Modules</h6>
-                      <div class="form-check mb-1">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="vb_audit" id="rep_vb_audit" <?php echo in_array('vb_audit', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_vb_audit">Vande Bharat Score Card</label>
-                      </div>
-                      <div class="form-check mb-1">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="vb_chem" id="rep_vb_chem" <?php echo in_array('vb_chem', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_vb_chem">Vande Bharat Chemical Report</label>
-                      </div>
-                      <div class="form-check">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="vb_mach" id="rep_vb_mach" <?php echo in_array('vb_mach', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_vb_mach">Vande Bharat Machine Report</label>
-                      </div>
-                    </div>
-
-                    <!-- 6. Attendance & Manpower Group -->
-                    <div class="report-group-container border rounded-3 p-3 bg-light-subtle mt-3">
-                      <h6 class="font-weight-bold text-indigo mb-2" style="font-size: 0.9rem;"><i class="bi bi-calendar-check"></i> Attendance & Manpower</h6>
-                      <div class="form-check">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="manpower" id="rep_manpower" <?php echo in_array('manpower', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_manpower">Man Power Log</label>
-                      </div>
-                    </div>
-
-                    <!-- 7. Cleanliness Group -->
-                    <div class="report-group-container border rounded-3 p-3 bg-light-subtle mt-3">
-                      <h6 class="font-weight-bold text-indigo mb-2" style="font-size: 0.9rem;"><i class="bi bi-stars"></i> Cleanliness Modules</h6>
-                      <div class="form-check">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="cleanliness" id="rep_cleanliness" <?php echo in_array('cleanliness', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_cleanliness">Cleanliness Scorecard</label>
-                      </div>
-                    </div>
-
-                    <!-- 8. Photo Report Group -->
-                    <div class="report-group-container border rounded-3 p-3 bg-light-subtle mt-3">
-                      <h6 class="font-weight-bold text-indigo mb-2" style="font-size: 0.9rem;"><i class="bi bi-camera"></i> Photo Reports</h6>
-                      <div class="form-check">
-                        <input class="form-check-input check-indigo" type="checkbox" name="reports[]" value="photo_report" id="rep_photo_report" <?php echo in_array('photo_report', $selected_reports) ? 'checked' : ''; ?>>
-                        <label class="form-check-label text-dark small" for="rep_photo_report">Photo Report (Before/After)</label>
-                      </div>
-                    </div>
-
-                  </div>
-
-                  <button type="submit" class="btn btn-indigo w-100 p-2.5 rounded-3 font-weight-bold shadow-sm mt-3">
-                    Assign Report Profiles &nbsp;<i class="bi bi-shield-check"></i>
-                  </button>
+                  <?php endif; ?>
                 </form>
               <?php endif; ?>
             </div>
@@ -354,57 +307,42 @@ include 'sidebar.php';
                   </thead>
                   <tbody>
                     <?php
-                    // Fetch and group station mapping configurations
+                    // Fetch and group station mapping configurations from mcc_reports and mcc_subreports
                     $mappings = [];
                     try {
-                        $stmt = $pdo->query("
-                            SELECT s.station_id, s.station_name, r.report_key 
-                            FROM mcc_stations s 
-                            LEFT JOIN mcc_station_reports r ON s.station_id = r.station_id 
-                            WHERE s.status = 'Active' 
-                            ORDER BY s.station_name ASC, r.report_key ASC
+                        $stationsStmt = $pdo->query("SELECT station_id, station_name FROM mcc_stations WHERE status = 'Active' ORDER BY station_name ASC");
+                        $stationsList = $stationsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                        $repStmt = $pdo->prepare("
+                            SELECT r.report_name, s.report_name AS subreport_name
+                            FROM mcc_reports r
+                            LEFT JOIN mcc_subreports s ON r.report_id = s.report_id AND s.status = 'Active'
+                            WHERE r.station_id = :station_id AND r.status = 'Active'
+                            ORDER BY r.report_id ASC, s.subreport_id ASC
                         ");
-                        $rawMappings = $stmt->fetchAll();
-                        
-                        foreach ($rawMappings as $row) {
-                            $sid = $row['station_id'];
-                            if (!isset($mappings[$sid])) {
-                                $mappings[$sid] = [
-                                    'name' => $row['station_name'],
-                                    'reports' => []
-                                ];
+
+                        foreach ($stationsList as $stn) {
+                            $sid = $stn['station_id'];
+                            $repStmt->execute(['station_id' => $sid]);
+                            $rows = $repStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                            $reports = [];
+                            foreach ($rows as $row) {
+                                if ($row['subreport_name']) {
+                                    $reports[] = $row['report_name'] . " (" . $row['subreport_name'] . ")";
+                                } else {
+                                    $reports[] = $row['report_name'];
+                                }
                             }
-                            if ($row['report_key'] !== null) {
-                                $mappings[$sid]['reports'][] = $row['report_key'];
-                            }
+
+                            $mappings[$sid] = [
+                                'name' => $stn['station_name'],
+                                'reports' => $reports
+                            ];
                         }
                     } catch (PDOException $e) {
                         // Fail silently
                     }
-                    
-                    $reportLabels = [
-                        'normal_audit' => 'Normal Audit',
-                        'normal_chem'  => 'Normal Chemical',
-                        'normal_mach'  => 'Normal Machine',
-                        'int_audit'       => 'Intensive Audit',
-                        'int_chem'        => 'Intensive Chemical',
-                        'int_mach'        => 'Intensive Machine',
-                        'int_scorecard_2' => 'Intensive Scorecard 2',
-                        'int_pantry'      => 'Pantry Car Score Card',
-                        'pldc_audit'      => 'PLDC Scorecard',
-                        'pldc_chem'    => 'PLDC Chemical',
-                        'pldc_mach'    => 'PLDC Machine',
-                        'prt_audit'    => 'PRT ScoreCard',
-                        'prt_chem'     => 'PRT Chemical',
-                        'sur_pit'      => 'Surprise Pit & Office',
-                        'sur_pf'       => 'Surprise PF Trains',
-                        'vb_audit'     => 'Vande Bharat Score Card',
-                        'vb_chem'      => 'Vande Bharat Chemical Report',
-                        'vb_mach'      => 'Vande Bharat Machine Report',
-                        'manpower'     => 'Manpower Log',
-                        'cleanliness'  => 'Cleanliness Scorecard',
-                        'photo_report' => 'Photo Report'
-                    ];
                     ?>
                     
                     <?php if (empty($mappings)): ?>
@@ -420,12 +358,10 @@ include 'sidebar.php';
                           <td class="ps-3"><strong><?php echo htmlspecialchars($data['name']); ?></strong></td>
                           <td>
                             <?php if (empty($data['reports'])): ?>
-                              <span class="text-muted small italic"><i class="bi bi-info-circle"></i> No report profiles assigned yet.</span>
+                              <span class="text-muted small italic"><i class="bi bi-info-circle"></i> No report profiles active/assigned yet.</span>
                             <?php else: ?>
-                              <?php foreach ($data['reports'] as $rep_key): ?>
-                                <?php if (isset($reportLabels[$rep_key])): ?>
-                                  <span class="badge bg-indigo-subtle text-indigo p-1.5 me-1 mb-1"><?php echo htmlspecialchars($reportLabels[$rep_key]); ?></span>
-                                <?php endif; ?>
+                              <?php foreach ($data['reports'] as $report_label): ?>
+                                <span class="badge bg-indigo-subtle text-indigo p-1.5 me-1 mb-1" style="font-size: 11px;"><?php echo htmlspecialchars($report_label); ?></span>
                               <?php endforeach; ?>
                             <?php endif; ?>
                           </td>

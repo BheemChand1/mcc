@@ -42,11 +42,11 @@ try {
         SELECT sp.id AS sub_parameter_id
         FROM mcc_normal_scorecard_param p
         JOIN mcc_normal_scorecard_sub_param sp ON p.id = sp.parameter_id
-        WHERE p.station_id = :station_id AND sp.station_id = :station_id 
+        WHERE p.station_id = ? AND sp.station_id = ? 
           AND p.status = 'Active' AND sp.status = 'Active'
         ORDER BY p.id ASC, sp.id ASC
     ");
-    $paramsStmt->execute(['station_id' => $stationId]);
+    $paramsStmt->execute([$stationId, $stationId]);
     $subParams = $paramsStmt->fetchAll(PDO::FETCH_COLUMN);
 
     if (empty($subParams)) {

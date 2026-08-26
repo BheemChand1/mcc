@@ -63,9 +63,8 @@ if ($isFallback) {
 } else {
     // Fetch reports for each token
     $scoresStmt = $pdo->prepare("
-        SELECT s.*, u.full_name AS supervisor_name 
+        SELECT s.* 
         FROM mcc_normal_scorecard_report s
-        LEFT JOIN mcc_users u ON s.submitted_by = u.user_id
         WHERE s.station_id = :station_id AND s.token_id = :token_id
     ");
 
@@ -82,7 +81,19 @@ if ($isFallback) {
         $dbCoaches = [];
 
         if (!empty($rows)) {
-            $supervisorName = $rows[0]['supervisor_name'] ?? 'Shubham';
+            $firstRow = $rows[0];
+            if (!empty($firstRow['auditor_name'])) {
+                $supervisorName = $firstRow['auditor_name'];
+            } elseif (!empty($firstRow['submitted_by'])) {
+                if (is_numeric($firstRow['submitted_by'])) {
+                    $uStmt = $pdo->prepare("SELECT full_name FROM mcc_users WHERE user_id = :uid");
+                    $uStmt->execute(['uid' => $firstRow['submitted_by']]);
+                    $supervisorName = $uStmt->fetchColumn() ?: $firstRow['submitted_by'];
+                } else {
+                    $supervisorName = $firstRow['submitted_by'];
+                }
+            }
+
             foreach ($rows as $row) {
                 $scoresData[$row['sub_parameter_id']][$row['coach_no']] = $row['score_value'];
                 $dbCoaches[$row['coach_no']] = true;

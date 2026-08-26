@@ -2423,7 +2423,7 @@ CREATE TABLE `mcc_normal_scorecard_report` (
   `train_no` varchar(50) NOT NULL,
   `coach_no` varchar(20) NOT NULL,
   `score_value` varchar(10) NOT NULL,
-  `submitted_by` int(11) NOT NULL,
+  `auditor_name` varchar(255) DEFAULT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -2433,7 +2433,7 @@ CREATE TABLE `mcc_normal_scorecard_report` (
 -- Dumping data for table `mcc_normal_scorecard_report`
 --
 
-INSERT INTO `mcc_normal_scorecard_report` (`id`, `sub_parameter_id`, `station_id`, `token_id`, `train_no`, `coach_no`, `score_value`, `submitted_by`, `report_date`, `created_at`, `updated_at`) VALUES
+INSERT INTO `mcc_normal_scorecard_report` (`id`, `sub_parameter_id`, `station_id`, `token_id`, `train_no`, `coach_no`, `score_value`, `auditor_name`, `report_date`, `created_at`, `updated_at`) VALUES
 (1, 7, 1, 'TKN-20260522-001', '12301', 'C1', '3', 2, '2026-05-22', '2026-05-22 11:36:28', '2026-05-22 11:36:28'),
 (2, 7, 1, 'TKN-20260522-001', '12301', 'C2', '3', 2, '2026-05-22', '2026-05-22 11:36:28', '2026-05-22 11:36:28'),
 (3, 7, 1, 'TKN-20260522-001', '12301', 'C3', '2', 2, '2026-05-22', '2026-05-22 11:36:28', '2026-05-22 11:36:28'),
@@ -5562,8 +5562,7 @@ ALTER TABLE `mcc_normal_scorecard_param`
 --
 ALTER TABLE `mcc_normal_scorecard_report`
   ADD CONSTRAINT `fk_normal_sc_rep_station` FOREIGN KEY (`station_id`) REFERENCES `mcc_stations` (`station_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `fk_normal_sc_rep_sub_param` FOREIGN KEY (`sub_parameter_id`) REFERENCES `mcc_normal_scorecard_sub_param` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `fk_normal_sc_rep_user` FOREIGN KEY (`submitted_by`) REFERENCES `mcc_users` (`user_id`);
+  ADD CONSTRAINT `fk_normal_sc_rep_sub_param` FOREIGN KEY (`sub_parameter_id`) REFERENCES `mcc_normal_scorecard_sub_param` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `mcc_normal_scorecard_sub_param`

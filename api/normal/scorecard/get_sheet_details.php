@@ -53,10 +53,10 @@ try {
         SELECT p.id AS parameter_id, p.parameter_name, sp.id AS sub_parameter_id, sp.sub_parameter_name
         FROM mcc_normal_scorecard_param p
         JOIN mcc_normal_scorecard_sub_param sp ON p.id = sp.parameter_id
-        WHERE p.station_id = :station_id AND sp.station_id = :station_id AND p.status = 'Active' AND sp.status = 'Active'
+        WHERE p.station_id = ? AND sp.station_id = ? AND p.status = 'Active' AND sp.status = 'Active'
         ORDER BY p.id ASC, sp.id ASC
     ");
-    $paramsStmt->execute(['station_id' => $meta['station_id']]);
+    $paramsStmt->execute([$meta['station_id'], $meta['station_id']]);
     $paramsRows = $paramsStmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Group subparameters by parameter

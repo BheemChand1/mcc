@@ -9,16 +9,6 @@ $selectedYear = $_GET['year'] ?? date('Y');
 $selectedMonth = str_pad($selectedMonth, 2, '0', STR_PAD_LEFT);
 $selectedYear = intval($selectedYear);
 
-// Fetch active shifts for this station (ordered by ID)
-$shiftsStmt = $pdo->prepare("
-    SELECT id AS shift_id, shift AS shift_name 
-    FROM mcc_normal_chemical_shifts 
-    WHERE station_id = :station_id
-    ORDER BY id ASC
-");
-$shiftsStmt->execute(['station_id' => $stationId]);
-$shiftsList = $shiftsStmt->fetchAll();
-
 // Fetch chemical parameters and target values for this station
 $paramsStmt = $pdo->prepare("
     SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
@@ -78,19 +68,14 @@ foreach ($parametersList as $p) {
         'penalty_rate' => floatval($p['penalty'] ?? 0),
         'penalty_qty_ml' => floatval($p['penalty_qty_ml'] ?? 0),
         'monthly_target' => 0.0,
-        'shift_qtys' => [],
         'total_consumed' => 0.0,
         'total_penalty' => 0.0
     ];
-    // Initialize shift quantities
-    foreach ($shiftsList as $s) {
-        $monthlyParamData[$p['parameter_id']]['shift_qtys'][$s['shift_id']] = 0.0;
-    }
 }
 
 // Fetch daily reports details to compute daily scores & penalties
 $dailyReportStmt = $pdo->prepare("
-    SELECT parameter_id, shift_id, qty_used 
+    SELECT parameter_id, qty_used 
     FROM mcc_normal_chemical_report 
     WHERE token_id = :token_id AND station_id = :station_id
 ");
@@ -108,7 +93,6 @@ foreach ($tokensList as $t) {
     $tokenParamQty = [];
     foreach ($rows as $row) {
         $pId = $row['parameter_id'];
-        $sId = $row['shift_id'];
         $qty = floatval($row['qty_used']);
 
         if (!isset($tokenParamQty[$pId])) {
@@ -117,7 +101,6 @@ foreach ($tokensList as $t) {
         $tokenParamQty[$pId] += $qty;
 
         if (isset($monthlyParamData[$pId])) {
-            $monthlyParamData[$pId]['shift_qtys'][$sId] += $qty;
             $monthlyParamData[$pId]['total_consumed'] += $qty;
         }
     }
@@ -425,25 +408,15 @@ include 'sidebar.php';
                     <table class="report-table">
                         <thead>
                             <tr>
-                                <th rowspan="2" style="width: 50px;">S.No</th>
-                                <th rowspan="2" style="text-align: left; padding-left: 10px;">Description Of Material</th>
-                                <th rowspan="2" style="width: 80px;">Target</th>
-                                <th rowspan="2" style="width: 80px;">Units</th>
-                                <th rowspan="2" style="width: 100px; white-space: nowrap;">Penalty</th>
-                                <th colspan="<?= max(1, count($shiftsList)) ?>">Quantity Used</th>
-                                <th rowspan="2" style="width: 90px;">Total Qty</th>
-                                <th rowspan="2" style="width: 90px;">Difference</th>
-                                <th rowspan="2" style="width: 90px;">Achieved</th>
-                                <th rowspan="2" style="width: 90px;">Deficit</th>
-                            </tr>
-                            <tr>
-                                <?php if (empty($shiftsList)): ?>
-                                    <th style="width: 80px;">Shifts</th>
-                                <?php else: ?>
-                                    <?php foreach ($shiftsList as $shift): ?>
-                                        <th style="width: 80px;"><?= htmlspecialchars($shift['shift_name']) ?></th>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
+                                <th style="width: 50px;">S.No</th>
+                                <th style="text-align: left; padding-left: 10px;">Description Of Material</th>
+                                <th style="width: 100px;">Target</th>
+                                <th style="width: 80px;">Units</th>
+                                <th style="width: 120px; white-space: nowrap;">Penalty</th>
+                                <th style="width: 120px;">Quantity Used (ml)</th>
+                                <th style="width: 100px;">Difference</th>
+                                <th style="width: 100px;">Achieved</th>
+                                <th style="width: 100px;">Deficit</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -470,16 +443,6 @@ include 'sidebar.php';
                                     <td><?= number_format($target, 0) ?></td>
                                     <td><?= htmlspecialchars($data['units']) ?></td>
                                     <td style="white-space: nowrap; font-size: 11.5px;"><?= $data['penalty_rate'] > 0 ? 'Rs.' . number_format($data['penalty_rate'], 0) . '/' . number_format(($data['penalty_qty_ml'] > 0 ? $data['penalty_qty_ml'] : $data['qty_ml']), 0) . 'ml' : '0' ?></td>
-                                    
-                                    <!-- Shift quantities -->
-                                    <?php if (empty($shiftsList)): ?>
-                                        <td>0</td>
-                                    <?php else: ?>
-                                        <?php foreach ($shiftsList as $shift): ?>
-                                            <td><?= number_format($data['shift_qtys'][$shift['shift_id']] ?? 0, 0) ?></td>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                    
                                     <td><strong><?= number_format($totalQty, 0) ?></strong></td>
                                     <td><?= ($difference > 0 ? '+' : '') . number_format($difference, 0) ?></td>
                                     <td><?= number_format($achievedPct, 2) ?>%</td>

@@ -38,7 +38,7 @@ try {
 
     // 2. Fetch active subreports for each report
     $subreportsStmt = $pdo->prepare("
-        SELECT subreport_id, report_name AS subreport_name, report_url 
+        SELECT subreport_id, report_name AS subreport_name, report_url, aap_key 
         FROM mcc_subreports 
         WHERE report_id = :report_id AND status = 'Active'
         ORDER BY subreport_id ASC

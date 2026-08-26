@@ -4102,6 +4102,7 @@ INSERT INTO `mcc_prt_scorecard_sub_param` (`id`, `sub_parameter_name`, `paramete
 
 CREATE TABLE `mcc_reports` (
   `report_id` int(11) NOT NULL,
+  `aap_key` varchar(255) DEFAULT NULL,
   `report_name` varchar(255) NOT NULL,
   `station_id` int(11) NOT NULL,
   `input_type` varchar(50) DEFAULT 'cleaning',
@@ -4193,6 +4194,7 @@ CREATE TABLE `mcc_subreports` (
   `report_url` varchar(500) NOT NULL,
   `report_name` varchar(255) NOT NULL,
   `report_id` int(11) NOT NULL,
+  `aap_key` varchar(255) DEFAULT NULL,
   `status` enum('Active','Inactive') DEFAULT 'Active',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -4202,18 +4204,18 @@ CREATE TABLE `mcc_subreports` (
 -- Dumping data for table `mcc_subreports`
 --
 
-INSERT INTO `mcc_subreports` (`subreport_id`, `report_url`, `report_name`, `report_id`, `status`, `created_at`, `updated_at`) VALUES
-(1, 'normal-report.php', 'Normal Report', 1, 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
-(2, 'chemical-report.php', 'Chemical Report', 1, 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
-(3, 'machine-report.php', 'Machine Report', 1, 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
-(4, 'intensive-report.php', 'Intensive Report', 2, 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
-(5, 'chemical-report.php', 'Chemical Report', 2, 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
-(6, 'machine-report-intensive.php', 'Machine Report', 2, 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
-(7, 'PLDC-Scorecard.php', 'PLDC Scorecard', 3, 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
-(8, 'pldc-chemical.php', 'Chemical Report', 3, 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
-(9, 'pldc-machine.php', 'Machine Report', 3, 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
-(10, 'Platform-Return-TrainsScorecard.php', 'PRT ScoreCard', 4, 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
-(11, 'Platform-Return-Chemical.php', 'Chemical Report', 4, 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06');
+INSERT INTO `mcc_subreports` (`subreport_id`, `report_url`, `report_name`, `report_id`, `aap_key`, `status`, `created_at`, `updated_at`) VALUES
+(1, 'normal-report.php', 'Normal Report', 1, 'normal_scorecard', 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
+(2, 'chemical-report.php', 'Chemical Report', 1, 'normal_chemical', 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
+(3, 'machine-report.php', 'Machine Report', 1, 'normal_machine', 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
+(4, 'intensive-report.php', 'Intensive Report', 2, 'intensive_scorecard', 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
+(5, 'chemical-report.php', 'Chemical Report', 2, 'intensive_chemical', 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
+(6, 'machine-report-intensive.php', 'Machine Report', 2, 'intensive_machine', 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
+(7, 'PLDC-Scorecard.php', 'PLDC Scorecard', 3, 'pldc_scorecard', 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
+(8, 'pldc-chemical.php', 'Chemical Report', 3, 'pldc_chemical', 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
+(9, 'pldc-machine.php', 'Machine Report', 3, 'pldc_machine', 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
+(10, 'Platform-Return-TrainsScorecard.php', 'PRT ScoreCard', 4, 'prt_scorecard', 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06'),
+(11, 'Platform-Return-Chemical.php', 'Chemical Report', 4, 'prt_chemical', 'Active', '2026-05-22 10:10:06', '2026-05-22 10:10:06');
 
 -- --------------------------------------------------------
 

@@ -97,6 +97,7 @@ try {
             $parameters[$pId] = [
                 'parameter_id' => $pId,
                 'parameter_name' => $row['parameter_name'],
+                'status' => 1,
                 'sub_parameters' => []
             ];
         }
@@ -104,12 +105,17 @@ try {
         $inputType = $row['input_type'] ?: 'cleaning';
         $options = $ratingGroups[$inputType] ?? [];
 
+        $scoreValue = $row['score_value'];
+        if ($scoreValue === null) {
+            $parameters[$pId]['status'] = 0;
+        }
+
         $parameters[$pId]['sub_parameters'][] = [
             'sub_parameter_id' => $row['sub_parameter_id'],
             'sub_parameter_name' => $row['sub_parameter_name'],
             'input_type' => $inputType,
             'options' => $options,
-            'score_value' => $row['score_value']
+            'score_value' => $scoreValue
         ];
     }
     $parameters = array_values($parameters);

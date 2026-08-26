@@ -24,15 +24,15 @@ $displayTargetsStmt = $pdo->prepare("
     SELECT t.parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
     FROM mcc_normal_chemical_target t
     WHERE t.station_id = :station_id 
-      AND :date_ref >= t.effective_from
-      AND (t.effective_to IS NULL OR :date_ref <= t.effective_to)
+      AND :date_ref_1 >= t.effective_from
+      AND (t.effective_to IS NULL OR :date_ref_2 <= t.effective_to)
 ");
 // Use last day of selected month or today as date reference
 $dateRef = date('Y-m-d', strtotime("$selectedYear-$selectedMonth-01 +1 month -1 day"));
 if (strtotime($dateRef) > time()) {
     $dateRef = date('Y-m-d');
 }
-$displayTargetsStmt->execute(['station_id' => $stationId, 'date_ref' => $dateRef]);
+$displayTargetsStmt->execute(['station_id' => $stationId, 'date_ref_1' => $dateRef, 'date_ref_2' => $dateRef]);
 $displayTargetsRaw = $displayTargetsStmt->fetchAll(PDO::FETCH_ASSOC);
 $displayTargets = [];
 foreach ($displayTargetsRaw as $dt) {
@@ -102,8 +102,8 @@ $targetStmt = $pdo->prepare("
     SELECT t.parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
     FROM mcc_normal_chemical_target t
     WHERE t.station_id = :station_id
-      AND :report_date >= t.effective_from 
-      AND (t.effective_to IS NULL OR :report_date <= t.effective_to)
+      AND :report_date_1 >= t.effective_from 
+      AND (t.effective_to IS NULL OR :report_date_2 <= t.effective_to)
 ");
 
 $dailyScores = [];
@@ -117,7 +117,8 @@ foreach ($tokensList as $t) {
     // Get targets active on this report date
     $targetStmt->execute([
         'station_id' => $stationId,
-        'report_date' => $reportDate
+        'report_date_1' => $reportDate,
+        'report_date_2' => $reportDate
     ]);
     $targetsRaw = $targetStmt->fetchAll(PDO::FETCH_ASSOC);
     $targets = [];

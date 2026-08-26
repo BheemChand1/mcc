@@ -35,8 +35,8 @@ $targetStmt = $pdo->prepare("
     SELECT t.parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
     FROM mcc_normal_chemical_target t
     WHERE t.station_id = :station_id
-      AND :report_date >= t.effective_from 
-      AND (t.effective_to IS NULL OR :report_date <= t.effective_to)
+      AND :report_date_1 >= t.effective_from 
+      AND (t.effective_to IS NULL OR :report_date_2 <= t.effective_to)
 ");
 
 if (!empty($tokensList)) {
@@ -60,7 +60,8 @@ if (!empty($tokensList)) {
         // Get targets active on this report date
         $targetStmt->execute([
             'station_id' => $stationId,
-            'report_date' => $reportDate
+            'report_date_1' => $reportDate,
+            'report_date_2' => $reportDate
         ]);
         $targetsRaw = $targetStmt->fetchAll(PDO::FETCH_ASSOC);
         $targets = [];
@@ -152,7 +153,8 @@ if (!empty($tokensList)) {
     // Default fallback template sheet if no data exists, get current targets active at fromDate
     $targetStmt->execute([
         'station_id' => $stationId,
-        'report_date' => $fromDate
+        'report_date_1' => $fromDate,
+        'report_date_2' => $fromDate
     ]);
     $targetsRaw = $targetStmt->fetchAll(PDO::FETCH_ASSOC);
     $targets = [];

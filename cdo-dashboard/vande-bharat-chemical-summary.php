@@ -9,31 +9,37 @@ $selectedYear = $_GET['year'] ?? date('Y');
 $selectedMonth = str_pad($selectedMonth, 2, '0', STR_PAD_LEFT);
 $selectedYear = intval($selectedYear);
 
-// Fetch active shifts for this station (ordered by ID)
-$shiftsStmt = $pdo->prepare("
-    SELECT id AS shift_id, shift AS shift_name 
-    FROM mcc_vb_chemical_shifts 
+// Fetch chemical parameters for this station dynamically - Vande Bharat
+$paramsStmt = $pdo->prepare("
+    SELECT id AS parameter_id, name AS parameter_name, units 
+    FROM mcc_vb_chemical_param
     WHERE station_id = :station_id
     ORDER BY id ASC
 ");
-$shiftsStmt->execute(['station_id' => $stationId]);
-$shiftsList = $shiftsStmt->fetchAll();
-
-// Fetch chemical parameters and target values for this station
-$paramsStmt = $pdo->prepare("
-    SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
-    FROM mcc_vb_chemical_param p
-    LEFT JOIN mcc_vb_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target
-    WHERE p.station_id = :station_id_param
-    ORDER BY p.id ASC
-");
-$paramsStmt->execute([
-    'station_id_target' => $stationId,
-    'station_id_param' => $stationId
-]);
+$paramsStmt->execute(['station_id' => $stationId]);
 $parametersList = $paramsStmt->fetchAll();
 
-// Fetch all reports (distinct tokens) in the selected month
+// Fetch active target values for display/initialization (as of end of month or today) - Vande Bharat
+$displayTargetsStmt = $pdo->prepare("
+    SELECT t.parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
+    FROM mcc_vb_chemical_target t
+    WHERE t.station_id = :station_id 
+      AND :date_ref_1 >= t.effective_from
+      AND (t.effective_to IS NULL OR :date_ref_2 <= t.effective_to)
+");
+// Use last day of selected month or today as date reference
+$dateRef = date('Y-m-d', strtotime("$selectedYear-$selectedMonth-01 +1 month -1 day"));
+if (strtotime($dateRef) > time()) {
+    $dateRef = date('Y-m-d');
+}
+$displayTargetsStmt->execute(['station_id' => $stationId, 'date_ref_1' => $dateRef, 'date_ref_2' => $dateRef]);
+$displayTargetsRaw = $displayTargetsStmt->fetchAll(PDO::FETCH_ASSOC);
+$displayTargets = [];
+foreach ($displayTargetsRaw as $dt) {
+    $displayTargets[$dt['parameter_id']] = $dt;
+}
+
+// Fetch all reports (distinct tokens) in the selected month - Vande Bharat
 $tokensStmt = $pdo->prepare("
     SELECT DISTINCT token_id, report_date 
     FROM mcc_vb_chemical_report 
@@ -47,7 +53,7 @@ $tokensStmt->execute([
 ]);
 $tokensList = $tokensStmt->fetchAll();
 
-// Get count of distinct coaches for each token in the selected month
+// Get count of distinct coaches for each token in the selected month - Vande Bharat
 $coachesStmt = $pdo->prepare("
     SELECT token_id, COUNT(DISTINCT coach_no) AS coaches_count
     FROM mcc_vb_chemical_report
@@ -71,28 +77,33 @@ while ($row = $coachesStmt->fetch()) {
 // Initialize parameters list for aggregation
 $monthlyParamData = [];
 foreach ($parametersList as $p) {
-    $monthlyParamData[$p['parameter_id']] = [
+    $pId = $p['parameter_id'];
+    $monthlyParamData[$pId] = [
         'name' => $p['parameter_name'],
         'units' => $p['units'] ?? 'Nos',
-        'qty_ml' => floatval($p['qty_ml'] ?? 0),
-        'penalty_rate' => floatval($p['penalty'] ?? 0),
-        'penalty_qty_ml' => floatval($p['penalty_qty_ml'] ?? 0),
+        'qty_ml' => isset($displayTargets[$pId]['qty_ml']) ? floatval($displayTargets[$pId]['qty_ml']) : 0,
+        'penalty_rate' => isset($displayTargets[$pId]['penalty']) ? floatval($displayTargets[$pId]['penalty']) : 0,
+        'penalty_qty_ml' => isset($displayTargets[$pId]['penalty_qty_ml']) ? floatval($displayTargets[$pId]['penalty_qty_ml']) : 0,
         'monthly_target' => 0.0,
-        'shift_qtys' => [],
         'total_consumed' => 0.0,
         'total_penalty' => 0.0
     ];
-    // Initialize shift quantities
-    foreach ($shiftsList as $s) {
-        $monthlyParamData[$p['parameter_id']]['shift_qtys'][$s['shift_id']] = 0.0;
-    }
 }
 
-// Fetch daily reports details to compute daily scores & penalties
+// Fetch daily reports details to compute daily scores & penalties - Vande Bharat
 $dailyReportStmt = $pdo->prepare("
-    SELECT parameter_id, shift_id, qty_used 
+    SELECT parameter_id, qty_used 
     FROM mcc_vb_chemical_report 
     WHERE token_id = :token_id AND station_id = :station_id
+");
+
+// Target resolving statement - Vande Bharat
+$targetStmt = $pdo->prepare("
+    SELECT t.parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
+    FROM mcc_vb_chemical_target t
+    WHERE t.station_id = :station_id
+      AND :report_date_1 >= t.effective_from 
+      AND (t.effective_to IS NULL OR :report_date_2 <= t.effective_to)
 ");
 
 $dailyScores = [];
@@ -101,6 +112,19 @@ $totalMonthlyPenalty = 0.0;
 foreach ($tokensList as $t) {
     $tokenId = $t['token_id'];
     $coachesCount = $tokenCoaches[$tokenId] ?? 16;
+    $reportDate = $t['report_date'];
+
+    // Get targets active on this report date
+    $targetStmt->execute([
+        'station_id' => $stationId,
+        'report_date_1' => $reportDate,
+        'report_date_2' => $reportDate
+    ]);
+    $targetsRaw = $targetStmt->fetchAll(PDO::FETCH_ASSOC);
+    $targets = [];
+    foreach ($targetsRaw as $tr) {
+        $targets[$tr['parameter_id']] = $tr;
+    }
 
     $dailyReportStmt->execute(['token_id' => $tokenId, 'station_id' => $stationId]);
     $rows = $dailyReportStmt->fetchAll();
@@ -108,7 +132,6 @@ foreach ($tokensList as $t) {
     $tokenParamQty = [];
     foreach ($rows as $row) {
         $pId = $row['parameter_id'];
-        $sId = $row['shift_id'];
         $qty = floatval($row['qty_used']);
 
         if (!isset($tokenParamQty[$pId])) {
@@ -117,7 +140,6 @@ foreach ($tokensList as $t) {
         $tokenParamQty[$pId] += $qty;
 
         if (isset($monthlyParamData[$pId])) {
-            $monthlyParamData[$pId]['shift_qtys'][$sId] += $qty;
             $monthlyParamData[$pId]['total_consumed'] += $qty;
         }
     }
@@ -127,7 +149,7 @@ foreach ($tokensList as $t) {
 
     foreach ($parametersList as $p) {
         $pId = $p['parameter_id'];
-        $targetPerCoach = floatval($p['qty_ml'] ?? 0);
+        $targetPerCoach = isset($targets[$pId]['qty_ml']) ? floatval($targets[$pId]['qty_ml']) : 0;
         $targetTotal = $targetPerCoach * $coachesCount;
         $consumedTotal = $tokenParamQty[$pId] ?? 0.0;
 
@@ -144,11 +166,11 @@ foreach ($tokensList as $t) {
 
         if ($consumedTotal < $targetTotal) {
             $deficit = $targetTotal - $consumedTotal;
-            $penaltyQty = floatval($p['penalty_qty_ml'] ?? 0);
+            $penaltyQty = isset($targets[$pId]['penalty_qty_ml']) ? floatval($targets[$pId]['penalty_qty_ml']) : 0;
             if ($penaltyQty <= 0) {
-                $penaltyQty = floatval($p['qty_ml'] ?? 0);
+                $penaltyQty = $targetPerCoach;
             }
-            $basePenalty = floatval($p['penalty'] ?? 0);
+            $basePenalty = isset($targets[$pId]['penalty']) ? floatval($targets[$pId]['penalty']) : 0;
             if ($penaltyQty > 0 && $basePenalty > 0) {
                 $penaltyVal = ceil($deficit / $penaltyQty) * $basePenalty;
                 $tokenPenalty += $penaltyVal;
@@ -441,25 +463,15 @@ include 'sidebar.php';
                     <table class="report-table">
                         <thead>
                             <tr>
-                                <th rowspan="2" style="width: 50px;">S.No</th>
-                                <th rowspan="2" style="text-align: left; padding-left: 10px;">Description Of Material</th>
-                                <th rowspan="2" style="width: 80px;">Target</th>
-                                <th rowspan="2" style="width: 80px;">Units</th>
-                                <th rowspan="2" style="width: 100px; white-space: nowrap;">Penalty</th>
-                                <th colspan="<?= max(1, count($shiftsList)) ?>">Quantity Used</th>
-                                <th rowspan="2" style="width: 90px;">Total Qty</th>
-                                <th rowspan="2" style="width: 90px;">Difference</th>
-                                <th rowspan="2" style="width: 90px;">Achieved</th>
-                                <th rowspan="2" style="width: 90px;">Deficit</th>
-                            </tr>
-                            <tr>
-                                <?php if (empty($shiftsList)): ?>
-                                    <th style="width: 80px;">Shifts</th>
-                                <?php else: ?>
-                                    <?php foreach ($shiftsList as $shift): ?>
-                                        <th style="width: 80px;"><?= htmlspecialchars($shift['shift_name']) ?></th>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
+                                <th style="width: 50px;">S.No</th>
+                                <th style="text-align: left; padding-left: 10px;">Description Of Material</th>
+                                <th style="width: 100px;">Target</th>
+                                <th style="width: 80px;">Units</th>
+                                <th style="width: 120px; white-space: nowrap;">Penalty</th>
+                                <th style="width: 120px;">Quantity Used (ml)</th>
+                                <th style="width: 100px;">Difference</th>
+                                <th style="width: 100px;">Achieved</th>
+                                <th style="width: 100px;">Deficit</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -486,16 +498,6 @@ include 'sidebar.php';
                                     <td><?= number_format($target, 0) ?></td>
                                     <td><?= htmlspecialchars($data['units']) ?></td>
                                     <td style="white-space: nowrap; font-size: 11.5px;"><?= $data['penalty_rate'] > 0 ? 'Rs.' . number_format($data['penalty_rate'], 0) . '/' . number_format(($data['penalty_qty_ml'] > 0 ? $data['penalty_qty_ml'] : $data['qty_ml']), 0) . 'ml' : '0' ?></td>
-                                    
-                                    <!-- Shift quantities -->
-                                    <?php if (empty($shiftsList)): ?>
-                                        <td>0</td>
-                                    <?php else: ?>
-                                        <?php foreach ($shiftsList as $shift): ?>
-                                            <td><?= number_format($data['shift_qtys'][$shift['shift_id']] ?? 0, 0) ?></td>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                    
                                     <td><strong><?= number_format($totalQty, 0) ?></strong></td>
                                     <td><?= ($difference > 0 ? '+' : '') . number_format($difference, 0) ?></td>
                                     <td><?= number_format($achievedPct, 2) ?>%</td>

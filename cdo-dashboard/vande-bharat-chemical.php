@@ -4,39 +4,34 @@ require_once 'auth.php';
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
 
-// Fetch all active shifts for station_id dynamically
-$shiftsStmt = $pdo->prepare("
-    SELECT id AS shift_id, shift AS shift_name 
-    FROM mcc_vb_chemical_shifts 
+// Fetch all active parameters - Vande Bharat
+$paramsStmt = $pdo->prepare("
+    SELECT id AS parameter_id, name AS parameter_name, units 
+    FROM mcc_vb_chemical_param 
     WHERE station_id = :station_id
     ORDER BY id ASC
 ");
-$shiftsStmt->execute(['station_id' => $stationId]);
-$shiftsList = $shiftsStmt->fetchAll();
-
-// Fetch all active parameters and their target values/penalties for station_id dynamically
-$paramsStmt = $pdo->prepare("
-    SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
-    FROM mcc_vb_chemical_param p
-    LEFT JOIN mcc_vb_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target
-    WHERE p.station_id = :station_id_param
-    ORDER BY p.id ASC
-");
-$paramsStmt->execute([
-    'station_id_target' => $stationId,
-    'station_id_param' => $stationId
-]);
+$paramsStmt->execute(['station_id' => $stationId]);
 $parametersList = $paramsStmt->fetchAll();
 
 // Fetch distinct tokens in this date range and station for Vande Bharat chemical report
 $stmt = $pdo->prepare("
-    SELECT DISTINCT token_id, report_date 
+    SELECT DISTINCT token_id, train_no, report_date 
     FROM mcc_vb_chemical_report 
     WHERE report_date BETWEEN :from_date AND :to_date AND station_id = :station_id
     ORDER BY report_date DESC, token_id DESC
 ");
 $stmt->execute(['from_date' => $fromDate, 'to_date' => $toDate, 'station_id' => $stationId]);
 $tokensList = $stmt->fetchAll();
+
+// Target resolving statement - Vande Bharat SCD Range
+$targetStmt = $pdo->prepare("
+    SELECT t.parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
+    FROM mcc_vb_chemical_target t
+    WHERE t.station_id = :station_id
+      AND :report_date_1 >= t.effective_from 
+      AND (t.effective_to IS NULL OR :report_date_2 <= t.effective_to)
+");
 
 $sheetsData = [];
 
@@ -49,15 +44,28 @@ if (!empty($tokensList)) {
     ");
 
     $reportStmt = $pdo->prepare("
-        SELECT r.*, s.shift 
-        FROM mcc_vb_chemical_report r
-        JOIN mcc_vb_chemical_shifts s ON r.shift_id = s.id
-        WHERE r.token_id = :token_id AND r.station_id = :station_id
+        SELECT * 
+        FROM mcc_vb_chemical_report 
+        WHERE token_id = :token_id AND station_id = :station_id
     ");
 
     foreach ($tokensList as $t) {
         $tokenId = $t['token_id'];
+        $reportDate = $t['report_date'];
+        $trainNo = $t['train_no'];
         
+        // Get targets active on this report date (SCD Type 2)
+        $targetStmt->execute([
+            'station_id' => $stationId,
+            'report_date_1' => $reportDate,
+            'report_date_2' => $reportDate
+        ]);
+        $targetsRaw = $targetStmt->fetchAll(PDO::FETCH_ASSOC);
+        $targets = [];
+        foreach ($targetsRaw as $tr) {
+            $targets[$tr['parameter_id']] = $tr;
+        }
+
         // Get distinct coaches count
         $coachesStmt->execute(['token_id' => $tokenId, 'station_id' => $stationId]);
         $distinctCoaches = $coachesStmt->fetchAll(PDO::FETCH_COLUMN);
@@ -71,23 +79,23 @@ if (!empty($tokensList)) {
         $rows = $reportStmt->fetchAll();
         
         $reportData = [];
-        $auditorsByShift = [];
+        $auditors = [];
         
         foreach ($rows as $row) {
             $pId = $row['parameter_id'];
-            $sId = $row['shift_id'];
-            $coach = $row['coach_no'];
             $qty = floatval($row['qty_used']);
             
-            if (!isset($reportData[$pId][$sId])) {
-                $reportData[$pId][$sId] = 0;
+            if (!isset($reportData[$pId])) {
+                $reportData[$pId] = 0;
             }
-            $reportData[$pId][$sId] += $qty;
+            $reportData[$pId] += $qty;
             
-            if ($row['auditor_name']) {
-                $auditorsByShift[$sId] = $row['auditor_name'];
+            if ($row['auditor_name'] && !in_array($row['auditor_name'], $auditors)) {
+                $auditors[] = $row['auditor_name'];
             }
         }
+        
+        $auditorNameStr = implode(', ', $auditors);
         
         // Score & penalty calculations for this sheet
         $paramCompliances = [];
@@ -95,14 +103,10 @@ if (!empty($tokensList)) {
         
         foreach ($parametersList as $param) {
             $pId = $param['parameter_id'];
-            $targetPerCoach = floatval($param['qty_ml'] ?? 0);
+            $targetPerCoach = isset($targets[$pId]['qty_ml']) ? floatval($targets[$pId]['qty_ml']) : 0;
             $targetTotal = $targetPerCoach * $totalCoaches;
             
-            $rowTotalUsed = 0;
-            foreach ($shiftsList as $shift) {
-                $sId = $shift['shift_id'];
-                $rowTotalUsed += $reportData[$pId][$sId] ?? 0;
-            }
+            $rowTotalUsed = $reportData[$pId] ?? 0;
             
             if ($targetTotal > 0) {
                 $compliance = min(100.0, ($rowTotalUsed / $targetTotal) * 100.0);
@@ -113,12 +117,15 @@ if (!empty($tokensList)) {
             
             if ($rowTotalUsed < $targetTotal) {
                 $deficit = $targetTotal - $rowTotalUsed;
-                $penaltyQty = floatval($param['penalty_qty_ml'] ?? 0);
+                $penaltyQty = isset($targets[$pId]['penalty_qty_ml']) ? floatval($targets[$pId]['penalty_qty_ml']) : 0;
                 if ($penaltyQty <= 0) {
-                    $penaltyQty = floatval($param['qty_ml'] ?? 0);
+                    $penaltyQty = $targetPerCoach;
                 }
-                $basePenalty = floatval($param['penalty'] ?? 0);
-                if ($penaltyQty > 0 && $basePenalty > 0) {
+                if ($penaltyQty <= 0) {
+                    $penaltyQty = 1; // avoid divide by zero
+                }
+                $basePenalty = isset($targets[$pId]['penalty']) ? floatval($targets[$pId]['penalty']) : 0;
+                if ($basePenalty > 0) {
                     $totalPenalty += ceil($deficit / $penaltyQty) * $basePenalty;
                 }
             }
@@ -132,12 +139,14 @@ if (!empty($tokensList)) {
         
         $sheetsData[] = [
             'token_id' => $tokenId,
-            'report_date' => $t['report_date'],
+            'report_date' => $reportDate,
+            'train_no' => $trainNo,
             'total_coaches' => $totalCoaches,
             'report_data' => $reportData,
-            'auditors_by_shift' => $auditorsByShift,
+            'auditor_name' => $auditorNameStr,
             'chemical_score' => $chemicalScore,
             'total_penalty' => $totalPenalty,
+            'targets' => $targets,
             'is_fallback' => false
         ];
     }
@@ -146,9 +155,10 @@ if (!empty($tokensList)) {
     $sheetsData[] = [
         'token_id' => '',
         'report_date' => $fromDate,
+        'train_no' => '',
         'total_coaches' => 16,
         'report_data' => [],
-        'auditors_by_shift' => [],
+        'auditor_name' => '',
         'chemical_score' => 100,
         'total_penalty' => 0,
         'is_fallback' => true
@@ -292,7 +302,9 @@ include 'sidebar.php';
                                     <strong>Railway:</strong> <?= htmlspecialchars($railwayName) ?> &nbsp;|&nbsp;
                                     <strong>Division:</strong> <?= htmlspecialchars($divisionName) ?> &nbsp;|&nbsp;
                                     <strong>Station:</strong> <?= htmlspecialchars($stationName) ?> &nbsp;|&nbsp;
-                                    <strong>Date:</strong> <?= htmlspecialchars($sheet['report_date'] ? date('d-m-Y', strtotime($sheet['report_date'])) : date('d-m-Y', strtotime($fromDate))) ?>
+                                    <strong>Date:</strong> <?= htmlspecialchars($sheet['report_date'] ? date('d-m-Y', strtotime($sheet['report_date'])) : date('d-m-Y', strtotime($fromDate))) ?> &nbsp;|&nbsp;
+                                    <strong>Train No:</strong> <?= htmlspecialchars($sheet['train_no'] ?? '-') ?> &nbsp;|&nbsp;
+                                    <strong>No. of Coaches:</strong> <?= htmlspecialchars($sheet['total_coaches']) ?>
                                 </div>
                                 <div>
                                     <strong>Contractor:</strong> <?= htmlspecialchars($contractorName) ?> &nbsp;|&nbsp;
@@ -306,20 +318,14 @@ include 'sidebar.php';
                             <table class="report-table">
                                 <thead>
                                     <tr>
-                                        <th rowspan="2">S.No</th>
-                                        <th rowspan="2">Description Of Material</th>
-                                        <th rowspan="2">Units</th>
-                                        <th rowspan="2">Coaches</th>
-                                        <th rowspan="2">Target (ml)</th>
-                                        <th colspan="<?= count($shiftsList) ?>">Quantity Used (ml)</th>
-                                        <th rowspan="2">Total (ml)</th>
-                                        <th rowspan="2">Deficit (ml)</th>
-                                        <th rowspan="2">Penalty (Rs.)</th>
-                                    </tr>
-                                    <tr>
-                                        <?php foreach ($shiftsList as $shift): ?>
-                                            <th><?= htmlspecialchars($shift['shift_name']) ?></th>
-                                        <?php endforeach; ?>
+                                        <th>S.No</th>
+                                        <th>Description Of Material</th>
+                                        <th>Units</th>
+                                        <th>Coaches</th>
+                                        <th>Target (ml)</th>
+                                        <th>Quantity Used (ml)</th>
+                                        <th>Deficit (ml)</th>
+                                        <th>Penalty (Rs.)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -327,26 +333,24 @@ include 'sidebar.php';
                                     $serial = 1;
                                     foreach ($parametersList as $param): 
                                         $pId = $param['parameter_id'];
-                                        $targetPerCoach = floatval($param['qty_ml'] ?? 0);
+                                        $targetPerCoach = isset($sheet['targets'][$pId]['qty_ml']) ? floatval($sheet['targets'][$pId]['qty_ml']) : 0;
                                         $totalTargetQty = $targetPerCoach * $sheet['total_coaches'];
                                         
-                                        $rowTotalUsed = 0;
-                                        foreach ($shiftsList as $shift): 
-                                            $sId = $shift['shift_id'];
-                                            $qty = $sheet['report_data'][$pId][$sId] ?? 0;
-                                            $rowTotalUsed += $qty;
-                                        endforeach;
+                                        $rowTotalUsed = $sheet['report_data'][$pId] ?? 0;
 
                                         $diff = $rowTotalUsed - $totalTargetQty;
                                         $rowPenalty = 0;
                                         if ($diff < 0) {
                                             $deficitVal = abs($diff);
-                                            $penaltyQty = floatval($param['penalty_qty_ml'] ?? 0);
+                                            $penaltyQty = isset($sheet['targets'][$pId]['penalty_qty_ml']) ? floatval($sheet['targets'][$pId]['penalty_qty_ml']) : 0;
                                             if ($penaltyQty <= 0) {
-                                                $penaltyQty = floatval($param['qty_ml'] ?? 0);
+                                                $penaltyQty = $targetPerCoach;
                                             }
-                                            $basePenalty = floatval($param['penalty'] ?? 0);
-                                            if ($penaltyQty > 0 && $basePenalty > 0) {
+                                            if ($penaltyQty <= 0) {
+                                                $penaltyQty = 1;
+                                            }
+                                            $basePenalty = isset($sheet['targets'][$pId]['penalty']) ? floatval($sheet['targets'][$pId]['penalty']) : 0;
+                                            if ($basePenalty > 0) {
                                                 $rowPenalty = ceil($deficitVal / $penaltyQty) * $basePenalty;
                                             }
                                         }
@@ -357,16 +361,7 @@ include 'sidebar.php';
                                             <td><?= htmlspecialchars($param['units'] ?? 'ml/coach') ?></td>
                                             <td><?= $sheet['total_coaches'] ?></td>
                                             <td><?= number_format($totalTargetQty, 2) ?></td>
-                                            
-                                            <?php 
-                                            foreach ($shiftsList as $shift): 
-                                                $sId = $shift['shift_id'];
-                                                $qty = $sheet['report_data'][$pId][$sId] ?? 0;
-                                            ?>
-                                                <td><?= $qty > 0 ? number_format($qty, 2) : '-' ?></td>
-                                            <?php endforeach; ?>
-                                            
-                                            <td><strong><?= number_format($rowTotalUsed, 2) ?></strong></td>
+                                            <td><strong><?= $rowTotalUsed > 0 ? number_format($rowTotalUsed, 2) : '-' ?></strong></td>
                                             <td><?= $diff < 0 ? number_format($diff, 2) : ($diff > 0 ? '+' . number_format($diff, 2) : '0.00') ?></td>
                                             <td><?= $rowPenalty > 0 ? 'Rs. ' . number_format($rowPenalty, 0) : '0' ?></td>
                                         </tr>
@@ -374,18 +369,13 @@ include 'sidebar.php';
                                     
                                     <tr class="section-row">
                                         <td colspan="5">Name Of Auditor</td>
-                                        <?php foreach ($shiftsList as $shift): ?>
-                                            <td style="text-align:center">
-                                                <?= htmlspecialchars($sheet['auditors_by_shift'][$shift['shift_id']] ?? '-') ?>
-                                            </td>
-                                        <?php endforeach; ?>
-                                        <td></td>
-                                        <td></td>
-                                        <td></td>
+                                        <td colspan="3" style="text-align:center">
+                                            <?= htmlspecialchars($sheet['auditor_name'] ?: '-') ?>
+                                        </td>
                                     </tr>
                                     <tr class="section-row">
                                         <td colspan="5">Signature of Supervisor</td>
-                                        <td colspan="<?= count($shiftsList) + 3 ?>" style="text-align:center">_________________</td>
+                                        <td colspan="3" style="text-align:center">_________________</td>
                                     </tr>
                                 </tbody>
                             </table>

@@ -19,6 +19,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['save_targets'
     $qtys = $_POST['qty'] ?? [];
     $penalties = $_POST['penalty'] ?? [];
     $penalty_qtys = $_POST['penalty_qty'] ?? [];
+    $effectiveFrom = isset($_POST['effective_from']) ? trim($_POST['effective_from']) : date('Y-m-d');
 
     $pdo->beginTransaction();
     try {
@@ -27,45 +28,75 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['save_targets'
         $pStmt->execute(['station_id' => $stationId]);
         $paramIds = $pStmt->fetchAll(PDO::FETCH_COLUMN);
 
+        // Prepare statements
+        $findActiveStmt = $pdo->prepare("
+            SELECT * FROM mcc_vb_chemical_target 
+            WHERE station_id = :station_id AND parameter_id = :parameter_id AND effective_to IS NULL
+            LIMIT 1
+        ");
+
+        $closeActiveStmt = $pdo->prepare("
+            UPDATE mcc_vb_chemical_target 
+            SET effective_to = :effective_to 
+            WHERE id = :id
+        ");
+
+        $insertNewStmt = $pdo->prepare("
+            INSERT INTO mcc_vb_chemical_target 
+            (parameter_id, station_id, `qty(ml)`, penalty, `penalty_qty(ml)`, effective_from, effective_to) 
+            VALUES (:parameter_id, :station_id, :qty, :penalty, :penalty_qty, :effective_from, NULL)
+        ");
+
         foreach ($paramIds as $pId) {
-            $qty = isset($qtys[$pId]) ? floatval($qtys[$pId]) : 0.00;
-            $penalty = isset($penalties[$pId]) ? floatval($penalties[$pId]) : 0.00;
-            $penalty_qty = isset($penalty_qtys[$pId]) ? floatval($penalty_qtys[$pId]) : 1.00;
+            $newQty = isset($qtys[$pId]) ? floatval($qtys[$pId]) : 0.00;
+            $newPenalty = isset($penalties[$pId]) ? floatval($penalties[$pId]) : 0.00;
+            $newPenaltyQty = isset($penalty_qtys[$pId]) ? floatval($penalty_qtys[$pId]) : 1.00;
 
-            // Check if target row already exists
-            $checkStmt = $pdo->prepare("
-                SELECT id FROM mcc_vb_chemical_target 
-                WHERE parameter_id = :param_id AND station_id = :station_id
-            ");
-            $checkStmt->execute([
-                'param_id' => $pId,
-                'station_id' => $stationId
+            // Find current active target
+            $findActiveStmt->execute([
+                'station_id' => $stationId,
+                'parameter_id' => $pId
             ]);
-            $existingId = $checkStmt->fetchColumn();
+            $currentActive = $findActiveStmt->fetch(PDO::FETCH_ASSOC);
 
-            if ($existingId) {
-                $updStmt = $pdo->prepare("
-                    UPDATE mcc_vb_chemical_target 
-                    SET `qty(ml)` = :qty, penalty = :penalty, `penalty_qty(ml)` = :penalty_qty 
-                    WHERE id = :id
-                ");
-                $updStmt->execute([
-                    'qty' => $qty,
-                    'penalty' => $penalty,
-                    'penalty_qty' => $penalty_qty,
-                    'id' => $existingId
-                ]);
+            $needsUpdate = false;
+
+            if ($currentActive) {
+                // Compare values
+                $currQty = floatval($currentActive['qty(ml)']);
+                $currPenalty = floatval($currentActive['penalty']);
+                $currPenaltyQty = floatval($currentActive['penalty_qty(ml)']);
+
+                if ($currQty !== $newQty || $currPenalty !== $newPenalty || $currPenaltyQty !== $newPenaltyQty) {
+                    $needsUpdate = true;
+                    
+                    // Close the active target. Set its effective_to to the day before the new effective date
+                    $effectiveToDate = date('Y-m-d', strtotime($effectiveFrom . ' - 1 day'));
+                    
+                    // If the new effective date is today or in the past, ensure we don't end up with invalid ranges
+                    if (strtotime($effectiveToDate) < strtotime($currentActive['effective_from'])) {
+                        $effectiveToDate = $currentActive['effective_from'];
+                    }
+
+                    $closeActiveStmt->execute([
+                        'effective_to' => $effectiveToDate,
+                        'id' => $currentActive['id']
+                    ]);
+                }
             } else {
-                $insStmt = $pdo->prepare("
-                    INSERT INTO mcc_vb_chemical_target (parameter_id, `qty(ml)`, penalty, `penalty_qty(ml)`, station_id) 
-                    VALUES (:param_id, :qty, :penalty, :penalty_qty, :station_id)
-                ");
-                $insStmt->execute([
-                    'param_id' => $pId,
-                    'qty' => $qty,
-                    'penalty' => $penalty,
-                    'penalty_qty' => $penalty_qty,
-                    'station_id' => $stationId
+                // No active target exists yet, we definitely need to insert
+                $needsUpdate = true;
+            }
+
+            if ($needsUpdate) {
+                // Insert the new target record
+                $insertNewStmt->execute([
+                    'parameter_id' => $pId,
+                    'station_id' => $stationId,
+                    'qty' => $newQty,
+                    'penalty' => $newPenalty,
+                    'penalty_qty' => $newPenaltyQty,
+                    'effective_from' => $effectiveFrom
                 ]);
             }
         }
@@ -78,11 +109,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['save_targets'
     }
 }
 
-// Fetch active parameters and their targets
+// Fetch active parameters and their active targets (effective_to IS NULL)
 $pStmt = $pdo->prepare("
     SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
     FROM mcc_vb_chemical_param p
-    LEFT JOIN mcc_vb_chemical_target t ON p.id = t.parameter_id AND t.station_id = :stn_id_target
+    LEFT JOIN mcc_vb_chemical_target t ON p.id = t.parameter_id AND t.station_id = :stn_id_target AND t.effective_to IS NULL
     WHERE p.station_id = :stn_id_param
     ORDER BY p.id ASC
 ");
@@ -188,6 +219,12 @@ include 'sidebar.php';
         <div class="card-body p-4">
           <form method="POST" action="vande-bharat-chemical-target.php">
             <input type="hidden" name="save_targets" value="1">
+            
+            <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;" class="no-print">
+                <label style="font-weight: 700; font-size: 14px; color: #334155; margin: 0;">Effective From:</label>
+                <input type="date" name="effective_from" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 12px; font-size: 14px; background-color: #f8fafc; color: #334155; width: 180px; height: 38px; outline: none;" value="<?= htmlspecialchars(date('Y-m-d')) ?>" required>
+            </div>
+
             <div class="table-responsive">
               <table class="table-target">
                 <thead>

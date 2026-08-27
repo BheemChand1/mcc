@@ -35,9 +35,16 @@ $successMsg = '';
 $errorMsg = '';
 
 // Handle save post request
+// Handle save post request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
     $selectedMonth = $_POST['month'] ?? '';
     $selectedYear = $_POST['year'] ?? '';
+    $effectiveFrom = $_POST['effective_from'] ?? '';
+    
+    if (empty($effectiveFrom) || !strtotime($effectiveFrom)) {
+        $effectiveFrom = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
+    }
+
     if (!empty($selectedMonth) && !empty($selectedYear)) {
         $targetMonthDate = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
         $penalties = $_POST['penalty'] ?? []; // machine_id => penalty_amount
@@ -45,21 +52,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
         
         $pdo->beginTransaction();
         try {
-            // Delete existing machine targets for this station and month
-            $deleteStmt = $pdo->prepare("
-                DELETE FROM mcc_vb_machine_target 
-                WHERE station_id = :station_id AND target_month = :target_month
+            // Prepare statements
+            $findActiveStmt = $pdo->prepare("
+                SELECT * FROM mcc_vb_machine_target 
+                WHERE station_id = :station_id 
+                  AND machine_id = :machine_id 
+                  AND shift_id = :shift_id 
+                  AND effective_to IS NULL
+                LIMIT 1
             ");
-            $deleteStmt->execute([
-                'station_id' => $stationId,
-                'target_month' => $targetMonthDate
-            ]);
-            
-            // Insert updated machine targets
-            $insertStmt = $pdo->prepare("
+
+            $closeActiveStmt = $pdo->prepare("
+                UPDATE mcc_vb_machine_target 
+                SET effective_to = :effective_to 
+                WHERE id = :id
+            ");
+
+            $insertNewStmt = $pdo->prepare("
                 INSERT INTO mcc_vb_machine_target 
-                (station_id, machine_id, target_month, shift_id, nominated_area, penalty_amount) 
-                VALUES (:station_id, :machine_id, :target_month, :shift_id, :nominated_area, :penalty_amount)
+                (station_id, machine_id, shift_id, nominated_area, penalty_amount, effective_from, effective_to) 
+                VALUES (:station_id, :machine_id, :shift_id, :nominated_area, :penalty_amount, :effective_from, NULL)
             ");
             
             foreach ($machinesList as $mach) {
@@ -70,19 +82,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
                     $sId = $shift['shift_id'];
                     $nom = $nominations[$mId][$sId] ?? 'N'; // default to 'N' if not selected
                     
-                    $insertStmt->execute([
+                    // Find currently active target row for this machine and shift
+                    $findActiveStmt->execute([
                         'station_id' => $stationId,
                         'machine_id' => $mId,
-                        'target_month' => $targetMonthDate,
-                        'shift_id' => $sId,
-                        'nominated_area' => $nom,
-                        'penalty_amount' => $penalty
+                        'shift_id' => $sId
                     ]);
+                    $currentActive = $findActiveStmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    $needsUpdate = false;
+                    
+                    if ($currentActive) {
+                        $currNom = $currentActive['nominated_area'];
+                        $currPenalty = floatval($currentActive['penalty_amount']);
+                        
+                        if ($currNom !== $nom || $currPenalty !== $penalty) {
+                            $needsUpdate = true;
+                            
+                            // Close the active target. Set its effective_to to the day before the new effective date
+                            $effectiveToDate = date('Y-m-d', strtotime($effectiveFrom . ' - 1 day'));
+                            
+                            // If the new effective date is today or in the past, ensure we don't end up with invalid ranges
+                            if (strtotime($effectiveToDate) < strtotime($currentActive['effective_from'])) {
+                                $effectiveToDate = $currentActive['effective_from'];
+                            }
+
+                            $closeActiveStmt->execute([
+                                'effective_to' => $effectiveToDate,
+                                'id' => $currentActive['id']
+                            ]);
+                        }
+                    } else {
+                        // No active target exists yet, we definitely need to insert
+                        $needsUpdate = true;
+                    }
+
+                    if ($needsUpdate) {
+                        $insertNewStmt->execute([
+                            'station_id' => $stationId,
+                            'machine_id' => $mId,
+                            'shift_id' => $sId,
+                            'nominated_area' => $nom,
+                            'penalty_amount' => $penalty,
+                            'effective_from' => $effectiveFrom
+                        ]);
+                    }
                 }
             }
             
             $pdo->commit();
-            $successMsg = "Vande Bharat machine targets for " . date('F, Y', strtotime($targetMonthDate)) . " saved successfully!";
+            $successMsg = "Vande Bharat machine targets saved successfully!";
         } catch (Exception $e) {
             $pdo->rollBack();
             $errorMsg = "Error saving machine targets: " . $e->getMessage();
@@ -90,15 +139,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
     }
 }
 
-// Fetch existing targets for the selected month to populate inputs
+// Fetch active targets (effective_to IS NULL) to populate inputs
 $existingTargetsStmt = $pdo->prepare("
     SELECT machine_id, shift_id, nominated_area, penalty_amount 
     FROM mcc_vb_machine_target 
-    WHERE station_id = :station_id AND target_month = :target_month
+    WHERE station_id = :station_id AND effective_to IS NULL
 ");
 $existingTargetsStmt->execute([
-    'station_id' => $stationId,
-    'target_month' => $targetMonthDate
+    'station_id' => $stationId
 ]);
 $existingTargetsRows = $existingTargetsStmt->fetchAll();
 
@@ -314,6 +362,12 @@ include 'sidebar.php';
                     <form method="POST" action="">
                         <input type="hidden" name="month" value="<?= htmlspecialchars($selectedMonth); ?>">
                         <input type="hidden" name="year" value="<?= htmlspecialchars($selectedYear); ?>">
+                        <input type="hidden" name="save_target" value="1">
+
+                        <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;" class="no-print">
+                            <label style="font-weight: 700; font-size: 14px; color: #334155; margin: 0;">Effective From Date:</label>
+                            <input type="date" name="effective_from" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 12px; font-size: 14px; background-color: #f8fafc; color: #334155; width: 180px; height: 38px; outline: none;" value="<?= htmlspecialchars(date('Y-m-d')) ?>" required>
+                        </div>
                         
                         <div class="table-responsive">
                             <table class="report-table">

@@ -6211,16 +6211,7 @@ INSERT INTO `mcc_vb_chemical_param` (`id`, `name`, `units`, `station_id`, `creat
 ('24', 'Label & Sticker Remover', 'ml/coach', '3', '2026-08-18 16:36:18', '2026-08-18 16:36:18');
 
 DROP TABLE IF EXISTS `mcc_vb_chemical_shifts`;
-CREATE TABLE `mcc_vb_chemical_shifts` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `shift` varchar(100) NOT NULL,
-  `station_id` int(11) NOT NULL,
-  `input_type` varchar(50) DEFAULT 'cleaning',
-  `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `station_id` (`station_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 
 INSERT INTO `mcc_vb_chemical_shifts` (`id`, `shift`, `station_id`, `created_at`, `updated_at`) VALUES
 ('1', 'Shift 1', '2', '2026-08-18 16:36:18', '2026-08-18 16:36:18'),
@@ -6241,6 +6232,8 @@ CREATE TABLE `mcc_vb_chemical_target` (
   `penalty` decimal(10,2) DEFAULT NULL,
   `penalty_qty(ml)` decimal(10,2) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
+  `effective_from` date DEFAULT NULL,
+  `effective_to` date DEFAULT NULL,
   `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
@@ -6285,12 +6278,12 @@ CREATE TABLE `mcc_vb_chemical_report` (
   `station_id` int(11) NOT NULL,
   `input_type` varchar(50) DEFAULT 'cleaning',
   `token_id` varchar(100) NOT NULL,
+  `train_no` varchar(50) DEFAULT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
   KEY `parameter_id` (`parameter_id`),
-  KEY `shift_id` (`shift_id`),
   KEY `station_id` (`station_id`),
   KEY `token_id` (`token_id`),
   KEY `report_date` (`report_date`)
@@ -7545,7 +7538,6 @@ CREATE TABLE `mcc_vb_machine_target` (
   `station_id` int(11) NOT NULL,
   `input_type` varchar(50) DEFAULT 'cleaning',
   `machine_id` int(11) NOT NULL,
-  `target_month` date NOT NULL,
   `nominated_area` varchar(50) DEFAULT NULL,
   `penalty_amount` decimal(10,2) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
@@ -7608,6 +7600,7 @@ CREATE TABLE `mcc_vb_machine_report` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `parameter_id` int(11) NOT NULL,
   `used_status` varchar(50) DEFAULT NULL,
+  `auditor_name` varchar(150) DEFAULT NULL,
   `token_id` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
   `input_type` varchar(50) DEFAULT 'cleaning',

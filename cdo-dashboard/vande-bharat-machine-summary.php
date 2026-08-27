@@ -32,26 +32,23 @@ $machinesStmt = $pdo->prepare("
 $machinesStmt->execute(['station_id' => $stationId]);
 $machinesList = $machinesStmt->fetchAll();
 
-// Fetch targets for selected month
-$targetMonthDate = "$selectedYear-$selectedMonth-01";
+// Fetch targets active in selected month (using SCD range logic) - Vande Bharat
+$firstDay = "$selectedYear-$selectedMonth-01";
+$lastDay = date('Y-m-d', strtotime("$firstDay +1 month -1 day"));
+
 $targetsStmt = $pdo->prepare("
-    SELECT machine_id, shift_id, nominated_area, penalty_amount 
-    FROM mcc_vb_machine_target 
-    WHERE station_id = :station_id AND target_month = :target_month
+    SELECT machine_id, shift_id, nominated_area, penalty_amount, effective_from, effective_to
+    FROM mcc_vb_machine_target
+    WHERE station_id = :station_id
+      AND effective_from <= :last_day
+      AND (effective_to IS NULL OR effective_to >= :first_day)
 ");
 $targetsStmt->execute([
     'station_id' => $stationId,
-    'target_month' => $targetMonthDate
+    'first_day' => $firstDay,
+    'last_day' => $lastDay
 ]);
 $targetsRows = $targetsStmt->fetchAll();
-
-$targetsMap = [];
-foreach ($targetsRows as $row) {
-    $targetsMap[$row['machine_id']][$row['shift_id']] = [
-        'nominated_area' => $row['nominated_area'],
-        'penalty_amount' => $row['penalty_amount']
-    ];
-}
 
 // Fetch all report data for the selected month
 $reportsStmt = $pdo->prepare("
@@ -91,11 +88,26 @@ for ($d = 1; $d <= $daysInMonth; $d++) {
         $dayNominated = 0;
         $dayOperated = 0;
         
+        // Resolve active targets for this specific day
+        $dayTargetsMap = [];
+        foreach ($targetsRows as $tm) {
+            $fromTs = strtotime($tm['effective_from']);
+            $toTs = empty($tm['effective_to']) ? null : strtotime($tm['effective_to']);
+            $currTs = strtotime($dateStr);
+
+            if ($currTs >= $fromTs && ($toTs === null || $currTs <= $toTs)) {
+                $dayTargetsMap[$tm['machine_id']][$tm['shift_id']] = [
+                    'nominated_area' => $tm['nominated_area'],
+                    'penalty_amount' => $tm['penalty_amount']
+                ];
+            }
+        }
+        
         foreach ($machinesList as $mach) {
             $mId = $mach['machine_id'];
             foreach ($shiftsList as $shift) {
                 $sId = $shift['shift_id'];
-                $isNominated = ($targetsMap[$mId][$sId]['nominated_area'] ?? 'N') === 'Y';
+                $isNominated = ($dayTargetsMap[$mId][$sId]['nominated_area'] ?? 'N') === 'Y';
                 if ($isNominated) {
                     $dayNominated++;
                     $status = $reportsMap[$dateStr][$mId][$sId] ?? '-';
@@ -103,7 +115,7 @@ for ($d = 1; $d <= $daysInMonth; $d++) {
                         $dayOperated++;
                     } else {
                         // Charged penalty for nominated but not operated
-                        $penaltyRate = floatval($targetsMap[$mId][$sId]['penalty_amount'] ?? 0.0);
+                        $penaltyRate = floatval($dayTargetsMap[$mId][$sId]['penalty_amount'] ?? 0.0);
                         $dayPenalty += $penaltyRate;
                     }
                 }

@@ -4,16 +4,6 @@ require_once 'auth.php';
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
 
-// Fetch all active shifts for station_id dynamically - Intensive
-$shiftsStmt = $pdo->prepare("
-    SELECT id AS shift_id, shift AS shift_name 
-    FROM mcc_intensive_chemical_shifts 
-    WHERE station_id = :station_id
-    ORDER BY id ASC
-");
-$shiftsStmt->execute(['station_id' => $stationId]);
-$shiftsList = $shiftsStmt->fetchAll();
-
 // Fetch all active parameters - Intensive
 $paramsStmt = $pdo->prepare("
     SELECT id AS parameter_id, name AS parameter_name, units 
@@ -53,10 +43,9 @@ if (!empty($tokensList)) {
     ");
 
     $reportStmt = $pdo->prepare("
-        SELECT r.*, s.shift 
-        FROM mcc_intensive_chemical_report r
-        JOIN mcc_intensive_chemical_shifts s ON r.shift_id = s.id
-        WHERE r.token_id = :token_id AND r.station_id = :station_id
+        SELECT * 
+        FROM mcc_intensive_chemical_report 
+        WHERE token_id = :token_id AND station_id = :station_id
     ");
 
     foreach ($tokensList as $t) {
@@ -87,22 +76,23 @@ if (!empty($tokensList)) {
         $rows = $reportStmt->fetchAll();
         
         $reportData = [];
-        $auditorsByShift = [];
+        $auditors = [];
         
         foreach ($rows as $row) {
             $pId = $row['parameter_id'];
-            $sId = $row['shift_id'];
             $qty = floatval($row['qty_used']);
             
-            if (!isset($reportData[$pId][$sId])) {
-                $reportData[$pId][$sId] = 0;
+            if (!isset($reportData[$pId])) {
+                $reportData[$pId] = 0;
             }
-            $reportData[$pId][$sId] += $qty;
+            $reportData[$pId] += $qty;
             
-            if ($row['auditor_name']) {
-                $auditorsByShift[$sId] = $row['auditor_name'];
+            if ($row['auditor_name'] && !in_array($row['auditor_name'], $auditors)) {
+                $auditors[] = $row['auditor_name'];
             }
         }
+        
+        $auditorNameStr = implode(', ', $auditors);
         
         $paramCompliances = [];
         $totalPenalty = 0;
@@ -112,11 +102,7 @@ if (!empty($tokensList)) {
             $targetPerCoach = isset($targets[$pId]['qty_ml']) ? floatval($targets[$pId]['qty_ml']) : 0;
             $targetTotal = $targetPerCoach * $totalCoaches;
             
-            $rowTotalUsed = 0;
-            foreach ($shiftsList as $shift) {
-                $sId = $shift['shift_id'];
-                $rowTotalUsed += $reportData[$pId][$sId] ?? 0;
-            }
+            $rowTotalUsed = $reportData[$pId] ?? 0;
             
             if ($targetTotal > 0) {
                 $compliance = min(100.0, ($rowTotalUsed / $targetTotal) * 100.0);
@@ -153,7 +139,7 @@ if (!empty($tokensList)) {
             'train_no' => $trainNo,
             'total_coaches' => $totalCoaches,
             'report_data' => $reportData,
-            'auditors_by_shift' => $auditorsByShift,
+            'auditor_name' => $auditorNameStr,
             'chemical_score' => $chemicalScore,
             'total_penalty' => $totalPenalty,
             'targets' => $targets, // save targets for this date to display in UI table!
@@ -166,7 +152,7 @@ if (!empty($tokensList)) {
         'report_date' => $fromDate,
         'total_coaches' => 24,
         'report_data' => [],
-        'auditors_by_shift' => [],
+        'auditor_name' => '',
         'chemical_score' => 100,
         'total_penalty' => 0,
         'is_fallback' => true
@@ -320,20 +306,14 @@ include 'sidebar.php';
                             <table class="report-table">
                                 <thead>
                                     <tr>
-                                        <th rowspan="2">S.No</th>
-                                        <th rowspan="2">Description Of Material</th>
-                                        <th rowspan="2">Units</th>
-                                        <th rowspan="2">Coaches</th>
-                                        <th rowspan="2">Target (ml)</th>
-                                        <th colspan="<?= count($shiftsList) ?>">Quantity Used (ml)</th>
-                                        <th rowspan="2">Total (ml)</th>
-                                        <th rowspan="2">Deficit (ml)</th>
-                                        <th rowspan="2">Penalty (Rs.)</th>
-                                    </tr>
-                                    <tr>
-                                        <?php foreach ($shiftsList as $shift): ?>
-                                            <th><?= htmlspecialchars($shift['shift_name']) ?></th>
-                                        <?php endforeach; ?>
+                                        <th>S.No</th>
+                                        <th>Description Of Material</th>
+                                        <th>Units</th>
+                                        <th>Coaches</th>
+                                        <th>Target (ml)</th>
+                                        <th>Quantity Used (ml)</th>
+                                        <th>Deficit (ml)</th>
+                                        <th>Penalty (Rs.)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -344,12 +324,7 @@ include 'sidebar.php';
                                         $targetPerCoach = isset($sheet['targets'][$pId]['qty_ml']) ? floatval($sheet['targets'][$pId]['qty_ml']) : 0;
                                         $totalTargetQty = $targetPerCoach * $sheet['total_coaches'];
                                         
-                                        $rowTotalUsed = 0;
-                                        foreach ($shiftsList as $shift): 
-                                            $sId = $shift['shift_id'];
-                                            $qty = $sheet['report_data'][$pId][$sId] ?? 0;
-                                            $rowTotalUsed += $qty;
-                                        endforeach;
+                                        $rowTotalUsed = $sheet['report_data'][$pId] ?? 0;
 
                                         $diff = $rowTotalUsed - $totalTargetQty;
                                         $rowPenalty = 0;
@@ -374,16 +349,7 @@ include 'sidebar.php';
                                             <td><?= htmlspecialchars($param['units'] ?? 'ml/coach') ?></td>
                                             <td><?= $sheet['total_coaches'] ?></td>
                                             <td><?= number_format($totalTargetQty, 2) ?></td>
-                                            
-                                            <?php 
-                                            foreach ($shiftsList as $shift): 
-                                                $sId = $shift['shift_id'];
-                                                $qty = $sheet['report_data'][$pId][$sId] ?? 0;
-                                            ?>
-                                                <td><?= $qty > 0 ? number_format($qty, 2) : '-' ?></td>
-                                            <?php endforeach; ?>
-                                            
-                                            <td><strong><?= number_format($rowTotalUsed, 2) ?></strong></td>
+                                            <td><strong><?= $rowTotalUsed > 0 ? number_format($rowTotalUsed, 2) : '-' ?></strong></td>
                                             <td><?= $diff < 0 ? number_format($diff, 2) : ($diff > 0 ? '+' . number_format($diff, 2) : '0.00') ?></td>
                                             <td><?= $rowPenalty > 0 ? 'Rs. ' . number_format($rowPenalty, 0) : '0' ?></td>
                                         </tr>
@@ -391,18 +357,13 @@ include 'sidebar.php';
                                     
                                     <tr class="section-row">
                                         <td colspan="5">Name Of Auditor</td>
-                                        <?php foreach ($shiftsList as $shift): ?>
-                                            <td style="text-align:center">
-                                                <?= htmlspecialchars($sheet['auditors_by_shift'][$shift['shift_id']] ?? '-') ?>
-                                            </td>
-                                        <?php endforeach; ?>
-                                        <td></td>
-                                        <td></td>
-                                        <td></td>
+                                        <td colspan="3" style="text-align:center">
+                                            <?= htmlspecialchars($sheet['auditor_name'] ?: '-') ?>
+                                        </td>
                                     </tr>
                                     <tr class="section-row">
                                         <td colspan="5">Signature of Supervisor</td>
-                                        <td colspan="<?= count($shiftsList) + 3 ?>" style="text-align:center">_________________</td>
+                                        <td colspan="3" style="text-align:center">_________________</td>
                                     </tr>
                                 </tbody>
                             </table>

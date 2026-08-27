@@ -735,14 +735,7 @@ INSERT INTO `mcc_intensive_chemical_report` (`id`, `parameter_id`, `coach_no`, `
 -- Table structure for table `mcc_intensive_chemical_shifts`
 --
 
-CREATE TABLE `mcc_intensive_chemical_shifts` (
-  `id` int(11) NOT NULL,
-  `shift` varchar(100) NOT NULL,
-  `station_id` int(11) NOT NULL,
-  `input_type` varchar(50) DEFAULT 'cleaning',
-  `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 
 --
 -- Dumping data for table `mcc_intensive_chemical_shifts`

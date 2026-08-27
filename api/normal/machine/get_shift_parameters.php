@@ -105,6 +105,26 @@ try {
         ];
     }
 
+    // Calculate shift completion status
+    $totalNominated = 0;
+    $totalFilled = 0;
+    foreach ($machines as $m) {
+        if ($m['nominated'] === 'Y') {
+            $totalNominated++;
+            if ($m['operated'] !== null && $m['operated'] !== '' && $m['operated'] !== '-') {
+                $totalFilled++;
+            }
+        }
+    }
+    
+    $shiftStatus = 0;
+    if ($totalNominated > 0) {
+        $shiftStatus = ($totalFilled === $totalNominated) ? 1 : 0;
+    } else {
+        // If there are no nominated machines configured, check if at least some entries exist
+        $shiftStatus = !empty($reportRows) ? 1 : 0;
+    }
+
     http_response_code(200);
     echo json_encode([
         "status" => "success",
@@ -113,7 +133,8 @@ try {
             "shift_id" => $shiftId,
             "shift_name" => $shiftName,
             "date" => $reportDate,
-            "token_id" => $tokenId
+            "token_id" => $tokenId,
+            "shift_status" => $shiftStatus
         ],
         "machines" => $machines
     ]);

@@ -46,7 +46,7 @@ foreach ($targetsRows as $row) {
 
 // Fetch report data for selected date
 $reportStmt = $pdo->prepare("
-    SELECT parameter_id AS machine_id, shift_id, used_status 
+    SELECT parameter_id AS machine_id, shift_id, used_status, auditor_name 
     FROM mcc_normal_machine_report 
     WHERE station_id = :station_id AND report_date = :report_date
 ");
@@ -57,8 +57,12 @@ $reportStmt->execute([
 $reportRows = $reportStmt->fetchAll();
 
 $reportsMap = [];
+$auditorName = '';
 foreach ($reportRows as $row) {
     $reportsMap[$row['machine_id']][$row['shift_id']] = $row['used_status'];
+    if (empty($auditorName) && !empty($row['auditor_name'])) {
+        $auditorName = $row['auditor_name'];
+    }
 }
 
 $isFallback = empty($reportRows);
@@ -146,6 +150,7 @@ include 'sidebar.php';
                         </div>
                         <div class="meta-row">
                             <div class="meta-item"><span>Contractor:</span> <?= htmlspecialchars($contractorName) ?></div>
+                            <div class="meta-item"><span>Auditor Name:</span> <?= htmlspecialchars($auditorName ?: '-') ?></div>
                             <div class="meta-item"><span>Total Score:</span> <?= htmlspecialchars($totalScore) ?></div>
                         </div>
                     </div>

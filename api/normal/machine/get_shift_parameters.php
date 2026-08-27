@@ -67,7 +67,7 @@ try {
 
     // 4. Fetch existing report records and token
     $reportStmt = $pdo->prepare("
-        SELECT parameter_id AS machine_id, used_status, token_id 
+        SELECT parameter_id AS machine_id, used_status, token_id, auditor_name 
         FROM mcc_normal_machine_report 
         WHERE station_id = :station_id AND shift_id = :shift_id AND report_date = :report_date
     ");
@@ -80,10 +80,14 @@ try {
     
     $reportsMap = [];
     $tokenId = null;
+    $auditorName = null;
     foreach ($reportRows as $r) {
         $reportsMap[$r['machine_id']] = $r['used_status'];
         if (empty($tokenId)) {
             $tokenId = $r['token_id'];
+        }
+        if (empty($auditorName) && !empty($r['auditor_name'])) {
+            $auditorName = $r['auditor_name'];
         }
     }
 
@@ -134,6 +138,7 @@ try {
             "shift_name" => $shiftName,
             "date" => $reportDate,
             "token_id" => $tokenId,
+            "auditor_name" => $auditorName,
             "shift_status" => $shiftStatus
         ],
         "machines" => $machines

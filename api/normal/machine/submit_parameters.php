@@ -20,13 +20,24 @@ $stationId = isset($data['station_id']) ? intval($data['station_id']) : null;
 $shiftId = isset($data['shift_id']) ? intval($data['shift_id']) : null;
 $reportDate = $data['date'] ?? null;
 $tokenId = $data['token_id'] ?? null;
+
+if (empty($reportDate)) {
+    // Attempt to extract YYYYMMDD date from token_id (e.g. TKN-MCH-20260827-4-7214)
+    if (!empty($tokenId) && preg_match('/(\d{4})(\d{2})(\d{2})/', $tokenId, $matches)) {
+        $reportDate = $matches[1] . '-' . $matches[2] . '-' . $matches[3];
+    } else {
+        $reportDate = date('Y-m-d');
+    }
+}
+
+$auditorName = $data['auditor_name'] ?? $data['submitted_by'] ?? null;
 $valuesList = $data['values'] ?? $data['parameters'] ?? null; // Support both values and parameters
 
 if (empty($stationId) || empty($shiftId) || empty($reportDate) || empty($valuesList) || !is_array($valuesList)) {
     http_response_code(400);
     echo json_encode([
         "status" => "error",
-        "message" => "Incomplete data. station_id, shift_id, date, and values (array) are required."
+        "message" => "Incomplete data. station_id, shift_id, and values (array) are required."
     ]);
     exit();
 }
@@ -51,14 +62,14 @@ try {
 
     $updateStmt = $pdo->prepare("
         UPDATE mcc_normal_machine_report 
-        SET used_status = :used_status, token_id = :token_id
+        SET used_status = :used_status, token_id = :token_id, auditor_name = :auditor_name
         WHERE id = :id
     ");
 
     $insertStmt = $pdo->prepare("
         INSERT INTO mcc_normal_machine_report 
-        (parameter_id, shift_id, used_status, token_id, station_id, report_date)
-        VALUES (:parameter_id, :shift_id, :used_status, :token_id, :station_id, :report_date)
+        (parameter_id, shift_id, used_status, token_id, auditor_name, station_id, report_date)
+        VALUES (:parameter_id, :shift_id, :used_status, :token_id, :auditor_name, :station_id, :report_date)
     ");
 
     $upsertCount = 0;
@@ -83,6 +94,7 @@ try {
                 $updateStmt->execute([
                     'used_status' => $operated,
                     'token_id' => $tokenId,
+                    'auditor_name' => $auditorName,
                     'id' => $existing['id']
                 ]);
             } else {
@@ -92,6 +104,7 @@ try {
                     'shift_id' => $shiftId,
                     'used_status' => $operated,
                     'token_id' => $tokenId,
+                    'auditor_name' => $auditorName,
                     'station_id' => $stationId,
                     'report_date' => $reportDate
                 ]);

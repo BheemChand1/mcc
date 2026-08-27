@@ -2218,6 +2218,7 @@ CREATE TABLE `mcc_normal_machine_report` (
   `parameter_id` int(11) NOT NULL,
   `used_status` varchar(50) DEFAULT NULL,
   `token_id` varchar(100) NOT NULL,
+  `auditor_name` varchar(150) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
   `input_type` varchar(50) DEFAULT 'cleaning',
   `report_date` date NOT NULL,

@@ -51,14 +51,29 @@ try {
             ORDER BY coach_no ASC
         ");
 
+        $statusStmt = $pdo->prepare("
+            SELECT 
+                COUNT(*) AS total_rows,
+                SUM(CASE WHEN score_value IS NULL OR score_value = '' THEN 1 ELSE 0 END) AS empty_rows
+            FROM mcc_intensive_scorecard_2_report
+            WHERE token_id = :token_id
+        ");
+
         foreach ($tokensList as $tokenItem) {
             $coachesStmt->execute(['token_id' => $tokenItem['token_id']]);
             $coaches = $coachesStmt->fetchAll(PDO::FETCH_COLUMN);
+
+            $statusStmt->execute(['token_id' => $tokenItem['token_id']]);
+            $statusRow = $statusStmt->fetch(PDO::FETCH_ASSOC);
+            $totalRows = intval($statusRow['total_rows'] ?? 0);
+            $emptyRows = intval($statusRow['empty_rows'] ?? 0);
+            $trainStatus = ($totalRows > 0 && $emptyRows === 0) ? "done" : "pending";
 
             $sheets[] = [
                 "token_id" => $tokenItem['token_id'],
                 "train_no" => $tokenItem['train_no'],
                 "report_date" => $tokenItem['report_date'],
+                "train_status" => $trainStatus,
                 "coaches" => $coaches
             ];
         }

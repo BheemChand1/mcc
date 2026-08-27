@@ -668,23 +668,13 @@ include 'sidebar.php';
                             <table class="cts-table">
                                 <thead>
                                     <tr>
-                                        <th rowspan="3" class="col-sn">SL<br>No.</th>
-                                        <th rowspan="3" class="col-desc">Description</th>
-                                        <th rowspan="3" class="col-slot">Area / Part</th>
-                                        <?php for ($c = 1; $c <= 24; $c++): ?>
-                                            <th class="col-c th-c-head">C<?= $c ?></th>
-                                        <?php endfor; ?>
-                                        <th rowspan="3" class="col-ts">T.S.</th>
-                                    </tr>
-                                    <tr>
-                                        <?php for ($c = 1; $c <= 24; $c++): ?>
-                                            <th class="col-c th-c-label">Coach<br><?= $c ?></th>
-                                        <?php endfor; ?>
-                                    </tr>
-                                    <tr>
+                                        <th class="col-sn">SL<br>No.</th>
+                                        <th class="col-desc">Description</th>
+                                        <th class="col-slot">Area / Part</th>
                                         <?php for ($c = 0; $c < 24; $c++): ?>
                                             <th class="col-c th-c-num"><?= htmlspecialchars($sheet['coach_numbers'][$c] ?? '') ?></th>
                                         <?php endfor; ?>
+                                        <th class="col-ts">T.S.</th>
                                     </tr>
                                 </thead>
                                 <tbody>

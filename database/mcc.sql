@@ -7760,3 +7760,50 @@ INSERT INTO `mcc_vb_machine_report` (`id`, `parameter_id`, `used_status`, `token
 ('134', '30', '5', 'Y', 'TKN-VB-MACH-20260818-001', '1', '2026-08-18', '2026-08-18 17:57:28', '2026-08-18 17:57:28'),
 ('135', '30', '6', 'Y', 'TKN-VB-MACH-20260818-001', '1', '2026-08-18', '2026-08-18 17:57:28', '2026-08-18 17:57:28');
 
+
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `mcc_intensive_scorecard_2_rating`
+--
+
+CREATE TABLE `mcc_intensive_scorecard_2_rating` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `rating_name` varchar(50) NOT NULL,
+  `rating_value` varchar(50) NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `rating_group` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+--
+-- Dumping data for table `mcc_intensive_scorecard_2_rating`
+--
+
+INSERT INTO `mcc_intensive_scorecard_2_rating` (`id`, `rating_name`, `rating_value`, `rating_group`) VALUES
+(1, 'Very Good', '3', 'cleaning'),
+(2, 'Satisfactory', '2', 'cleaning'),
+(3, 'Poor', '1', 'cleaning'),
+(4, 'Not attended', '0', 'cleaning'),
+(5, 'Yes', 'Y', 'watering'),
+(6, 'No', 'N', 'watering');
+
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `mcc_intensive_scorecard_2_sub_param`
+--
+
+CREATE TABLE `mcc_intensive_scorecard_2_sub_param` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `sub_parameter_name` varchar(255) NOT NULL,
+  `parameter_id` int(11) NOT NULL,
+  `station_id` int(11) NOT NULL,
+  `status` enum('Active','Inactive') DEFAULT 'Active',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `input_type` varchar(50) DEFAULT 'cleaning',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -601,18 +601,6 @@ include 'sidebar.php';
                         <input type="date" name="to_date" class="filter-input" value="<?= htmlspecialchars($toDate) ?>">
                     </div>
 
-                    <div class="filter-group">
-                        <label class="filter-label"><i class="bi bi-train-front me-1 text-primary"></i> Train:</label>
-                        <select name="train_no" class="filter-input" style="min-width: 150px;">
-                            <option value="">-- All Trains --</option>
-                            <?php foreach ($availableTrains as $tNo): ?>
-                                <option value="<?= htmlspecialchars($tNo) ?>" <?= ($selectedTrain === $tNo) ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($tNo) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-
                     <button type="submit" class="btn-filter-go">
                         <i class="bi bi-funnel-fill me-1"></i> Apply Filter
                     </button>

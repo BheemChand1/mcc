@@ -1767,7 +1767,6 @@ CREATE TABLE `mcc_normal_chemical_report` (
   `qty_used` decimal(10,2) DEFAULT NULL,
   `auditor_name` varchar(255) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
-  `input_type` varchar(50) DEFAULT 'cleaning',
   `token_id` varchar(100) NOT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),

@@ -104,8 +104,8 @@ try {
     if (!empty($chemParams)) {
         $insertChemStmt = $pdo->prepare("
             INSERT INTO mcc_normal_chemical_report 
-            (parameter_id, coach_no, qty_used, auditor_name, station_id, token_id, report_date)
-            VALUES (:parameter_id, :coach_no, NULL, :auditor_name, :station_id, :token_id, :report_date)
+            (parameter_id, coach_no, qty_used, auditor_name, station_id, token_id, train_no, report_date)
+            VALUES (:parameter_id, :coach_no, NULL, :auditor_name, :station_id, :token_id, :train_no, :report_date)
         ");
 
         foreach ($coachNos as $coachNo) {
@@ -116,6 +116,7 @@ try {
                     'auditor_name' => $auditorName,
                     'station_id' => $stationId,
                     'token_id' => $tokenId,
+                    'train_no' => $trainNo,
                     'report_date' => $reportDate
                 ]);
             }

@@ -1768,6 +1768,7 @@ CREATE TABLE `mcc_normal_chemical_report` (
   `auditor_name` varchar(255) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
   `token_id` varchar(100) NOT NULL,
+  `train_no` varchar(50) NOT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()

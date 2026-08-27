@@ -20,7 +20,7 @@ $parametersList = $paramsStmt->fetchAll();
 
 // Fetch distinct tokens in this date range and station for normal chemical report
 $stmt = $pdo->prepare("
-    SELECT DISTINCT token_id, report_date 
+    SELECT DISTINCT token_id, train_no, report_date 
     FROM mcc_normal_chemical_report 
     WHERE report_date BETWEEN :from_date AND :to_date AND station_id = :station_id
     ORDER BY report_date DESC, token_id DESC
@@ -56,6 +56,7 @@ if (!empty($tokensList)) {
     foreach ($tokensList as $t) {
         $tokenId = $t['token_id'];
         $reportDate = $t['report_date'];
+        $trainNo = $t['train_no'];
 
         // Get targets active on this report date
         $targetStmt->execute([
@@ -139,6 +140,7 @@ if (!empty($tokensList)) {
         
         $sheetsData[] = [
             'token_id' => $tokenId,
+            'train_no' => $trainNo,
             'report_date' => $t['report_date'],
             'total_coaches' => $totalCoaches,
             'report_data' => $reportData,
@@ -164,6 +166,7 @@ if (!empty($tokensList)) {
 
     $sheetsData[] = [
         'token_id' => '',
+        'train_no' => '-',
         'report_date' => $fromDate,
         'total_coaches' => 24,
         'report_data' => [],
@@ -312,7 +315,9 @@ include 'sidebar.php';
                                     <strong>Railway:</strong> <?= htmlspecialchars($railwayName) ?> &nbsp;|&nbsp;
                                     <strong>Division:</strong> <?= htmlspecialchars($divisionName) ?> &nbsp;|&nbsp;
                                     <strong>Station:</strong> <?= htmlspecialchars($stationName) ?> &nbsp;|&nbsp;
-                                    <strong>Date:</strong> <?= htmlspecialchars($sheet['report_date'] ? date('d-m-Y', strtotime($sheet['report_date'])) : date('d-m-Y', strtotime($fromDate))) ?>
+                                    <strong>Date:</strong> <?= htmlspecialchars($sheet['report_date'] ? date('d-m-Y', strtotime($sheet['report_date'])) : date('d-m-Y', strtotime($fromDate))) ?> &nbsp;|&nbsp;
+                                    <strong>Train No:</strong> <?= htmlspecialchars($sheet['train_no'] ?? '-') ?> &nbsp;|&nbsp;
+                                    <strong>No. of Coaches:</strong> <?= htmlspecialchars($sheet['total_coaches']) ?>
                                 </div>
                                 <div>
                                     <strong>Contractor:</strong> <?= htmlspecialchars($contractorName) ?> &nbsp;|&nbsp;

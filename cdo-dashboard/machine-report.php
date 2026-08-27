@@ -24,16 +24,18 @@ $machinesStmt = $pdo->prepare("
 $machinesStmt->execute(['station_id' => $stationId]);
 $machinesList = $machinesStmt->fetchAll();
 
-// Fetch targets for selected month
-$targetMonthDate = date('Y-m-01', strtotime($fromDate));
+// Fetch targets active on selected date (using SCD range logic)
 $targetsStmt = $pdo->prepare("
     SELECT machine_id, shift_id, nominated_area 
     FROM mcc_normal_machine_target 
-    WHERE station_id = :station_id AND target_month = :target_month
+    WHERE station_id = :station_id 
+      AND :date_ref_1 >= effective_from
+      AND (effective_to IS NULL OR :date_ref_2 <= effective_to)
 ");
 $targetsStmt->execute([
     'station_id' => $stationId,
-    'target_month' => $targetMonthDate
+    'date_ref_1' => $fromDate,
+    'date_ref_2' => $fromDate
 ]);
 $targetsRows = $targetsStmt->fetchAll();
 

@@ -2314,9 +2314,10 @@ CREATE TABLE `mcc_normal_machine_target` (
   `station_id` int(11) NOT NULL,
   `input_type` varchar(50) DEFAULT 'cleaning',
   `machine_id` int(11) NOT NULL,
-  `target_month` date NOT NULL,
   `nominated_area` varchar(50) DEFAULT NULL,
   `penalty_amount` decimal(10,2) DEFAULT NULL,
+  `effective_from` date NOT NULL DEFAULT curdate(),
+  `effective_to` date DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

@@ -20,13 +20,16 @@ $tokenId = $data['token_id'] ?? null;
 $trainNo = $data['train_no'] ?? null;
 $coachNo = $data['coach_no'] ?? null;
 $auditorName = $data['auditor_name'] ?? null;
-$parameters = $data['parameters'] ?? null; // Expect array of {"parameter_id": X, "qty_used": Y}
+$stationId = isset($data['station_id']) ? intval($data['station_id']) : null;
 
-if (empty($tokenId) || empty($trainNo) || empty($coachNo) || empty($auditorName) || empty($parameters) || !is_array($parameters)) {
+// Support both payload schemas: "values" array and legacy "parameters" array
+$valuesList = $data['values'] ?? $data['parameters'] ?? null;
+
+if (empty($tokenId) || empty($trainNo) || empty($coachNo) || empty($auditorName) || empty($valuesList) || !is_array($valuesList)) {
     http_response_code(400);
     echo json_encode([
         "status" => "error",
-        "message" => "Incomplete data. token_id, train_no, coach_no, auditor_name, and parameters (array) are required."
+        "message" => "Incomplete data. token_id, train_no, coach_no, auditor_name, and values (array) are required."
     ]);
     exit();
 }
@@ -35,30 +38,47 @@ try {
     $pdo->beginTransaction();
 
     // Prepare update query
-    $stmt = $pdo->prepare("
-        UPDATE mcc_normal_chemical_report 
-        SET qty_used = :qty_used, auditor_name = :auditor_name
-        WHERE token_id = :token_id 
-          AND train_no = :train_no 
-          AND coach_no = :coach_no 
-          AND parameter_id = :parameter_id
-    ");
+    if ($stationId !== null) {
+        $stmt = $pdo->prepare("
+            UPDATE mcc_normal_chemical_report 
+            SET qty_used = :qty_used, auditor_name = :auditor_name
+            WHERE token_id = :token_id 
+              AND train_no = :train_no 
+              AND coach_no = :coach_no 
+              AND parameter_id = :parameter_id
+              AND station_id = :station_id
+        ");
+    } else {
+        $stmt = $pdo->prepare("
+            UPDATE mcc_normal_chemical_report 
+            SET qty_used = :qty_used, auditor_name = :auditor_name
+            WHERE token_id = :token_id 
+              AND train_no = :train_no 
+              AND coach_no = :coach_no 
+              AND parameter_id = :parameter_id
+        ");
+    }
 
     $updatedCount = 0;
 
-    foreach ($parameters as $paramItem) {
-        $paramId = $paramItem['parameter_id'] ?? null;
-        $qtyUsed = isset($paramItem['qty_used']) ? floatval($paramItem['qty_used']) : null;
+    foreach ($valuesList as $item) {
+        $paramId = $item['parameter_id'] ?? null;
+        // Support both "value" key and legacy "qty_used" key
+        $qtyUsed = isset($item['value']) ? floatval($item['value']) : (isset($item['qty_used']) ? floatval($item['qty_used']) : null);
 
         if ($paramId !== null && $qtyUsed !== null) {
-            $stmt->execute([
+            $binds = [
                 'qty_used' => $qtyUsed,
                 'auditor_name' => $auditorName,
                 'token_id' => $tokenId,
                 'train_no' => $trainNo,
                 'coach_no' => $coachNo,
                 'parameter_id' => $paramId
-            ]);
+            ];
+            if ($stationId !== null) {
+                $binds['station_id'] = $stationId;
+            }
+            $stmt->execute($binds);
             $updatedCount += $stmt->rowCount();
         }
     }

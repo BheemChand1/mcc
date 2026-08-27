@@ -381,6 +381,7 @@ CREATE TABLE `mcc_intensive_chemical_report` (
   `station_id` int(11) NOT NULL,
   `input_type` varchar(50) DEFAULT 'cleaning',
   `token_id` varchar(100) NOT NULL,
+  `train_no` varchar(50) DEFAULT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -764,6 +765,8 @@ CREATE TABLE `mcc_intensive_chemical_target` (
   `qty(ml)` decimal(10,2) DEFAULT NULL,
   `penalty` decimal(10,2) DEFAULT NULL,
   `penalty_qty(ml)` decimal(10,2) DEFAULT NULL,
+  `effective_from` date NOT NULL DEFAULT curdate(),
+  `effective_to` date DEFAULT NULL,
   `station_id` int(11) NOT NULL,
   `input_type` varchar(50) DEFAULT 'cleaning',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
@@ -847,6 +850,7 @@ CREATE TABLE `mcc_intensive_machine_report` (
   `parameter_id` int(11) NOT NULL,
   `used_status` varchar(50) DEFAULT NULL,
   `token_id` varchar(100) NOT NULL,
+  `auditor_name` varchar(150) DEFAULT NULL,
   `station_id` int(11) NOT NULL,
   `input_type` varchar(50) DEFAULT 'cleaning',
   `report_date` date NOT NULL,
@@ -943,9 +947,10 @@ CREATE TABLE `mcc_intensive_machine_target` (
   `station_id` int(11) NOT NULL,
   `input_type` varchar(50) DEFAULT 'cleaning',
   `machine_id` int(11) NOT NULL,
-  `target_month` date NOT NULL,
   `nominated_area` varchar(50) DEFAULT NULL,
   `penalty_amount` decimal(10,2) DEFAULT NULL,
+  `effective_from` date NOT NULL DEFAULT curdate(),
+  `effective_to` date DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

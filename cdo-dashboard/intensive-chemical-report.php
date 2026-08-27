@@ -14,29 +14,34 @@ $shiftsStmt = $pdo->prepare("
 $shiftsStmt->execute(['station_id' => $stationId]);
 $shiftsList = $shiftsStmt->fetchAll();
 
-// Fetch all active parameters and their target values/penalties dynamically - Intensive
+// Fetch all active parameters - Intensive
 $paramsStmt = $pdo->prepare("
-    SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
-    FROM mcc_intensive_chemical_param p
-    LEFT JOIN mcc_intensive_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target
-    WHERE p.station_id = :station_id_param
-    ORDER BY p.id ASC
+    SELECT id AS parameter_id, name AS parameter_name, units 
+    FROM mcc_intensive_chemical_param 
+    WHERE station_id = :station_id
+    ORDER BY id ASC
 ");
-$paramsStmt->execute([
-    'station_id_target' => $stationId,
-    'station_id_param' => $stationId
-]);
+$paramsStmt->execute(['station_id' => $stationId]);
 $parametersList = $paramsStmt->fetchAll();
 
 // Fetch distinct tokens in this date range and station for intensive chemical report
 $stmt = $pdo->prepare("
-    SELECT DISTINCT token_id, report_date 
+    SELECT DISTINCT token_id, train_no, report_date 
     FROM mcc_intensive_chemical_report 
     WHERE report_date BETWEEN :from_date AND :to_date AND station_id = :station_id
     ORDER BY report_date DESC, token_id DESC
 ");
 $stmt->execute(['from_date' => $fromDate, 'to_date' => $toDate, 'station_id' => $stationId]);
 $tokensList = $stmt->fetchAll();
+
+// Target resolving statement - Intensive SCD Range
+$targetStmt = $pdo->prepare("
+    SELECT t.parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
+    FROM mcc_intensive_chemical_target t
+    WHERE t.station_id = :station_id
+      AND :report_date_1 >= t.effective_from 
+      AND (t.effective_to IS NULL OR :report_date_2 <= t.effective_to)
+");
 
 $sheetsData = [];
 
@@ -56,6 +61,20 @@ if (!empty($tokensList)) {
 
     foreach ($tokensList as $t) {
         $tokenId = $t['token_id'];
+        $reportDate = $t['report_date'];
+        $trainNo = $t['train_no'];
+
+        // Get targets active on this report date (SCD Type 2)
+        $targetStmt->execute([
+            'station_id' => $stationId,
+            'report_date_1' => $reportDate,
+            'report_date_2' => $reportDate
+        ]);
+        $targetsRaw = $targetStmt->fetchAll(PDO::FETCH_ASSOC);
+        $targets = [];
+        foreach ($targetsRaw as $tr) {
+            $targets[$tr['parameter_id']] = $tr;
+        }
         
         $coachesStmt->execute(['token_id' => $tokenId, 'station_id' => $stationId]);
         $distinctCoaches = $coachesStmt->fetchAll(PDO::FETCH_COLUMN);
@@ -90,7 +109,7 @@ if (!empty($tokensList)) {
         
         foreach ($parametersList as $param) {
             $pId = $param['parameter_id'];
-            $targetPerCoach = floatval($param['qty_ml'] ?? 0);
+            $targetPerCoach = isset($targets[$pId]['qty_ml']) ? floatval($targets[$pId]['qty_ml']) : 0;
             $targetTotal = $targetPerCoach * $totalCoaches;
             
             $rowTotalUsed = 0;
@@ -108,12 +127,15 @@ if (!empty($tokensList)) {
             
             if ($rowTotalUsed < $targetTotal) {
                 $deficit = $targetTotal - $rowTotalUsed;
-                $penaltyQty = floatval($param['penalty_qty_ml'] ?? 0);
+                $penaltyQty = isset($targets[$pId]['penalty_qty_ml']) ? floatval($targets[$pId]['penalty_qty_ml']) : 0;
                 if ($penaltyQty <= 0) {
-                    $penaltyQty = floatval($param['qty_ml'] ?? 0);
+                    $penaltyQty = targetPerCoach; // fallback to target per coach
                 }
-                $basePenalty = floatval($param['penalty'] ?? 0);
-                if ($penaltyQty > 0 && $basePenalty > 0) {
+                if ($penaltyQty <= 0) {
+                    $penaltyQty = 1; // avoid divide by zero
+                }
+                $basePenalty = isset($targets[$pId]['penalty']) ? floatval($targets[$pId]['penalty']) : 0;
+                if ($basePenalty > 0) {
                     $totalPenalty += ceil($deficit / $penaltyQty) * $basePenalty;
                 }
             }
@@ -127,12 +149,14 @@ if (!empty($tokensList)) {
         
         $sheetsData[] = [
             'token_id' => $tokenId,
-            'report_date' => $t['report_date'],
+            'report_date' => $reportDate,
+            'train_no' => $trainNo,
             'total_coaches' => $totalCoaches,
             'report_data' => $reportData,
             'auditors_by_shift' => $auditorsByShift,
             'chemical_score' => $chemicalScore,
             'total_penalty' => $totalPenalty,
+            'targets' => $targets, // save targets for this date to display in UI table!
             'is_fallback' => false
         ];
     }
@@ -283,6 +307,8 @@ include 'sidebar.php';
                                     <strong>Date:</strong> <?= htmlspecialchars($sheet['report_date'] ? date('d-m-Y', strtotime($sheet['report_date'])) : date('d-m-Y', strtotime($fromDate))) ?>
                                 </div>
                                 <div>
+                                    <strong>Train No:</strong> <?= htmlspecialchars($sheet['train_no'] ?? '-') ?> &nbsp;|&nbsp;
+                                    <strong>No. of Coaches:</strong> <?= htmlspecialchars($sheet['total_coaches']) ?> &nbsp;|&nbsp;
                                     <strong>Contractor:</strong> <?= htmlspecialchars($contractorName) ?> &nbsp;|&nbsp;
                                     <strong>Score:</strong> <span style="color: #15803d; font-weight: 700;"><?= $sheet['chemical_score'] ?>%</span> &nbsp;|&nbsp;
                                     <strong>Total Penalty:</strong> <span style="color: #b91c1c; font-weight: 700;">Rs. <?= number_format($sheet['total_penalty'], 0) ?></span>
@@ -315,7 +341,7 @@ include 'sidebar.php';
                                     $serial = 1;
                                     foreach ($parametersList as $param): 
                                         $pId = $param['parameter_id'];
-                                        $targetPerCoach = floatval($param['qty_ml'] ?? 0);
+                                        $targetPerCoach = isset($sheet['targets'][$pId]['qty_ml']) ? floatval($sheet['targets'][$pId]['qty_ml']) : 0;
                                         $totalTargetQty = $targetPerCoach * $sheet['total_coaches'];
                                         
                                         $rowTotalUsed = 0;
@@ -329,12 +355,15 @@ include 'sidebar.php';
                                         $rowPenalty = 0;
                                         if ($diff < 0) {
                                             $deficitVal = abs($diff);
-                                            $penaltyQty = floatval($param['penalty_qty_ml'] ?? 0);
+                                            $penaltyQty = isset($sheet['targets'][$pId]['penalty_qty_ml']) ? floatval($sheet['targets'][$pId]['penalty_qty_ml']) : 0;
                                             if ($penaltyQty <= 0) {
-                                                $penaltyQty = floatval($param['qty_ml'] ?? 0);
+                                                $penaltyQty = $targetPerCoach;
                                             }
-                                            $basePenalty = floatval($param['penalty'] ?? 0);
-                                            if ($penaltyQty > 0 && $basePenalty > 0) {
+                                            if ($penaltyQty <= 0) {
+                                                $penaltyQty = 1;
+                                            }
+                                            $basePenalty = isset($sheet['targets'][$pId]['penalty']) ? floatval($sheet['targets'][$pId]['penalty']) : 0;
+                                            if ($basePenalty > 0) {
                                                 $rowPenalty = ceil($deficitVal / $penaltyQty) * $basePenalty;
                                             }
                                         }

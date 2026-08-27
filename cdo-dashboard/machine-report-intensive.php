@@ -25,15 +25,17 @@ $machinesStmt->execute(['station_id' => $stationId]);
 $machinesList = $machinesStmt->fetchAll();
 
 // Fetch targets for selected month - Intensive
-$targetMonthDate = date('Y-m-01', strtotime($fromDate));
 $targetsStmt = $pdo->prepare("
     SELECT machine_id, shift_id, nominated_area 
     FROM mcc_intensive_machine_target 
-    WHERE station_id = :station_id AND target_month = :target_month
+    WHERE station_id = :station_id 
+      AND :date_ref_1 >= effective_from
+      AND (effective_to IS NULL OR :date_ref_2 <= effective_to)
 ");
 $targetsStmt->execute([
     'station_id' => $stationId,
-    'target_month' => $targetMonthDate
+    'date_ref_1' => $fromDate,
+    'date_ref_2' => $fromDate
 ]);
 $targetsRows = $targetsStmt->fetchAll();
 
@@ -44,7 +46,7 @@ foreach ($targetsRows as $row) {
 
 // Fetch report data for selected date - Intensive
 $reportStmt = $pdo->prepare("
-    SELECT parameter_id AS machine_id, shift_id, used_status 
+    SELECT parameter_id AS machine_id, shift_id, used_status, auditor_name 
     FROM mcc_intensive_machine_report 
     WHERE station_id = :station_id AND report_date = :report_date
 ");
@@ -55,8 +57,12 @@ $reportStmt->execute([
 $reportRows = $reportStmt->fetchAll();
 
 $reportsMap = [];
+$auditorName = '';
 foreach ($reportRows as $row) {
     $reportsMap[$row['machine_id']][$row['shift_id']] = $row['used_status'];
+    if (empty($auditorName) && !empty($row['auditor_name'])) {
+        $auditorName = $row['auditor_name'];
+    }
 }
 
 $isFallback = empty($reportRows);
@@ -144,6 +150,7 @@ include 'sidebar.php';
                         </div>
                         <div class="meta-row">
                             <div class="meta-item"><span>Contractor:</span> <?= htmlspecialchars($contractorName) ?></div>
+                            <div class="meta-item"><span>Auditor Name:</span> <?= htmlspecialchars($auditorName ?: '-') ?></div>
                             <div class="meta-item"><span>Total Score:</span> <?= htmlspecialchars($totalScore) ?></div>
                         </div>
                     </div>

@@ -10,6 +10,20 @@ $stationId = $_SESSION['station_id'] ?? 1;
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
 
+// Fetch rating values from database
+$ratingStmt = $pdo->query("SELECT rating_name, rating_value FROM mcc_normal_rating ORDER BY rating_value DESC");
+$ratings = $ratingStmt->fetchAll(PDO::FETCH_ASSOC);
+$ratingStrings = [];
+foreach ($ratings as $r) {
+    $ratingStrings[] = htmlspecialchars($r['rating_name']) . "-" . htmlspecialchars($r['rating_value']);
+}
+$ratingText = implode(', ', $ratingStrings);
+
+// Fetch the current station's name for meta info
+$stationQuery = $pdo->prepare("SELECT station_name FROM mcc_stations WHERE station_id = :station_id");
+$stationQuery->execute(['station_id' => $stationId]);
+$stationName = $stationQuery->fetchColumn() ?: 'Lumdhing';
+
 // Fetch distinct tokens/trains in this date range for PRT report
 $stmt = $pdo->prepare("
     SELECT DISTINCT token_id, train_no, report_date 
@@ -58,9 +72,8 @@ if ($isFallback) {
 } else {
     // Fetch reports for each token
     $scoresStmt = $pdo->prepare("
-        SELECT s.*, u.full_name AS supervisor_name 
+        SELECT s.* 
         FROM mcc_prt_scorecard_report s
-        LEFT JOIN mcc_users u ON s.submitted_by = u.user_id
         WHERE s.station_id = :station_id AND s.token_id = :token_id
     ");
 
@@ -77,7 +90,19 @@ if ($isFallback) {
         $dbCoaches = [];
 
         if (!empty($rows)) {
-            $supervisorName = $rows[0]['supervisor_name'] ?? 'Shubham';
+            $firstRow = $rows[0];
+            if (!empty($firstRow['auditor_name'])) {
+                $supervisorName = $firstRow['auditor_name'];
+            } elseif (!empty($firstRow['submitted_by'])) {
+                if (is_numeric($firstRow['submitted_by'])) {
+                    $uStmt = $pdo->prepare("SELECT full_name FROM mcc_users WHERE user_id = :uid");
+                    $uStmt->execute(['uid' => $firstRow['submitted_by']]);
+                    $supervisorName = $uStmt->fetchColumn() ?: $firstRow['submitted_by'];
+                } else {
+                    $supervisorName = $firstRow['submitted_by'];
+                }
+            }
+
             foreach ($rows as $row) {
                 $scoresData[$row['sub_parameter_id']][$row['coach_no']] = $row['score_value'];
                 $dbCoaches[$row['coach_no']] = true;
@@ -170,7 +195,7 @@ if ($isFallback) {
     }
 }
 
-$pageTitle = 'PRT Scorecard | MCC';
+$pageTitle = 'Platform Return Train Score Card | MCC';
 
 $extraStyles = "
 .report-wrap{
@@ -397,10 +422,6 @@ include 'sidebar.php';
                         <div class="report-meta-section">
                             <div class="meta-row">
                                 <div class="meta-item">
-                                    <span>Agreement No & date:</span>
-                                    AGR_2026-99-02 & 01-04-2026
-                                </div>
-                                <div class="meta-item">
                                     <span>Date of Inspection:</span>
                                     <?= htmlspecialchars(date('d-m-Y', strtotime($sheet['report_date']))) ?>
                                 </div>
@@ -425,7 +446,7 @@ include 'sidebar.php';
                             <div class="meta-row">
                                 <div class="meta-item">
                                     <span>Name of Depot:</span>
-                                    Silchar Coaching Depot
+                                    <?= htmlspecialchars($stationName) ?> Coaching Depot
                                 </div>
                                 <div class="meta-item">
                                     <span>Train No:</span>
@@ -510,12 +531,11 @@ include 'sidebar.php';
                             <strong>Scoring Guidelines:</strong>
                             <ul>
                                 <li>
-                                    Maximum Marks will be 15 for internal cleaning. This will be counted as under: Very
-                                    Good- 3, Satisfactory-2, Poor-1,Not attended-0
+                                    Maximum Marks will be 12 for internal cleaning. This will be counted as under: <?= $ratingText ?>
                                 </li>
                                 <li>
                                     Maximum Marks will be 3 for exterior cleaning & washing. This will be counted as under:
-                                    Very Good-3, Satisfactory-2, Poor-1, Not attended-0. % can be derived as per the marks
+                                    <?= $ratingText ?>. % can be derived as per the marks
                                     separately.
                                 </li>
                             </ul>
@@ -523,10 +543,10 @@ include 'sidebar.php';
 
                         <div class="signature-row">
                             <div class="signature-box">
-                                <div class="signature-line">Auditor Signature</div>
+                                <div class="signature-line">Contractor's Supervisor</div>
                             </div>
                             <div class="signature-box">
-                                <div class="signature-line">On Duty Supervisor Signature</div>
+                                <div class="signature-line">Auth. Rep. of Sr.DME/CDO</div>
                             </div>
                         </div>
                     </div>

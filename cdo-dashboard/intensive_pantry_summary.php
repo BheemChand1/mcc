@@ -1,6 +1,7 @@
 <?php
 /**
  * CDO Dashboard - Monthly Summary for Intensive Cleaning of Pantry Car
+ * Aggregated by Date (Overall Daily Score Percentage)
  */
 require_once 'auth.php';
 
@@ -32,121 +33,81 @@ $divisionName   = strtoupper($stnData['division_name'] ?? 'LUCKNOW - NER');
 $stationName    = ucfirst($stnData['station_name'] ?? 'Gorakhpur');
 $contractorName = $stnData['contractor_name'] ?? 'Prime Cleaning Services';
 
-// Fetch active parameters and sub-parameters for intensive pantry scorecard
-$paramStmt = $pdo->prepare("
-    SELECT p.id AS param_id, p.parameter_name, sp.id AS sub_param_id, sp.sub_parameter_name 
-    FROM mcc_intensive_pantry_param p
-    JOIN mcc_intensive_pantry_sub_param sp ON p.id = sp.parameter_id
-    WHERE p.station_id = :p_station_id AND sp.station_id = :sp_station_id AND p.status = 'Active' AND sp.status = 'Active'
-    ORDER BY p.id ASC, sp.id ASC
-");
-$paramStmt->execute(['p_station_id' => $stationId, 'sp_station_id' => $stationId]);
-$paramRows = $paramStmt->fetchAll();
-
-$totalSubParamsCount = count($paramRows);
-$maxScorePerCoach = $totalSubParamsCount > 0 ? ($totalSubParamsCount * 3) : 54;
-
-// Fetch distinct inspection tokens in selected month
-$tokensStmt = $pdo->prepare("
-    SELECT DISTINCT token_id, train_no, report_date 
+// Fetch distinct report dates in selected month from mcc_intensive_pantry_report
+$datesStmt = $pdo->prepare("
+    SELECT DISTINCT report_date 
     FROM mcc_intensive_pantry_report 
     WHERE station_id = :station_id AND report_date BETWEEN :start_date AND :end_date 
-    ORDER BY report_date ASC, id ASC
+    ORDER BY report_date ASC
 ");
-$tokensStmt->execute([
+$datesStmt->execute([
     'station_id' => $stationId,
     'start_date' => $startDate,
     'end_date'   => $endDate
 ]);
-$tokens = $tokensStmt->fetchAll();
+$activeDates = $datesStmt->fetchAll(PDO::FETCH_COLUMN);
 
-$sheets = [];
-$reportStmt = $pdo->prepare("
-    SELECT r.sub_parameter_id, r.coach_no, r.score_value, r.submitted_by, u.full_name AS auditor_name
-    FROM mcc_intensive_pantry_report r
-    LEFT JOIN mcc_users u ON r.submitted_by = u.user_id
-    WHERE r.station_id = :station_id AND r.token_id = :token_id
-    ORDER BY r.id ASC
+$scoresStmt = $pdo->prepare("
+    SELECT sub_parameter_id, coach_no, score_value, token_id
+    FROM mcc_intensive_pantry_report
+    WHERE station_id = :station_id AND report_date = :report_date
 ");
 
-foreach ($tokens as $t) {
-    $tokenId    = $t['token_id'];
-    $trainNo    = $t['train_no'];
-    $reportDate = $t['report_date'];
+$dailyRows = [];
+$totalMonthlyObtained = 0.0;
+$totalMonthlyPossible = 0;
+$totalMonthlyInspections = 0;
 
-    $reportStmt->execute(['station_id' => $stationId, 'token_id' => $tokenId]);
-    $entries = $reportStmt->fetchAll();
+foreach ($activeDates as $rDate) {
+    $scoresStmt->execute([
+        'station_id'  => $stationId,
+        'report_date' => $rDate
+    ]);
+    $entries = $scoresStmt->fetchAll();
 
-    $uniqueCoaches = [];
-    $supervisorName = 'prabhunath';
-    $totalObtained = 0.0;
-    $totalPossible = 0;
+    $tokensOnDate = [];
+    $dateObtained = 0.0;
+    $datePossible = 0;
 
     foreach ($entries as $sc) {
-        if (!empty($sc['coach_no']) && !in_array($sc['coach_no'], $uniqueCoaches)) {
-            $uniqueCoaches[] = $sc['coach_no'];
-        }
-        if (!empty($sc['auditor_name'])) {
-            $supervisorName = $sc['auditor_name'];
-        } elseif (!empty($sc['submitted_by'])) {
-            $supervisorName = $sc['submitted_by'];
+        if (!empty($sc['token_id']) && !in_array($sc['token_id'], $tokensOnDate)) {
+            $tokensOnDate[] = $sc['token_id'];
         }
 
         $val = $sc['score_value'];
         if (is_numeric($val)) {
-            $totalObtained += floatval($val);
-            $totalPossible += 3;
+            $dateObtained += floatval($val);
+            $datePossible += 3;
         } else {
             $v = strtolower(trim((string)$val));
-            if ($v === '3' || $v === 'vg' || $v === 'very good') { $totalObtained += 3; $totalPossible += 3; }
-            elseif ($v === '2' || $v === 'sat' || $v === 'satisfactory' || $v === 'good') { $totalObtained += 2; $totalPossible += 3; }
-            elseif ($v === '1' || $v === 'poor') { $totalObtained += 1; $totalPossible += 3; }
-            elseif ($v === '0' || $v === 'not attended') { $totalObtained += 0; $totalPossible += 3; }
+            if ($v === '3' || $v === 'vg' || $v === 'very good') { $dateObtained += 3; $datePossible += 3; }
+            elseif ($v === '2' || $v === 'sat' || $v === 'satisfactory' || $v === 'good') { $dateObtained += 2; $datePossible += 3; }
+            elseif ($v === '1' || $v === 'poor') { $dateObtained += 1; $datePossible += 3; }
+            elseif ($v === '0' || $v === 'not attended') { $dateObtained += 0; $datePossible += 3; }
         }
     }
 
-    if (empty($uniqueCoaches)) {
-        $uniqueCoaches = ['WGACCW 19208'];
+    $inspectionCount = count($tokensOnDate);
+    if ($inspectionCount === 0) {
+        $inspectionCount = 1;
     }
 
-    if ($totalPossible === 0) {
-        $totalPossible = count($uniqueCoaches) * $maxScorePerCoach;
-        $totalObtained = $totalPossible;
-    }
+    $datePct = $datePossible > 0 ? round(($dateObtained / $datePossible) * 100, 2) : 0;
 
-    $pct = $totalPossible > 0 ? round(($totalObtained / $totalPossible) * 100, 2) : 0;
-
-    $sheets[] = [
-        'token_id'        => $tokenId,
-        'train_no'        => $trainNo,
-        'report_date'     => $reportDate,
-        'coaches'         => implode(', ', $uniqueCoaches),
-        'coach_count'     => count($uniqueCoaches),
-        'supervisor_name' => $supervisorName,
-        'obtained'        => round($totalObtained, 1),
-        'possible'        => $totalPossible,
-        'percentage'      => $pct
+    $dailyRows[] = [
+        'date'             => $rDate,
+        'inspection_count' => $inspectionCount,
+        'obtained'         => round($dateObtained, 1),
+        'possible'         => $datePossible,
+        'percentage'       => $datePct
     ];
+
+    $totalMonthlyObtained += $dateObtained;
+    $totalMonthlyPossible += $datePossible;
+    $totalMonthlyInspections += $inspectionCount;
 }
 
-// Compute Monthly Average Score across all sheets
-$averageMonthlyScore = 0.0;
-$totalCoachesCleaned = 0;
-if (count($sheets) > 0) {
-    $totalPercent = 0.0;
-    foreach ($sheets as $sheet) {
-        $totalPercent += $sheet['percentage'];
-        $totalCoachesCleaned += $sheet['coach_count'];
-    }
-    $averageMonthlyScore = round($totalPercent / count($sheets), 2);
-}
-
-// Group sheets by day
-$sheetsByDay = [];
-foreach ($sheets as $sheet) {
-    $day = intval(date('d', strtotime($sheet['report_date'])));
-    $sheetsByDay[$day][] = $sheet;
-}
+$averageMonthlyScore = $totalMonthlyPossible > 0 ? round(($totalMonthlyObtained / $totalMonthlyPossible) * 100, 2) : 0.0;
 
 $pageTitle = 'Monthly Intensive Pantry Car Scorecard Summary | MCC';
 
@@ -276,8 +237,8 @@ include 'sidebar.php';
             <div class="row g-3 mb-4 no-print">
                 <div class="col-md-4">
                     <div class="stat-card-box">
-                        <div class="stat-val text-primary"><?= count($sheets); ?></div>
-                        <div class="stat-label">Pantry Inspections Done</div>
+                        <div class="stat-val text-primary"><?= count($dailyRows); ?></div>
+                        <div class="stat-label">Inspected Days</div>
                     </div>
                 </div>
                 <div class="col-md-4">
@@ -288,8 +249,8 @@ include 'sidebar.php';
                 </div>
                 <div class="col-md-4">
                     <div class="stat-card-box">
-                        <div class="stat-val text-info"><?= $totalCoachesCleaned; ?></div>
-                        <div class="stat-label">Pantry Coaches Inspected</div>
+                        <div class="stat-val text-info"><?= $totalMonthlyInspections; ?></div>
+                        <div class="stat-label">Total Pantry Inspections</div>
                     </div>
                 </div>
             </div>
@@ -299,7 +260,7 @@ include 'sidebar.php';
                 <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
                     <h5 class="mb-0 font-weight-bold text-dark d-flex align-items-center" style="font-size: 1.1rem;">
                         <i class="bi bi-cup-hot-fill text-primary me-2"></i>
-                        Pantry Car Intensive Cleaning Monthly Summary: <?= date('F Y', strtotime($startDate)); ?>
+                        Pantry Car Intensive Cleaning Daily Summary: <?= date('F Y', strtotime($startDate)); ?>
                     </h5>
                     <div class="d-flex align-items-center gap-3">
                         <span class="badge bg-success-subtle text-success p-2 px-3 border border-success-subtle rounded-pill font-weight-bold" style="font-size: 0.95rem;">
@@ -312,45 +273,39 @@ include 'sidebar.php';
                 </div>
 
                 <div class="card-body p-0 table-responsive">
-                    <table class="table table-bordered table-hover align-middle mb-0" style="font-size: 0.88rem;">
+                    <table class="table table-bordered table-hover align-middle mb-0" style="font-size: 0.92rem;">
                         <thead style="background: #1987C6; color: #ffffff;" class="text-center align-middle">
                             <tr>
-                                <th style="width: 50px;">#</th>
-                                <th style="width: 110px;">Date</th>
-                                <th style="width: 100px;">Train No.</th>
-                                <th style="width: 160px;">Token ID</th>
-                                <th>Pantry Coach No.(s)</th>
-                                <th>Supervisor</th>
-                                <th style="width: 140px;">Marks Obtained</th>
-                                <th style="width: 100px;">Score (%)</th>
-                                <th style="width: 130px;" class="no-print">Action</th>
+                                <th style="width: 60px;">#</th>
+                                <th style="width: 140px;">Date</th>
+                                <th style="width: 180px;">Total Inspections</th>
+                                <th>Marks Obtained / Eligible</th>
+                                <th style="width: 180px;">Overall Day Score (%)</th>
+                                <th style="width: 160px;" class="no-print">Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (empty($sheets)): ?>
+                            <?php if (empty($dailyRows)): ?>
                                 <tr>
-                                    <td colspan="9" class="text-center py-4 text-muted">
+                                    <td colspan="6" class="text-center py-4 text-muted">
                                         <i class="bi bi-info-circle me-1"></i> No pantry car intensive scorecard inspections found for <?= date('F Y', strtotime($startDate)); ?>.
                                     </td>
                                 </tr>
                             <?php else: ?>
                                 <?php 
                                 $sn = 1;
-                                foreach ($sheets as $s):
-                                    $scoreColor = $s['percentage'] >= 90 ? 'text-success' : ($s['percentage'] >= 75 ? 'text-primary' : 'text-danger');
+                                foreach ($dailyRows as $r):
+                                    $scoreColor = $r['percentage'] >= 90 ? 'text-success' : ($r['percentage'] >= 75 ? 'text-primary' : 'text-danger');
                                 ?>
                                     <tr>
                                         <td class="text-center font-weight-bold"><?= $sn++; ?></td>
-                                        <td class="text-center font-weight-bold"><?= date('d-m-Y', strtotime($s['report_date'])); ?></td>
-                                        <td class="text-center font-weight-bold text-primary"><?= htmlspecialchars($s['train_no']); ?></td>
-                                        <td class="text-center"><span class="badge bg-light text-dark border"><?= htmlspecialchars($s['token_id']); ?></span></td>
-                                        <td class="font-weight-bold"><?= htmlspecialchars($s['coaches']); ?></td>
-                                        <td><?= htmlspecialchars($s['supervisor_name']); ?></td>
-                                        <td class="text-center font-weight-bold"><?= number_format($s['obtained'], 1) ?> / <?= $s['possible'] ?></td>
-                                        <td class="text-center font-weight-bold <?= $scoreColor ?>" style="font-size: 0.95rem;"><?= number_format($s['percentage'], 2) ?>%</td>
+                                        <td class="text-center font-weight-bold"><?= date('d-m-Y', strtotime($r['date'])); ?></td>
+                                        <td class="text-center font-weight-bold text-primary"><?= $r['inspection_count']; ?> Inspection<?= $r['inspection_count'] > 1 ? 's' : '' ?></td>
+                                        <td class="text-center font-weight-bold"><?= number_format($r['obtained'], 1) ?> / <?= $r['possible'] ?></td>
+                                        <td class="text-center font-weight-bold <?= $scoreColor ?>" style="font-size: 1rem;"><?= number_format($r['percentage'], 2) ?>%</td>
                                         <td class="text-center no-print">
-                                            <a href="intensive_pantry_scorecard.php?from_date=<?= $s['report_date'] ?>&to_date=<?= $s['report_date'] ?>&train_no=<?= urlencode($s['train_no']) ?>" class="btn btn-xs btn-outline-primary fw-bold py-1 px-2" style="font-size: 0.78rem;">
-                                                <i class="bi bi-eye-fill me-1"></i> View Sheet
+                                            <a href="intensive_pantry_scorecard.php?from_date=<?= $r['date'] ?>&to_date=<?= $r['date'] ?>" class="btn btn-sm btn-outline-primary fw-bold py-1 px-3" style="font-size: 0.8rem;">
+                                                <i class="bi bi-eye-fill me-1"></i> View Scorecards
                                             </a>
                                         </td>
                                     </tr>
@@ -358,9 +313,9 @@ include 'sidebar.php';
                             <?php endif; ?>
                         </tbody>
                         <tfoot class="table-light">
-                            <tr class="font-weight-bold">
-                                <td colspan="6" class="text-end">Overall Monthly Average Score:</td>
-                                <td colspan="3" class="text-success font-weight-bold fs-6">
+                            <tr class="font-weight-bold fs-6">
+                                <td colspan="4" class="text-end">Overall Monthly Average Score:</td>
+                                <td colspan="2" class="text-success font-weight-bold">
                                     <?= number_format($averageMonthlyScore, 2); ?>%
                                 </td>
                             </tr>

@@ -745,6 +745,9 @@ include 'sidebar.php';
                 </form>
 
                 <div class="d-flex align-items-center gap-2 ms-auto">
+                    <a href="intensive_pantry_summary.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn btn-outline-primary btn-sm fw-bold">
+                        <i class="bi bi-file-earmark-bar-graph-fill me-1"></i> Summary Page
+                    </a>
                     <button type="button" class="btn-filter-print" onclick="window.print()">
                         <i class="bi bi-printer-fill"></i> Print Scorecard
                     </button>
@@ -792,10 +795,6 @@ include 'sidebar.php';
                                 <div class="meta-item">
                                     <span class="meta-label">Name of the supervisor:</span>
                                     <span class="meta-val"><?= htmlspecialchars($sheet['supervisor_name']) ?></span>
-                                </div>
-                                <div class="meta-item">
-                                    <span class="meta-label">Name of the Technician:</span>
-                                    <span class="meta-val"><?= htmlspecialchars($sheet['technician_name']) ?></span>
                                 </div>
                                 <div class="meta-item">
                                     <span class="meta-label">Division:</span>

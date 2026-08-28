@@ -332,7 +332,7 @@ $has_photo_report = in_array(10, $active_report_ids) && in_array('photo-report.p
         <!-- Pantry Car Dropdown -->
         <?php if ($has_int_pantry): ?>
         <?php 
-        $pantryPages = ['intensive_pantry_scorecard.php', 'pantry_scorecard.php'];
+        $pantryPages = ['intensive_pantry_scorecard.php', 'pantry_scorecard.php', 'intensive_pantry_summary.php'];
         $isPantryActive = in_array($currentPage, $pantryPages);
         ?>
         <li class="nav-item <?= $isPantryActive ? 'menu-open' : '' ?>">
@@ -347,6 +347,11 @@ $has_photo_report = in_array(10, $active_report_ids) && in_array('photo-report.p
             <li class="nav-item">
               <a href="intensive_pantry_scorecard.php" class="nav-link <?= in_array($currentPage, ['intensive_pantry_scorecard.php', 'pantry_scorecard.php']) ? 'active' : '' ?>">
                 <p><?= htmlspecialchars($subreport_names[13]) ?></p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="intensive_pantry_summary.php" class="nav-link <?= ($currentPage == 'intensive_pantry_summary.php') ? 'active' : '' ?>">
+                <p>Pantry Summary</p>
               </a>
             </li>
           </ul>

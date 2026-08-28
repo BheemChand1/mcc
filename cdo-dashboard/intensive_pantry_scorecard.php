@@ -7,7 +7,6 @@ require_once 'auth.php';
 
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
-$selectedTrain = $_GET['train_no'] ?? '';
 
 // Station information
 $stationQuery = $pdo->prepare("
@@ -24,11 +23,6 @@ $railwayName    = strtoupper($stnData['zone_name'] ?? 'NORTH EASTERN RAILWAY');
 $divisionName   = strtoupper($stnData['division_name'] ?? 'LUCKNOW - NER');
 $stationName    = ucfirst($stnData['station_name'] ?? 'Gorakhpur');
 $contractorName = $stnData['contractor_name'] ?? 'Prime Cleaning Services';
-
-// Fetch distinct available trains for dropdown filter
-$trainsStmt = $pdo->prepare("SELECT DISTINCT train_no FROM mcc_intensive_pantry_report WHERE station_id = :station_id ORDER BY train_no ASC");
-$trainsStmt->execute(['station_id' => $stationId]);
-$availableTrains = $trainsStmt->fetchAll(PDO::FETCH_COLUMN);
 
 // Helper function to format qualitative rating grades
 if (!function_exists('getPantryGradeBadge')) {
@@ -85,6 +79,7 @@ $tokensSql = "
     SELECT DISTINCT token_id, train_no, report_date 
     FROM mcc_intensive_pantry_report 
     WHERE station_id = :station_id AND report_date BETWEEN :from_date AND :to_date
+    ORDER BY report_date DESC, id DESC
 ";
 $tokensParams = [
     'station_id' => $stationId,
@@ -92,12 +87,6 @@ $tokensParams = [
     'to_date' => $toDate
 ];
 
-if (!empty($selectedTrain)) {
-    $tokensSql .= " AND train_no = :train_no";
-    $tokensParams['train_no'] = $selectedTrain;
-}
-
-$tokensSql .= " ORDER BY report_date DESC, id DESC";
 $tokensStmt = $pdo->prepare($tokensSql);
 $tokensStmt->execute($tokensParams);
 $inspectionTokens = $tokensStmt->fetchAll();
@@ -725,18 +714,6 @@ include 'sidebar.php';
                     <div class="filter-group">
                         <label class="filter-label">To:</label>
                         <input type="date" name="to_date" class="filter-input" value="<?= htmlspecialchars($toDate) ?>">
-                    </div>
-
-                    <div class="filter-group">
-                        <label class="filter-label"><i class="bi bi-train-front me-1 text-primary"></i> Train:</label>
-                        <select name="train_no" class="filter-input" style="min-width: 150px;">
-                            <option value="">-- All Trains --</option>
-                            <?php foreach ($availableTrains as $tNo): ?>
-                                <option value="<?= htmlspecialchars($tNo) ?>" <?= ($selectedTrain === $tNo) ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($tNo) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
                     </div>
 
                     <button type="submit" class="btn-filter-go">

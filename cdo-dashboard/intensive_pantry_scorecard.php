@@ -34,16 +34,17 @@ $availableTrains = $trainsStmt->fetchAll(PDO::FETCH_COLUMN);
 if (!function_exists('getPantryGradeBadge')) {
     function getPantryGradeBadge($val) {
         if (is_numeric($val)) {
-            if ($val >= 2.8) return '<span class="grade-badge grade-vg">Very Good</span>';
-            if ($val >= 1.8) return '<span class="grade-badge grade-sat">Satisfactory</span>';
-            if ($val >= 0.8) return '<span class="grade-badge grade-poor">Poor</span>';
-            return '<span class="grade-badge grade-na">Not attended</span>';
+            $num = floatval($val);
+            if ($num >= 2.8) return '<span class="grade-badge grade-vg">3</span>';
+            if ($num >= 1.8) return '<span class="grade-badge grade-sat">2</span>';
+            if ($num >= 0.8) return '<span class="grade-badge grade-poor">1</span>';
+            return '<span class="grade-badge grade-na">0</span>';
         }
         $v = strtolower(trim((string)$val));
-        if ($v === '3' || $v === 'vg' || $v === 'very good' || $v === 'verygood') return '<span class="grade-badge grade-vg">Very Good</span>';
-        if ($v === '2' || $v === 'sat' || $v === 'satisfactory' || $v === 'good') return '<span class="grade-badge grade-sat">Satisfactory</span>';
-        if ($v === '1' || $v === 'poor') return '<span class="grade-badge grade-poor">Poor</span>';
-        if ($v === '0' || $v === 'not attended' || $v === 'na') return '<span class="grade-badge grade-na">Not attended</span>';
+        if ($v === '3' || $v === 'vg' || $v === 'very good' || $v === 'verygood') return '<span class="grade-badge grade-vg">3</span>';
+        if ($v === '2' || $v === 'sat' || $v === 'satisfactory' || $v === 'good') return '<span class="grade-badge grade-sat">2</span>';
+        if ($v === '1' || $v === 'poor') return '<span class="grade-badge grade-poor">1</span>';
+        if ($v === '0' || $v === 'not attended' || $v === 'na') return '<span class="grade-badge grade-na">0</span>';
         if ($v === 'x') return '<span class="grade-badge grade-x">X</span>';
         if ($v === '-') return '<span class="text-muted">-</span>';
         return htmlspecialchars((string)$val);
@@ -455,11 +456,13 @@ $extraStyles = "
 /* Qualitative Grade Badges */
 .grade-badge {
     display: inline-block;
-    padding: 2px 6px;
+    padding: 2px 8px;
     border-radius: 4px;
-    font-size: 10.5px;
-    font-weight: 700;
+    font-size: 11px;
+    font-weight: 800;
     line-height: 1.2;
+    min-width: 24px;
+    text-align: center;
 }
 
 .grade-vg {

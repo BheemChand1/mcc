@@ -37,11 +37,11 @@ if (!is_array($coachNos)) {
 }
 
 try {
-    // 1. Fetch active parameters and subparameters
+    // 1. Fetch active parameters and subparameters - Intensive Scorecard 2
     $paramsStmt = $pdo->prepare("
         SELECT sp.id AS sub_parameter_id
-        FROM mcc_vb_scorecard_param p
-        JOIN mcc_vb_scorecard_sub_param sp ON p.id = sp.parameter_id
+        FROM mcc_intensive_scorecard_2_param p
+        JOIN mcc_intensive_scorecard_2_sub_param sp ON p.id = sp.parameter_id
         WHERE p.station_id = ? AND sp.station_id = ? 
           AND p.status = 'Active' AND sp.status = 'Active'
         ORDER BY p.id ASC, sp.id ASC
@@ -49,8 +49,8 @@ try {
     $paramsStmt->execute([$stationId, $stationId]);
     $subParams = $paramsStmt->fetchAll(PDO::FETCH_COLUMN);
 
-    // Fetch chemical parameters for the station
-    $chemParamsStmt = $pdo->prepare("SELECT id FROM mcc_vb_chemical_param WHERE station_id = :station_id");
+    // Fetch chemical parameters for the station - Intensive
+    $chemParamsStmt = $pdo->prepare("SELECT id FROM mcc_intensive_chemical_param WHERE station_id = :station_id");
     $chemParamsStmt->execute(['station_id' => $stationId]);
     $chemParams = $chemParamsStmt->fetchAll(PDO::FETCH_COLUMN);
 
@@ -69,7 +69,7 @@ try {
     $tokenId = "TKN-" . $datePart . "-" . $randPart;
 
     // Verify uniqueness of generated token
-    $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM mcc_vb_scorecard_report WHERE token_id = ?");
+    $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM mcc_intensive_scorecard_2_report WHERE token_id = ?");
     $checkStmt->execute([$tokenId]);
     while ($checkStmt->fetchColumn() > 0) {
         $randPart = sprintf("%03d", rand(1, 999));
@@ -81,7 +81,7 @@ try {
     $pdo->beginTransaction();
 
     $insertStmt = $pdo->prepare("
-        INSERT INTO mcc_vb_scorecard_report 
+        INSERT INTO mcc_intensive_scorecard_2_report 
         (sub_parameter_id, station_id, token_id, train_no, coach_no, score_value, auditor_name, report_date)
         VALUES (:sub_parameter_id, :station_id, :token_id, :train_no, :coach_no, NULL, :auditor_name, :report_date)
     ");
@@ -103,7 +103,7 @@ try {
     // 4. Insert initial chemical report records (all quantities set to NULL)
     if (!empty($chemParams)) {
         $insertChemStmt = $pdo->prepare("
-            INSERT INTO mcc_vb_chemical_report 
+            INSERT INTO mcc_intensive_chemical_report 
             (parameter_id, coach_no, qty_used, auditor_name, station_id, token_id, train_no, report_date)
             VALUES (:parameter_id, :coach_no, NULL, :auditor_name, :station_id, :token_id, :train_no, :report_date)
         ");
@@ -128,7 +128,7 @@ try {
     http_response_code(201);
     echo json_encode([
         "status" => "success",
-        "message" => "Vande Bharat cleaning scorecard sheet initialized successfully.",
+        "message" => "Intensive cleaning scorecard sheet initialized successfully.",
         "token_id" => $tokenId,
         "train_no" => $trainNo,
         "coaches_count" => count($coachNos)

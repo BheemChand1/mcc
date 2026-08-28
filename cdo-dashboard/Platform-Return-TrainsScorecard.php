@@ -11,7 +11,7 @@ $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
 
 // Fetch rating values from database
-$ratingStmt = $pdo->query("SELECT rating_name, rating_value FROM mcc_normal_rating ORDER BY rating_value DESC");
+$ratingStmt = $pdo->query("SELECT rating_name, rating_value FROM mcc_prt_rating ORDER BY rating_value DESC");
 $ratings = $ratingStmt->fetchAll(PDO::FETCH_ASSOC);
 $ratingStrings = [];
 foreach ($ratings as $r) {

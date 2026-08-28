@@ -100,7 +100,6 @@ $categories = [
         'label' => 'PRT Chemical Report',
         'type' => 'chemical_with_shifts',
         'table' => 'mcc_prt_chemical_param',
-        'shift_table' => 'mcc_prt_chemical_shifts',
         'required_report_keys' => ['prt_chem']
     ],
     'surprise' => [

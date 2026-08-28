@@ -82,8 +82,8 @@ try {
 
     $insertStmt = $pdo->prepare("
         INSERT INTO mcc_intensive_scorecard_2_report 
-        (sub_parameter_id, station_id, token_id, train_no, coach_no, score_value, auditor_name, report_date)
-        VALUES (:sub_parameter_id, :station_id, :token_id, :train_no, :coach_no, NULL, :auditor_name, :report_date)
+        (sub_parameter_id, station_id, token_id, train_no, coach_no, score_value, submitted_by, report_date)
+        VALUES (:sub_parameter_id, :station_id, :token_id, :train_no, :coach_no, '', :submitted_by, :report_date)
     ");
 
     foreach ($coachNos as $coachNo) {
@@ -94,7 +94,7 @@ try {
                 'token_id' => $tokenId,
                 'train_no' => $trainNo,
                 'coach_no' => trim($coachNo),
-                'auditor_name' => $auditorName,
+                'submitted_by' => $auditorName,
                 'report_date' => $reportDate
             ]);
         }

@@ -1,29 +1,24 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 require_once 'auth.php';
 
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
 
-// Fetch all active shifts for station_id dynamically - PRT
-$shiftsStmt = $pdo->prepare("
-    SELECT id AS shift_id, shift AS shift_name 
-    FROM mcc_prt_chemical_shifts 
+// Fetch all active parameters dynamically - PRT
+$paramsStmt = $pdo->prepare("
+    SELECT id AS parameter_id, name AS parameter_name, units 
+    FROM mcc_prt_chemical_param
     WHERE station_id = :station_id
     ORDER BY id ASC
 ");
-$shiftsStmt->execute(['station_id' => $stationId]);
-$shiftsList = $shiftsStmt->fetchAll();
+$paramsStmt->execute(['station_id' => $stationId]);
+$parametersList = $paramsStmt->fetchAll();
 
-// Fetch all active parameters and their target values/penalties dynamically by month - PRT
-$paramsStmt = $pdo->prepare("
-    SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
-    FROM mcc_prt_chemical_param p
-    LEFT JOIN mcc_prt_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.target_month = :target_month
-    WHERE p.station_id = :station_id_param
-    ORDER BY p.id ASC
-");
-
-// Fetch distinct tokens/trains in this date range and station for PRT chemical report
+// Fetch distinct tokens in this date range and station for PRT chemical report
 $stmt = $pdo->prepare("
     SELECT DISTINCT token_id, train_no, report_date 
     FROM mcc_prt_chemical_report 
@@ -35,77 +30,116 @@ $tokensList = $stmt->fetchAll();
 
 $sheetsData = [];
 
+// Target resolving statement - PRT
+$targetStmt = $pdo->prepare("
+    SELECT t.parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
+    FROM mcc_prt_chemical_target t
+    WHERE t.station_id = :station_id
+      AND :report_date_1 >= t.effective_from 
+      AND (t.effective_to IS NULL OR :report_date_2 <= t.effective_to)
+");
+
 if (!empty($tokensList)) {
+    // Prepare queries to run inside the loop
+    $coachesStmt = $pdo->prepare("
+        SELECT DISTINCT coach_no 
+        FROM mcc_prt_chemical_report 
+        WHERE token_id = :token_id AND station_id = :station_id
+    ");
+
     $reportStmt = $pdo->prepare("
-        SELECT r.*, s.shift 
-        FROM mcc_prt_chemical_report r
-        JOIN mcc_prt_chemical_shifts s ON r.shift_id = s.id
-        WHERE r.token_id = :token_id AND r.station_id = :station_id
+        SELECT * 
+        FROM mcc_prt_chemical_report 
+        WHERE token_id = :token_id AND station_id = :station_id
     ");
 
     foreach ($tokensList as $t) {
         $tokenId = $t['token_id'];
-        $trainNo = $t['train_no'];
         $reportDate = $t['report_date'];
-        $targetMonth = date('Y-m-01', strtotime($reportDate));
+        $trainNo = $t['train_no'];
 
-        // Fetch targets for this month
-        $paramsStmt->execute([
-            'station_id_target' => $stationId,
-            'station_id_param' => $stationId,
-            'target_month' => $targetMonth
+        // Get targets active on this report date
+        $targetStmt->execute([
+            'station_id' => $stationId,
+            'report_date_1' => $reportDate,
+            'report_date_2' => $reportDate
         ]);
-        $sheetParameters = $paramsStmt->fetchAll();
+        $targetsRaw = $targetStmt->fetchAll(PDO::FETCH_ASSOC);
+        $targets = [];
+        foreach ($targetsRaw as $tr) {
+            $targets[$tr['parameter_id']] = $tr;
+        }
         
+        // Get distinct coaches count
+        $coachesStmt->execute(['token_id' => $tokenId, 'station_id' => $stationId]);
+        $distinctCoaches = $coachesStmt->fetchAll(PDO::FETCH_COLUMN);
+        $totalCoaches = count($distinctCoaches);
+        if ($totalCoaches === 0) {
+            $totalCoaches = 24;
+        }
+        
+        // Fetch report data
         $reportStmt->execute(['token_id' => $tokenId, 'station_id' => $stationId]);
         $rows = $reportStmt->fetchAll();
         
         $reportData = [];
-        $auditorsByShift = [];
+        $auditors = [];
         
         foreach ($rows as $row) {
             $pId = $row['parameter_id'];
-            $sId = $row['shift_id'];
             $qty = floatval($row['qty_used']);
             
-            if (!isset($reportData[$pId][$sId])) {
-                $reportData[$pId][$sId] = 0;
+            if (!isset($reportData[$pId])) {
+                $reportData[$pId] = 0;
             }
-            $reportData[$pId][$sId] += $qty;
+            $reportData[$pId] += $qty;
             
-            if ($row['auditor_name']) {
-                $auditorsByShift[$sId] = $row['auditor_name'];
+            if ($row['auditor_name'] && !in_array($row['auditor_name'], $auditors)) {
+                $auditors[] = $row['auditor_name'];
             }
         }
         
+        $sheetParameters = [];
         $paramCompliances = [];
         $totalPenalty = 0;
         
-        foreach ($sheetParameters as $param) {
-            $pId = $param['parameter_id'];
-            $targetMonthQty = floatval($param['qty_ml'] ?? 0);
-            $dailyTarget = $targetMonthQty / 30.0;
+        foreach ($parametersList as $p) {
+            $pId = $p['parameter_id'];
+            $target = $targets[$pId] ?? null;
             
-            $rowTotalUsed = 0;
-            foreach ($shiftsList as $shift) {
-                $sId = $shift['shift_id'];
-                $rowTotalUsed += $reportData[$pId][$sId] ?? 0;
-            }
+            $targetQty = isset($target['qty_ml']) ? floatval($target['qty_ml']) : 0.0;
+            $dailyTarget = $targetQty * $totalCoaches;
+            
+            $actualUsed = $reportData[$pId] ?? 0.0;
             
             if ($dailyTarget > 0) {
-                $compliance = min(100.0, ($rowTotalUsed / $dailyTarget) * 100.0);
+                $compliance = min(100.0, ($actualUsed / $dailyTarget) * 100.0);
                 $paramCompliances[] = $compliance;
             } else {
+                $compliance = 100.0;
                 $paramCompliances[] = 100.0;
             }
             
-            if ($rowTotalUsed < $dailyTarget) {
-                $deficit = $dailyTarget - $rowTotalUsed;
-                $penaltyQty = floatval($param['penalty_qty_ml'] ?? 0);
+            $sheetParameters[] = [
+                'parameter_id' => $pId,
+                'parameter_name' => $p['parameter_name'],
+                'units' => $p['units'] ?? 'Nos',
+                'target_qty' => $targetQty,
+                'total_target' => $dailyTarget,
+                'actual_used' => $actualUsed,
+                'compliance' => $compliance,
+                'penalty_qty_ml' => $target['penalty_qty_ml'] ?? 0.0,
+                'penalty' => $target['penalty'] ?? 0.0
+            ];
+            
+            // Penalty calculation
+            if ($actualUsed < $dailyTarget) {
+                $deficit = $dailyTarget - $actualUsed;
+                $penaltyQty = floatval($target['penalty_qty_ml'] ?? 0);
                 if ($penaltyQty <= 0) {
                     $penaltyQty = 1.0;
                 }
-                $basePenalty = floatval($param['penalty'] ?? 0);
+                $basePenalty = floatval($target['penalty'] ?? 0);
                 if ($basePenalty > 0) {
                     $totalPenalty += ceil($deficit / $penaltyQty) * $basePenalty;
                 }
@@ -123,7 +157,7 @@ if (!empty($tokensList)) {
             'train_no' => $trainNo,
             'report_date' => $reportDate,
             'report_data' => $reportData,
-            'auditors_by_shift' => $auditorsByShift,
+            'auditor_name' => implode(', ', $auditors),
             'chemical_score' => $chemicalScore,
             'total_penalty' => $totalPenalty,
             'parameters_list' => $sheetParameters,
@@ -131,43 +165,54 @@ if (!empty($tokensList)) {
         ];
     }
 } else {
-    $targetMonth = date('Y-m-01', strtotime($fromDate));
-    $paramsStmt->execute([
-        'station_id_target' => $stationId,
-        'station_id_param' => $stationId,
-        'target_month' => $targetMonth
-    ]);
-    $fallbackParams = $paramsStmt->fetchAll();
-
+    // Return empty template row
+    $sheetParameters = [];
+    foreach ($parametersList as $p) {
+        $sheetParameters[] = [
+            'parameter_id' => $p['parameter_id'],
+            'parameter_name' => $p['parameter_name'],
+            'units' => $p['units'] ?? 'Nos',
+            'target_qty' => 0.0,
+            'total_target' => 0.0,
+            'actual_used' => 0.0,
+            'compliance' => 100.0,
+            'penalty_qty_ml' => 0.0,
+            'penalty' => 0.0
+        ];
+    }
     $sheetsData[] = [
-        'token_id' => '',
-        'train_no' => '12018',
+        'token_id' => 'TKN-' . date('Ymd') . '-001',
+        'train_no' => '12555',
         'report_date' => $fromDate,
         'report_data' => [],
-        'auditors_by_shift' => [],
+        'auditor_name' => 'Supervisor',
         'chemical_score' => 100,
         'total_penalty' => 0,
-        'parameters_list' => $fallbackParams,
+        'parameters_list' => $sheetParameters,
         'is_fallback' => true
     ];
 }
 
-$pageTitle = 'PRT Consumables Usage Report | MCC';
+$pageTitle = 'Consumables Usage Report (PRT) | MCC';
 
 $extraStyles = "
 .chemical-sheet {
-    background: #fff !important;
+    background: #ffffff !important;
     border: 1px solid #cbd5e1 !important;
     padding: 20px !important;
     width: 100% !important;
-    overflow-x: auto !important;
-    margin-bottom: 50px !important;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05) !important;
+    max-width: 1300px !important;
+    margin: 10px auto 30px auto !important;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important;
     border-radius: 8px !important;
 }
-.chemical-sheet:last-child {
-    margin-bottom: 0 !important;
+
+.report-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-top: 15px !important;
 }
+
 .report-table th {
     background: linear-gradient(180deg, #1987C6 0%, #146ea3 100%) !important;
     color: white !important;
@@ -177,10 +222,17 @@ $extraStyles = "
     font-size: 13px !important;
     border: 1px solid #cbd5e1 !important;
 }
+
 .report-table td {
     padding: 8px 10px !important;
     font-size: 13px !important;
     border: 1px solid #cbd5e1 !important;
+    text-align: center !important;
+}
+
+.report-table td.text-left {
+    text-align: left !important;
+    padding-left: 15px !important;
 }
 ";
 
@@ -298,132 +350,62 @@ include 'sidebar.php';
                         </div>
 
                         <div style="font-size: 13px; color: #334155; margin-bottom: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; line-height: 1.6;">
-                            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px;">
-                                <div>
-                                    <strong>Railway:</strong> <?= htmlspecialchars($railwayName) ?> &nbsp;|&nbsp;
-                                    <strong>Division:</strong> <?= htmlspecialchars($divisionName) ?> &nbsp;|&nbsp;
-                                    <strong>Depot:</strong> <?= htmlspecialchars($stationName) ?> &nbsp;|&nbsp;
-                                    <strong>Date:</strong> <?= htmlspecialchars($sheet['report_date'] ? date('d-m-Y', strtotime($sheet['report_date'])) : date('d-m-Y', strtotime($fromDate))) ?> &nbsp;|&nbsp;
-                                    <strong>Agreement No:</strong> AGR_2026-99-02
-                                </div>
-                                <div>
-                                    <strong>Train No:</strong> <?= htmlspecialchars($sheet['train_no']) ?> &nbsp;|&nbsp;
-                                    <strong>Contractor:</strong> <?= htmlspecialchars($contractorName) ?> &nbsp;|&nbsp;
-                                    <strong>Score:</strong> <span style="color: #15803d; font-weight: 700;"><?= $sheet['chemical_score'] ?>%</span> &nbsp;|&nbsp;
-                                    <strong>Total Penalty:</strong> <span style="color: #b91c1c; font-weight: 700;">Rs. <?= number_format($sheet['total_penalty'], 0) ?></span>
-                                </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 25px;">
+                                <div><strong style="color: #475569;">Railway:</strong> <?= htmlspecialchars($railwayName) ?></div>
+                                <div><strong style="color: #475569;">Date:</strong> <?= htmlspecialchars(date('d-m-Y', strtotime($sheet['report_date']))) ?></div>
+                                <div><strong style="color: #475569;">Division:</strong> <?= htmlspecialchars($divisionName) ?></div>
+                                <div><strong style="color: #475569;">Station:</strong> <?= htmlspecialchars($stationName) ?></div>
+                                <div><strong style="color: #475569;">Contractor:</strong> <?= htmlspecialchars($contractorName) ?></div>
+                                <div><strong style="color: #475569;">Auditor Name:</strong> <?= htmlspecialchars($sheet['auditor_name'] ?: '-') ?></div>
+                                <div><strong style="color: #475569;">Overall Compliance:</strong> <span style="font-weight: 800; color: #16a34a;"><?= htmlspecialchars($sheet['chemical_score']) ?>%</span></div>
+                                <div><strong style="color: #475569;">Penalty Deduction:</strong> <span style="font-weight: 800; color: #dc2626;">₹<?= number_format($sheet['total_penalty'], 2) ?></span></div>
                             </div>
                         </div>
 
                         <div class="table-responsive">
-                            <table class="report-table" style="width:100%; border-collapse:collapse;">
+                            <table class="report-table">
                                 <thead>
                                     <tr>
-                                        <th rowspan="2" style="width: 50px;">S.No</th>
-                                        <th rowspan="2" class="text-left">Description of Material</th>
-                                        <th rowspan="2" style="width: 80px;">Units</th>
-                                        <th rowspan="2" style="width: 100px;">Target/Month</th>
-                                        <th rowspan="2" style="width: 100px;">Daily Target</th>
-                                        <th colspan="<?= max(1, count($shiftsList)) ?>">Quantity Used</th>
-                                        <th rowspan="2" style="width: 100px;">Total Qty</th>
-                                        <th rowspan="2" style="width: 100px;">Deficit</th>
-                                        <th rowspan="2" style="width: 100px;">Penalty (Rs.)</th>
-                                    </tr>
-                                    <tr>
-                                        <?php if (empty($shiftsList)): ?>
-                                            <th style="width: 80px;">Shift</th>
-                                        <?php else: ?>
-                                            <?php foreach ($shiftsList as $shift): ?>
-                                                <th style="width: 80px;"><?= htmlspecialchars($shift['shift_name']) ?></th>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
+                                        <th style="width: 50px;">S.No</th>
+                                        <th style="text-align: left; padding-left: 15px;">Consumable Items</th>
+                                        <th style="width: 110px;">Units</th>
+                                        <th style="width: 140px;">Standard Qty (per coach)</th>
+                                        <th style="width: 140px;">Nominated Qty (total train)</th>
+                                        <th style="width: 140px;">Actual Quantity Consumed</th>
+                                        <th style="width: 140px;">Compliance (%)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php 
                                     $serial = 1;
                                     foreach ($sheet['parameters_list'] as $param): 
-                                        $pId = $param['parameter_id'];
-                                        $targetMonthQty = floatval($param['qty_ml'] ?? 0);
-                                        $dailyTarget = $targetMonthQty / 30.0;
-                                        
-                                        $rowTotalUsed = 0;
-                                        foreach ($shiftsList as $shift): 
-                                            $sId = $shift['shift_id'];
-                                            $qty = $sheet['report_data'][$pId][$sId] ?? 0;
-                                            $rowTotalUsed += $qty;
-                                        endforeach;
-
-                                        $diff = $rowTotalUsed - $dailyTarget;
-                                        $rowPenalty = 0;
-                                        if ($diff < 0) {
-                                            $deficitVal = abs($diff);
-                                            $penaltyQty = floatval($param['penalty_qty_ml'] ?? 0);
-                                            if ($penaltyQty <= 0) {
-                                                $penaltyQty = 1.0;
-                                            }
-                                            $basePenalty = floatval($param['penalty'] ?? 0);
-                                            if ($basePenalty > 0) {
-                                                $rowPenalty = ceil($deficitVal / $penaltyQty) * $basePenalty;
-                                            }
-                                        }
+                                        $scoreVal = floatval($param['compliance']);
+                                        $scoreClass = $scoreVal >= 90 ? 'text-success font-weight-bold' : ($scoreVal >= 75 ? 'text-primary font-weight-bold' : 'text-danger font-weight-bold');
                                     ?>
                                         <tr>
                                             <td><?= $serial++ ?></td>
-                                            <td class="text-left" style="text-align:left;"><strong><?= htmlspecialchars($param['parameter_name']) ?></strong></td>
-                                            <td><?= htmlspecialchars($param['units'] ?? 'ml') ?></td>
-                                            <td><?= number_format($targetMonthQty, 2) ?></td>
-                                            <td><?= number_format($dailyTarget, 2) ?></td>
-                                            
-                                            <?php if (empty($shiftsList)): ?>
-                                                <td>-</td>
-                                            <?php else: ?>
-                                                <?php 
-                                                foreach ($shiftsList as $shift): 
-                                                    $sId = $shift['shift_id'];
-                                                    $qty = $sheet['report_data'][$pId][$sId] ?? 0;
-                                                ?>
-                                                    <td><?= $qty > 0 ? number_format($qty, 2) : '-' ?></td>
-                                                <?php endforeach; ?>
-                                            <?php endif; ?>
-                                            
-                                            <td><strong><?= number_format($rowTotalUsed, 2) ?></strong></td>
-                                            <td><?= $diff < 0 ? number_format($diff, 2) : ($diff > 0 ? '+' . number_format($diff, 2) : '0.00') ?></td>
-                                            <td><?= $rowPenalty > 0 ? 'Rs. ' . number_format($rowPenalty, 0) : '0' ?></td>
+                                            <td class="text-left"><strong><?= htmlspecialchars($param['parameter_name']) ?></strong></td>
+                                            <td><?= htmlspecialchars($param['units']) ?></td>
+                                            <td><?= number_format($param['target_qty'], 2) ?></td>
+                                            <td><?= number_format($param['total_target'], 2) ?></td>
+                                            <td><strong><?= number_format($param['actual_used'], 2) ?></strong></td>
+                                            <td class="<?= $scoreClass ?>"><?= number_format($param['compliance'], 1) ?>%</td>
                                         </tr>
                                     <?php endforeach; ?>
-                                    
-                                    <tr class="section-row" style="background:#f8fafc; font-weight:bold;">
-                                        <td colspan="5">Name Of Auditor</td>
-                                        <?php if (empty($shiftsList)): ?>
-                                            <td>-</td>
-                                        <?php else: ?>
-                                            <?php foreach ($shiftsList as $shift): ?>
-                                                <td style="text-align:center">
-                                                    <?= htmlspecialchars($sheet['auditors_by_shift'][$shift['shift_id']] ?? '-') ?>
-                                                </td>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
-                                        <td></td>
-                                        <td></td>
-                                        <td></td>
-                                    </tr>
-                                    <tr class="section-row" style="background:#f8fafc; font-weight:bold;">
-                                        <td colspan="5">Signature of Supervisor</td>
-                                        <td colspan="<?= max(1, count($shiftsList)) + 3 ?>" style="text-align:center">_________________</td>
-                                    </tr>
                                 </tbody>
                             </table>
                         </div>
 
-                        <div class="signature-row" style="display: flex; justify-content: space-between; margin-top: 40px;">
-                            <div class="signature-box" style="text-align: center; font-weight: bold;">
-                                <div class="signature-line" style="border-top: 1px solid #000; padding-top: 5px; width: 200px;">Contractor's Supervisor</div>
+                        <!-- Footer and Signatures -->
+                        <div style="margin-top: 40px; display: flex; justify-content: space-between; align-items: flex-end; padding: 0 20px;">
+                            <div style="text-align: center;">
+                                <div style="border-top: 1px solid #475569; width: 200px; padding-top: 6px; font-size: 13px; font-weight: 700; color: #475569;">Contractor Representative</div>
                             </div>
-                            <div class="signature-box" style="text-align: center; font-weight: bold;">
-                                <div class="signature-line" style="border-top: 1px solid #000; padding-top: 5px; width: 200px;">Authorized Railway Officer</div>
+                            <div style="text-align: center;">
+                                <div style="border-top: 1px solid #475569; width: 200px; padding-top: 6px; font-size: 13px; font-weight: 700; color: #475569;">Authorized Railway Officer</div>
                             </div>
                         </div>
+
                     </div>
                 <?php endforeach; ?>
             </div>

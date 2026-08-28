@@ -1,123 +1,153 @@
 <?php
 require_once 'auth.php';
 
-// Target month & year selection
-$selectedMonth = $_GET['month'] ?? date('m');
-$selectedYear = $_GET['year'] ?? date('Y');
+$successMessage = '';
+$errorMessage = '';
 
-// Standardize
-$selectedMonth = str_pad($selectedMonth, 2, '0', STR_PAD_LEFT);
-$selectedYear = intval($selectedYear);
+// Handle POST request to update targets - PRT
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $effectiveFrom = $_POST['effective_from'] ?? date('Y-m-d');
+    
+    // Ensure effective date is valid
+    if (empty($effectiveFrom) || !strtotime($effectiveFrom)) {
+        $effectiveFrom = date('Y-m-d');
+    }
 
-$targetMonthDate = $selectedYear . "-" . $selectedMonth . "-01";
-
-$successMsg = '';
-$errorMsg = '';
-
-// Handle save post request
-if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['save_targets'])) {
-    $selectedMonth = $_POST['month'] ?? '';
-    $selectedYear = $_POST['year'] ?? '';
-    if (!empty($selectedMonth) && !empty($selectedYear)) {
-        $targetMonthDate = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
-        $qtys = $_POST['qty'] ?? [];
-        $penalties = $_POST['penalty'] ?? [];
-        $penalty_qtys = $_POST['penalty_qty'] ?? [];
-
+    $targetsInput = $_POST['targets'] ?? []; // Array of parameter_id => [qty, penalty, penalty_qty]
+    
+    try {
         $pdo->beginTransaction();
-        try {
-            // Query active parameters to check update list
-            $pStmt = $pdo->prepare("SELECT id FROM mcc_prt_chemical_param WHERE station_id = :station_id");
-            $pStmt->execute(['station_id' => $stationId]);
-            $paramIds = $pStmt->fetchAll(PDO::FETCH_COLUMN);
 
-            foreach ($paramIds as $pId) {
-                $qty = isset($qtys[$pId]) ? floatval($qtys[$pId]) : 0.00;
-                $penalty = isset($penalties[$pId]) ? floatval($penalties[$pId]) : 0.00;
-                $penalty_qty = isset($penalty_qtys[$pId]) ? floatval($penalty_qtys[$pId]) : 1.00;
+        // Prepare statements
+        $findActiveStmt = $pdo->prepare("
+            SELECT * FROM mcc_prt_chemical_target 
+            WHERE station_id = :station_id AND parameter_id = :parameter_id AND effective_to IS NULL
+            LIMIT 1
+        ");
 
-                // Check if target row already exists
-                $checkStmt = $pdo->prepare("
-                    SELECT id FROM mcc_prt_chemical_target 
-                    WHERE parameter_id = :param_id AND target_month = :target_month AND station_id = :station_id
-                ");
-                $checkStmt->execute([
-                    'param_id' => $pId,
-                    'target_month' => $targetMonthDate,
-                    'station_id' => $stationId
-                ]);
-                $existingId = $checkStmt->fetchColumn();
+        $closeActiveStmt = $pdo->prepare("
+            UPDATE mcc_prt_chemical_target 
+            SET effective_to = :effective_to 
+            WHERE id = :id
+        ");
 
-                if ($existingId) {
-                    $updStmt = $pdo->prepare("
-                        UPDATE mcc_prt_chemical_target 
-                        SET `qty(ml)` = :qty, penalty = :penalty, `penalty_qty(ml)` = :penalty_qty 
-                        WHERE id = :id
-                    ");
-                    $updStmt->execute([
-                        'qty' => $qty,
-                        'penalty' => $penalty,
-                        'penalty_qty' => $penalty_qty,
-                        'id' => $existingId
-                    ]);
-                } else {
-                    $insStmt = $pdo->prepare("
-                        INSERT INTO mcc_prt_chemical_target (parameter_id, target_month, `qty(ml)`, penalty, `penalty_qty(ml)`, station_id) 
-                        VALUES (:param_id, :target_month, :qty, :penalty, :penalty_qty, :station_id)
-                    ");
-                    $insStmt->execute([
-                        'param_id' => $pId,
-                        'target_month' => $targetMonthDate,
-                        'qty' => $qty,
-                        'penalty' => $penalty,
-                        'penalty_qty' => $penalty_qty,
-                        'station_id' => $stationId
+        $insertNewStmt = $pdo->prepare("
+            INSERT INTO mcc_prt_chemical_target 
+            (parameter_id, station_id, `qty(ml)`, penalty, `penalty_qty(ml)`, effective_from, effective_to) 
+            VALUES (:parameter_id, :station_id, :qty, :penalty, :penalty_qty, :effective_from, NULL)
+        ");
+
+        foreach ($targetsInput as $paramId => $values) {
+            $newQty = isset($values['qty']) ? floatval($values['qty']) : 0.0;
+            $newPenalty = isset($values['penalty']) ? floatval($values['penalty']) : 0.0;
+            $newPenaltyQty = isset($values['penalty_qty']) ? floatval($values['penalty_qty']) : 0.0;
+
+            // Find current active target
+            $findActiveStmt->execute([
+                'station_id' => $stationId,
+                'parameter_id' => $paramId
+            ]);
+            $currentActive = $findActiveStmt->fetch(PDO::FETCH_ASSOC);
+
+            $needsUpdate = false;
+
+            if ($currentActive) {
+                // Compare values
+                $currQty = floatval($currentActive['qty(ml)']);
+                $currPenalty = floatval($currentActive['penalty']);
+                $currPenaltyQty = floatval($currentActive['penalty_qty(ml)']);
+
+                if ($currQty !== $newQty || $currPenalty !== $newPenalty || $currPenaltyQty !== $newPenaltyQty) {
+                    $needsUpdate = true;
+                    
+                    // Close the active target. Set its effective_to to the day before the new effective date
+                    $effectiveToDate = date('Y-m-d', strtotime($effectiveFrom . ' - 1 day'));
+                    
+                    // If the new effective date is today or in the past, ensure we don't end up with invalid ranges
+                    if (strtotime($effectiveToDate) < strtotime($currentActive['effective_from'])) {
+                        $effectiveToDate = $currentActive['effective_from'];
+                    }
+
+                    $closeActiveStmt->execute([
+                        'effective_to' => $effectiveToDate,
+                        'id' => $currentActive['id']
                     ]);
                 }
+            } else {
+                // No active target exists yet, we definitely need to insert
+                $needsUpdate = true;
             }
 
-            $pdo->commit();
-            $successMsg = "PRT chemical targets for " . date('F, Y', strtotime($targetMonthDate)) . " saved successfully!";
-        } catch (Exception $e) {
-            $pdo->rollBack();
-            $errorMsg = "Error saving targets: " . $e->getMessage();
+            if ($needsUpdate) {
+                // Insert the new target record
+                $insertNewStmt->execute([
+                    'parameter_id' => $paramId,
+                    'station_id' => $stationId,
+                    'qty' => $newQty,
+                    'penalty' => $newPenalty,
+                    'penalty_qty' => $newPenaltyQty,
+                    'effective_from' => $effectiveFrom
+                ]);
+            }
         }
+
+        $pdo->commit();
+        $successMessage = 'PRT Chemical targets updated successfully.';
+
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        $errorMessage = 'Error updating PRT chemical targets: ' . $e->getMessage();
     }
 }
 
-// Fetch all active parameters and current targets for the selected month
+// Fetch all active chemical parameters - PRT
 $paramsStmt = $pdo->prepare("
-    SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
-    FROM mcc_prt_chemical_param p
-    LEFT JOIN mcc_prt_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.target_month = :target_month
-    WHERE p.station_id = :station_id_param
-    ORDER BY p.id ASC
+    SELECT id AS parameter_id, name AS parameter_name, units 
+    FROM mcc_prt_chemical_param
+    WHERE station_id = :station_id
+    ORDER BY id ASC
 ");
-$paramsStmt->execute([
-    'station_id_target' => $stationId,
-    'station_id_param' => $stationId,
-    'target_month' => $targetMonthDate
-]);
+$paramsStmt->execute(['station_id' => $stationId]);
 $parametersList = $paramsStmt->fetchAll();
 
-$pageTitle = 'Set PRT Chemical Targets | MCC';
+// Resolve active target values (effective_to IS NULL) - PRT
+$activeTargetsStmt = $pdo->prepare("
+    SELECT * FROM mcc_prt_chemical_target 
+    WHERE station_id = :station_id AND effective_to IS NULL
+");
+$activeTargetsStmt->execute(['station_id' => $stationId]);
+$activeTargetsRaw = $activeTargetsStmt->fetchAll();
+
+$activeTargets = [];
+foreach ($activeTargetsRaw as $at) {
+    $activeTargets[$at['parameter_id']] = [
+        'qty' => floatval($at['qty(ml)']),
+        'penalty' => floatval($at['penalty']),
+        'penalty_qty' => floatval($at['penalty_qty(ml)'])
+    ];
+}
+
+$pageTitle = 'Set Monthly PRT Chemical Target | MCC';
 
 $extraStyles = "
-.target-sheet {
+.target-card {
     background: #ffffff !important;
     border: 1px solid #cbd5e1 !important;
-    padding: 20px !important;
-    width: 100% !important;
-    max-width: 1300px !important;
+    padding: 25px !important;
+    max-width: 1200px !important;
     margin: 10px auto 30px auto !important;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05) !important;
     border-radius: 8px !important;
 }
+
 .report-table {
     width: 100% !important;
     border-collapse: collapse !important;
     margin-top: 15px !important;
 }
+
 .report-table th {
     background: linear-gradient(180deg, #1987C6 0%, #146ea3 100%) !important;
     color: white !important;
@@ -127,28 +157,32 @@ $extraStyles = "
     font-size: 13px !important;
     border: 1px solid #cbd5e1 !important;
 }
+
 .report-table td {
     padding: 8px 10px !important;
     font-size: 13px !important;
     border: 1px solid #cbd5e1 !important;
+    text-align: center !important;
 }
+
 .report-table td.text-left {
     text-align: left !important;
-    padding-left: 12px !important;
+    padding-left: 15px !important;
 }
-.target-input {
+
+.qty-input, .penalty-input {
     width: 100px;
     padding: 4px 8px;
     border: 1px solid #cbd5e1;
     border-radius: 4px;
-    text-align: center;
     font-weight: 600;
+    text-align: center;
     outline: none;
     font-size: 13px;
     transition: all 0.2s ease;
-    height: 32px;
 }
-.target-input:focus {
+
+.qty-input:focus, .penalty-input:focus {
     border-color: #3b82f6;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
@@ -158,204 +192,108 @@ include 'header.php';
 include 'sidebar.php';
 ?>
 
-<style>
-@media print {
-    .app-header, 
-    .app-sidebar, 
-    .app-footer, 
-    .no-print, 
-    .report-filter,
-    form.report-filter,
-    div.no-print,
-    .sidebar-overlay,
-    .sidebar-backdrop,
-    #sidebar-overlay {
-        display: none !important;
-        opacity: 0 !important;
-        visibility: hidden !important;
-        height: 0 !important;
-        padding: 0 !important;
-        margin: 0 !important;
-    }
-    
-    html,
-    body, 
-    .bg-body-tertiary,
-    .app-wrapper, 
-    .app-main, 
-    .app-content, 
-    .container-fluid, 
-    .target-sheet {
-        margin: 0 !important;
-        padding: 0 !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        background: #ffffff !important;
-        background-color: #ffffff !important;
-        box-shadow: none !important;
-        border: none !important;
-        height: auto !important;
-    }
-    
-    .app-main {
-        padding-top: 0 !important;
-        margin-left: 0 !important;
-    }
-    
-    .target-sheet {
-        border: none !important;
-    }
-    
-    .table-responsive {
-        overflow: visible !important;
-        display: block !important;
-    }
-    
-    .report-table thead th {
-        background-color: #f1f5f9 !important;
-        background: #f1f5f9 !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-    }
-}
-</style>
-
 <main class="app-main">
-    <div class="app-content">
-        <div class="container-fluid" style="padding-top: 15px;">
+    <div class="app-content py-4">
+        <div class="container-fluid">
             
-            <!-- Filters & Navigation Bar -->
-            <form class="report-filter no-print" method="GET" style="display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1px solid #e2e8f0; padding: 12px 20px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); flex-wrap: wrap; gap: 15px;">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <label for="month" style="font-weight: 700; margin: 0; font-size: 14px; color: #334155; white-space: nowrap;">Target Month</label>
-                    <select id="month" name="month" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 12px; font-size: 14px; background-color: #f8fafc; color: #334155; width: 140px; cursor: pointer; height: 38px; outline: none;">
-                        <?php
-                        for ($m = 1; $m <= 12; $m++) {
-                            $mVal = str_pad($m, 2, '0', STR_PAD_LEFT);
-                            $mName = date('F', mktime(0, 0, 0, $m, 1));
-                            $selected = ($mVal == $selectedMonth) ? 'selected' : '';
-                            echo "<option value=\"$mVal\" $selected>$mName</option>";
-                        }
-                        ?>
-                    </select>
+            <?php if (!empty($successMessage)): ?>
+                <div class="alert alert-success alert-dismissible fade show no-print mx-auto col-md-10" role="alert">
+                    <i class="bi bi-check-circle-fill me-2"></i> <?= htmlspecialchars($successMessage) ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            <?php endif; ?>
+
+            <?php if (!empty($errorMessage)): ?>
+                <div class="alert alert-danger alert-dismissible fade show no-print mx-auto col-md-10" role="alert">
+                    <i class="bi bi-exclamation-octagon-fill me-2"></i> <?= htmlspecialchars($errorMessage) ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            <?php endif; ?>
+
+            <div class="target-card">
+                <div class="d-flex align-items-center justify-content-between mb-4 border-bottom pb-3">
+                    <h4 class="mb-0 fw-bold text-dark text-uppercase">
+                        <i class="bi bi-sliders text-primary me-2"></i> PRT Chemical Nominated Targets
+                    </h4>
+                    <div class="no-print">
+                        <a href="Platform-Return-Chemical.php" class="btn btn-sm btn-outline-secondary fw-bold px-3 me-2">
+                            <i class="bi bi-arrow-left"></i> Daily Chemical Report
+                        </a>
+                        <button type="button" class="btn btn-sm btn-dark fw-bold px-3" onclick="window.print()">
+                            <i class="bi bi-printer me-1"></i> Print
+                        </button>
+                    </div>
+                </div>
+
+                <form method="POST" action="Platform-Return-Chemical-target.php">
                     
-                    <select id="year" name="year" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 12px; font-size: 14px; background-color: #f8fafc; color: #334155; width: 100px; cursor: pointer; height: 38px; outline: none;">
-                        <?php
-                        $currentYear = intval(date('Y'));
-                        for ($y = $currentYear - 3; $y <= $currentYear + 2; $y++) {
-                            $selected = ($y == $selectedYear) ? 'selected' : '';
-                            echo "<option value=\"$y\" $selected>$y</option>";
-                        }
-                        ?>
-                    </select>
-                    <button type="submit" class="btn-go" style="background: #1987C6 !important; color: white !important; font-weight: 700; font-size: 14px; padding: 8px 24px; border-radius: 6px; border: none; cursor: pointer; height: 38px; display: inline-flex; align-items: center;">
-                        Show
-                    </button>
-                </div>
-                
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <a href="Platform-Return-Chemical.php" class="btn-print" style="background: #1987C6 !important; color: white !important; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; border: none; height: 38px;">
-                        Daily Chemical Report
-                    </a>
-                    <a href="Platform-Return-Chemical-summary.php?month=<?= date('m', strtotime($targetMonthDate)) ?>&year=<?= date('Y', strtotime($targetMonthDate)) ?>" class="btn-print" style="background: #6b7280 !important; color: white !important; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; border: none; height: 38px;">
-                        Chemical Summary
-                    </a>
-                    <button type="button" class="btn-print" onclick="window.print()" style="background: #15803d !important; color: white !important; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; border: none; height: 38px;">
-                        Print
-                    </button>
-                </div>
-            </form>
-
-            <?php if (!empty($successMsg)): ?>
-                <div class="alert alert-success no-print" style="margin-bottom: 20px; border-radius: 8px; padding: 12px 20px; border: 1px solid #c3e6cb; background-color: #d4edda; color: #155724;">
-                    <i class="bi bi-check-circle-fill me-2"></i> <?= htmlspecialchars($successMsg) ?>
-                </div>
-            <?php endif; ?>
-            <?php if (!empty($errorMsg)): ?>
-                <div class="alert alert-danger no-print" style="margin-bottom: 20px; border-radius: 8px; padding: 12px 20px; border: 1px solid #f5c6cb; background-color: #f8d7da; color: #721c24;">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i> <?= htmlspecialchars($errorMsg) ?>
-                </div>
-            <?php endif; ?>
-
-            <!-- Target Sheet Panel -->
-            <div class="target-sheet">
-                <div style="text-align: center; margin-bottom: 20px;">
-                    <h1 style="font-size: 18px; font-weight: bold; color: #1e293b; margin: 0; text-transform: uppercase;">
-                        PRT Chemical Target Configuration
-                    </h1>
-                    <div style="font-size: 14px; color: #64748b; margin-top: 5px;">
-                        Month: <strong><?= date('F, Y', strtotime($targetMonthDate)) ?></strong> &nbsp;|&nbsp; Depot: <strong><?= htmlspecialchars($stationName) ?></strong> &nbsp;|&nbsp; Contractor: <strong><?= htmlspecialchars($contractorName) ?></strong>
+                    <div class="row g-3 mb-4 align-items-center no-print bg-light p-3 rounded border">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold mb-1"><i class="bi bi-calendar-check me-1 text-primary"></i> Target Change Effective Date:</label>
+                            <input type="date" name="effective_from" class="form-control form-control-sm" required value="<?= date('Y-m-d') ?>">
+                            <small class="text-muted">Set when these targets become active (defaults to today).</small>
+                        </div>
                     </div>
-                </div>
 
-                <?php if (empty($parametersList)): ?>
-                    <div class="alert alert-info" style="margin: 20px 0; border-radius: 8px; padding: 12px 20px; border: 1px solid #bee5eb; background-color: #d1ecf1; color: #0c5460; text-align: center;">
-                        <i class="bi bi-info-circle-fill me-2"></i> No chemical parameters registered for this station.
-                    </div>
-                <?php else: ?>
-                    <form method="POST" action="">
-                        <input type="hidden" name="month" value="<?= htmlspecialchars($selectedMonth); ?>">
-                        <input type="hidden" name="year" value="<?= htmlspecialchars($selectedYear); ?>">
-                        <div class="table-responsive">
-                            <table class="report-table">
-                                <thead>
+                    <div class="table-responsive">
+                        <table class="report-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;">S.No</th>
+                                    <th style="text-align: left; padding-left: 15px;">Consumable Items</th>
+                                    <th style="width: 140px;">Units</th>
+                                    <th>Standard Target Qty (per coach)</th>
+                                    <th>Penalty Rate (₹)</th>
+                                    <th>Penalty Deficit Qty Step</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($parametersList)): ?>
                                     <tr>
-                                        <th style="width: 50px;">S.No</th>
-                                        <th class="text-left">Consumable Material Name</th>
-                                        <th style="width: 100px;">Units</th>
-                                        <th style="width: 160px;">Target Quantity/Month</th>
-                                        <th style="width: 160px;">Penalty Rate (Rs.)</th>
-                                        <th style="width: 160px;">Penalty Quantity (Divisor)</th>
+                                        <td colspan="6" class="text-center py-4 text-muted">
+                                            No chemical parameters configured.
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody>
+                                <?php else: ?>
                                     <?php 
                                     $serial = 1;
-                                    foreach ($parametersList as $param): 
-                                        $pId = $param['parameter_id'];
-                                        $qtyVal = $param['qty_ml'] !== null ? floatval($param['qty_ml']) : '';
-                                        $penaltyVal = $param['penalty'] !== null ? floatval($param['penalty']) : '';
-                                        $penaltyQtyVal = $param['penalty_qty_ml'] !== null ? floatval($param['penalty_qty_ml']) : '';
-
-                                        // Clean values if they are integers
-                                        if ($qtyVal !== '' && $qtyVal == intval($qtyVal)) $qtyVal = intval($qtyVal);
-                                        if ($penaltyVal !== '' && $penaltyVal == intval($penaltyVal)) $penaltyVal = intval($penaltyVal);
-                                        if ($penaltyQtyVal !== '' && $penaltyQtyVal == intval($penaltyQtyVal)) $penaltyQtyVal = intval($penaltyQtyVal);
+                                    foreach ($parametersList as $p): 
+                                        $pId = $p['parameter_id'];
+                                        $targetQty = $activeTargets[$pId]['qty'] ?? 0.0;
+                                        $penaltyVal = $activeTargets[$pId]['penalty'] ?? 0.0;
+                                        $penaltyQty = $activeTargets[$pId]['penalty_qty'] ?? 0.0;
                                     ?>
                                         <tr>
-                                            <td><?= $serial++ ?></td>
-                                            <td class="text-left"><strong><?= htmlspecialchars($param['parameter_name']) ?></strong></td>
-                                            <td><?= htmlspecialchars($param['units'] ?? 'Nos.') ?></td>
+                                            <td class="text-center font-weight-bold"><?= $serial++ ?></td>
+                                            <td class="text-left"><strong><?= htmlspecialchars($p['parameter_name']) ?></strong></td>
+                                            <td><?= htmlspecialchars($p['units']) ?></td>
                                             <td>
-                                                <input type="number" step="0.01" min="0" name="qty[<?= $pId ?>]" 
-                                                    value="<?= htmlspecialchars($qtyVal) ?>" 
-                                                    class="target-input" required placeholder="0">
+                                                <input type="number" step="0.001" min="0" name="targets[<?= $pId ?>][qty]" 
+                                                       value="<?= number_format($targetQty, 3, '.', '') ?>" class="qty-input form-control form-control-sm">
                                             </td>
                                             <td>
-                                                <input type="number" step="0.01" min="0" name="penalty[<?= $pId ?>]" 
-                                                    value="<?= htmlspecialchars($penaltyVal) ?>" 
-                                                    class="target-input" required placeholder="0">
+                                                <input type="number" step="0.01" min="0" name="targets[<?= $pId ?>][penalty]" 
+                                                       value="<?= number_format($penaltyVal, 2, '.', '') ?>" class="penalty-input form-control form-control-sm">
                                             </td>
                                             <td>
-                                                <input type="number" step="0.01" min="0.01" name="penalty_qty[<?= $pId ?>]" 
-                                                    value="<?= htmlspecialchars($penaltyQtyVal) ?>" 
-                                                    class="target-input" required placeholder="1">
+                                                <input type="number" step="0.001" min="0" name="targets[<?= $pId ?>][penalty_qty]" 
+                                                       value="<?= number_format($penaltyQty, 3, '.', '') ?>" class="qty-input form-control form-control-sm">
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
 
-                        <div style="text-align: center; margin-top: 25px;" class="no-print">
-                            <button type="submit" name="save_targets" class="btn btn-primary" style="background-color: #1987C6; border: none; font-weight: 700; font-size: 15px; padding: 10px 40px; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.2s ease; color:white;">
-                                Save Targets
-                            </button>
-                        </div>
-                    </form>
-                <?php endif; ?>
-
+                    <div class="mt-4 text-center no-print">
+                        <button type="submit" class="btn btn-success fw-bold px-4 py-2">
+                            <i class="bi bi-save me-1"></i> Save Chemical Targets
+                        </button>
+                    </div>
+                </form>
             </div>
+
         </div>
     </div>
 </main>

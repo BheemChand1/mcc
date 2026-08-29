@@ -19,17 +19,16 @@ if (empty($data)) {
 $tokenId = $data['token_id'] ?? null;
 $trainNo = $data['train_no'] ?? null;
 $coachNo = $data['coach_no'] ?? null;
-$auditorName = $data['auditor_name'] ?? $data['submitted_by'] ?? null;
 $stationId = isset($data['station_id']) ? intval($data['station_id']) : null;
 
 // Support both payload schemas: "values" array and legacy "parameters" array
 $valuesList = $data['values'] ?? $data['parameters'] ?? null;
 
-if (empty($tokenId) || empty($trainNo) || empty($coachNo) || empty($auditorName) || empty($valuesList) || !is_array($valuesList)) {
+if (empty($tokenId) || empty($trainNo) || empty($coachNo) || empty($valuesList) || !is_array($valuesList)) {
     http_response_code(400);
     echo json_encode([
         "status" => "error",
-        "message" => "Incomplete data. token_id, train_no, coach_no, auditor_name, and values (array) are required."
+        "message" => "Incomplete data. token_id, train_no, coach_no, and values (array) are required."
     ]);
     exit();
 }
@@ -41,7 +40,7 @@ try {
     if ($stationId !== null) {
         $stmt = $pdo->prepare("
             UPDATE mcc_intensive_chemical_report 
-            SET qty_used = :qty_used, auditor_name = :auditor_name, train_no = :train_no
+            SET qty_used = :qty_used, train_no = :train_no
             WHERE token_id = :token_id 
               AND coach_no = :coach_no 
               AND parameter_id = :parameter_id
@@ -50,7 +49,7 @@ try {
     } else {
         $stmt = $pdo->prepare("
             UPDATE mcc_intensive_chemical_report 
-            SET qty_used = :qty_used, auditor_name = :auditor_name, train_no = :train_no
+            SET qty_used = :qty_used, train_no = :train_no
             WHERE token_id = :token_id 
               AND coach_no = :coach_no 
               AND parameter_id = :parameter_id
@@ -67,7 +66,6 @@ try {
         if ($paramId !== null && $qtyUsed !== null) {
             $binds = [
                 'qty_used' => $qtyUsed,
-                'auditor_name' => $auditorName,
                 'token_id' => $tokenId,
                 'train_no' => $trainNo,
                 'coach_no' => $coachNo,

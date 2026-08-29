@@ -99,48 +99,34 @@ if (!empty($tokensList)) {
             }
         }
         
-        $sheetParameters = [];
+        $auditorNameStr = implode(', ', $auditors);
+        
+        // Score & penalty calculations for this sheet
         $paramCompliances = [];
         $totalPenalty = 0;
         
-        foreach ($parametersList as $p) {
-            $pId = $p['parameter_id'];
-            $target = $targets[$pId] ?? null;
+        foreach ($parametersList as $param) {
+            $pId = $param['parameter_id'];
+            $targetPerCoach = isset($targets[$pId]['qty_ml']) ? floatval($targets[$pId]['qty_ml']) : 0;
+            $targetTotal = $targetPerCoach * $totalCoaches;
             
-            $targetQty = isset($target['qty_ml']) ? floatval($target['qty_ml']) : 0.0;
-            $dailyTarget = $targetQty * $totalCoaches;
+            $rowTotalUsed = $reportData[$pId] ?? 0;
             
-            $actualUsed = $reportData[$pId] ?? 0.0;
-            
-            if ($dailyTarget > 0) {
-                $compliance = min(100.0, ($actualUsed / $dailyTarget) * 100.0);
+            if ($targetTotal > 0) {
+                $compliance = min(100.0, ($rowTotalUsed / $targetTotal) * 100.0);
                 $paramCompliances[] = $compliance;
             } else {
-                $compliance = 100.0;
                 $paramCompliances[] = 100.0;
             }
             
-            $sheetParameters[] = [
-                'parameter_id' => $pId,
-                'parameter_name' => $p['parameter_name'],
-                'units' => $p['units'] ?? 'Nos',
-                'target_qty' => $targetQty,
-                'total_target' => $dailyTarget,
-                'actual_used' => $actualUsed,
-                'compliance' => $compliance,
-                'penalty_qty_ml' => $target['penalty_qty_ml'] ?? 0.0,
-                'penalty' => $target['penalty'] ?? 0.0
-            ];
-            
-            // Penalty calculation
-            if ($actualUsed < $dailyTarget) {
-                $deficit = $dailyTarget - $actualUsed;
-                $penaltyQty = floatval($target['penalty_qty_ml'] ?? 0);
+            if ($rowTotalUsed < $targetTotal) {
+                $deficit = $targetTotal - $rowTotalUsed;
+                $penaltyQty = isset($targets[$pId]['penalty_qty_ml']) ? floatval($targets[$pId]['penalty_qty_ml']) : 0;
                 if ($penaltyQty <= 0) {
-                    $penaltyQty = 1.0;
+                    $penaltyQty = $targetPerCoach;
                 }
-                $basePenalty = floatval($target['penalty'] ?? 0);
-                if ($basePenalty > 0) {
+                $basePenalty = isset($targets[$pId]['penalty']) ? floatval($targets[$pId]['penalty']) : 0;
+                if ($penaltyQty > 0 && $basePenalty > 0) {
                     $totalPenalty += ceil($deficit / $penaltyQty) * $basePenalty;
                 }
             }
@@ -155,84 +141,57 @@ if (!empty($tokensList)) {
         $sheetsData[] = [
             'token_id' => $tokenId,
             'train_no' => $trainNo,
-            'report_date' => $reportDate,
+            'report_date' => $t['report_date'],
+            'total_coaches' => $totalCoaches,
             'report_data' => $reportData,
-            'auditor_name' => implode(', ', $auditors),
+            'auditor_name_str' => $auditorNameStr,
             'chemical_score' => $chemicalScore,
             'total_penalty' => $totalPenalty,
-            'parameters_list' => $sheetParameters,
+            'targets' => $targets,
             'is_fallback' => false
         ];
     }
 } else {
-    // Return empty template row
-    $sheetParameters = [];
-    foreach ($parametersList as $p) {
-        $sheetParameters[] = [
-            'parameter_id' => $p['parameter_id'],
-            'parameter_name' => $p['parameter_name'],
-            'units' => $p['units'] ?? 'Nos',
-            'target_qty' => 0.0,
-            'total_target' => 0.0,
-            'actual_used' => 0.0,
-            'compliance' => 100.0,
-            'penalty_qty_ml' => 0.0,
-            'penalty' => 0.0
-        ];
+    // Default fallback template sheet if no data exists, get current targets active at fromDate
+    $targetStmt->execute([
+        'station_id' => $stationId,
+        'report_date_1' => $fromDate,
+        'report_date_2' => $fromDate
+    ]);
+    $targetsRaw = $targetStmt->fetchAll(PDO::FETCH_ASSOC);
+    $targets = [];
+    foreach ($targetsRaw as $tr) {
+        $targets[$tr['parameter_id']] = $tr;
     }
+
     $sheetsData[] = [
-        'token_id' => 'TKN-' . date('Ymd') . '-001',
-        'train_no' => '12555',
+        'token_id' => '',
+        'train_no' => '-',
         'report_date' => $fromDate,
+        'total_coaches' => 24,
         'report_data' => [],
-        'auditor_name' => 'Supervisor',
+        'auditor_name_str' => '',
         'chemical_score' => 100,
         'total_penalty' => 0,
-        'parameters_list' => $sheetParameters,
+        'targets' => $targets,
         'is_fallback' => true
     ];
 }
-
-$pageTitle = 'Consumables Usage Report (PRT) | MCC';
+$pageTitle = 'Chemical Report (PRT) | CDO';
 
 $extraStyles = "
 .chemical-sheet {
-    background: #ffffff !important;
-    border: 1px solid #cbd5e1 !important;
+    background: #fff !important;
+    border: 1px solid #000000 !important;
     padding: 20px !important;
     width: 100% !important;
-    max-width: 1300px !important;
-    margin: 10px auto 30px auto !important;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important;
+    overflow-x: auto !important;
+    margin-bottom: 50px !important;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1) !important;
     border-radius: 8px !important;
 }
-
-.report-table {
-    width: 100% !important;
-    border-collapse: collapse !important;
-    margin-top: 15px !important;
-}
-
-.report-table th {
-    background: linear-gradient(180deg, #1987C6 0%, #146ea3 100%) !important;
-    color: white !important;
-    font-weight: 700 !important;
-    text-align: center !important;
-    padding: 8px 10px !important;
-    font-size: 13px !important;
-    border: 1px solid #cbd5e1 !important;
-}
-
-.report-table td {
-    padding: 8px 10px !important;
-    font-size: 13px !important;
-    border: 1px solid #cbd5e1 !important;
-    text-align: center !important;
-}
-
-.report-table td.text-left {
-    text-align: left !important;
-    padding-left: 15px !important;
+.chemical-sheet:last-child {
+    margin-bottom: 0 !important;
 }
 ";
 
@@ -241,6 +200,7 @@ include 'sidebar.php';
 ?>
 <style>
 @media print {
+    /* Explicitly hide the header, sidebar, footer, filter panel, and overlay/backdrop elements */
     .app-header, 
     .app-sidebar, 
     .app-footer, 
@@ -260,6 +220,7 @@ include 'sidebar.php';
         height: 0 !important;
     }
     
+    /* Reset background colors on html, body, and all wrapper containers to absolute white */
     html,
     body, 
     .bg-body-tertiary,
@@ -279,17 +240,21 @@ include 'sidebar.php';
         box-shadow: none !important;
         position: static !important;
         overflow: visible !important;
+        
+        /* Disable transition fades, filters, and opacity shifts */
         opacity: 1 !important;
         filter: none !important;
         transition: none !important;
         animation: none !important;
     }
     
+    /* Remove padding and margin offsets from main content wrapper */
     .app-main {
         padding-top: 0 !important;
         margin-left: 0 !important;
     }
     
+    /* Reset margins and force pagination for each scorecard sheet */
     .chemical-sheet {
         margin: 0 0 20px 0 !important;
         padding: 0 !important;
@@ -313,23 +278,18 @@ include 'sidebar.php';
 
 <main class="app-main">
     <div class="app-content">
-        <div class="container-fluid" style="padding-top: 15px;">
-            <form class="report-filter no-print" method="GET" style="display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1px solid #e2e8f0; padding: 12px 20px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); flex-wrap: wrap; gap: 15px;">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <label for="from_date" style="font-weight: 600; margin: 0; color: #334155;">From:</label>
-                    <input type="date" id="from_date" name="from_date" value="<?= htmlspecialchars($fromDate); ?>" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 12px; font-size: 14px; background-color: #f8fafc; color: #334155; height: 38px; outline: none;">
-                    
-                    <label for="to_date" style="font-weight: 600; margin: 0; color: #334155;">To:</label>
-                    <input type="date" id="to_date" name="to_date" value="<?= htmlspecialchars($toDate); ?>" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 12px; font-size: 14px; background-color: #f8fafc; color: #334155; height: 38px; outline: none;">
-                    
-                    <button type="submit" class="btn-go" style="background: #1987C6 !important; color: white !important; font-weight: 700; font-size: 14px; padding: 8px 24px; border-radius: 6px; border: none; cursor: pointer; height: 38px; display: inline-flex; align-items: center;">Go</button>
-                </div>
+        <div class="container-fluid">
+            <form class="report-filter no-print" method="GET">
+                <label for="from_date">From:</label>
+                <input type="date" id="from_date" name="from_date" value="<?= htmlspecialchars($fromDate); ?>">
                 
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <a href="Platform-Return-Chemical-summary.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-summary" style="background: #16a34a !important; color: white !important; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; border: none; height: 38px;">Summary</a>
-                    <a href="Platform-Return-Chemical-target.php" class="btn-summary" style="background: #6c757d !important; color: white !important; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; border: none; height: 38px;">Targets</a>
-                    <button type="button" class="btn-print" onclick="window.print()" style="background: #1987C6 !important; color: white !important; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; border: none; height: 38px;">Print</button>
-                </div>
+                <label for="to_date">To:</label>
+                <input type="date" id="to_date" name="to_date" value="<?= htmlspecialchars($toDate); ?>">
+                
+                <button type="submit" class="btn-go">Go</button>
+                <a href="Platform-Return-Chemical-summary.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-summary">Summary</a>
+                <a href="Platform-Return-Chemical-target.php" class="btn-summary" style="background: #10b981 !important; margin-left: 8px;">Targets</a>
+                <button type="button" class="btn-print" onclick="window.print()">Print</button>
             </form>
 
             <div class="report-wrap">
@@ -343,22 +303,27 @@ include 'sidebar.php';
                     <div class="chemical-sheet">
 
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;">
-                            <h2 style="font-size: 18px; font-weight: 700; color: #1e293b; margin: 0;">Daily Consumables Usage Report (Platform Return Trains)</h2>
+                            <h2 style="font-size: 18px; font-weight: 700; color: #1e293b; margin: 0;">Daily Chemical Report (Platform Return Trains)</h2>
                             <?php if (!$sheet['is_fallback']): ?>
                                 <span style="font-family: monospace; font-weight: 700; font-size: 12px; background: #e2e8f0; color: #475569; padding: 3px 8px; border-radius: 4px; border: 1px solid #cbd5e1;">Token: <?= htmlspecialchars($sheet['token_id']) ?></span>
                             <?php endif; ?>
                         </div>
 
                         <div style="font-size: 13px; color: #334155; margin-bottom: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; line-height: 1.6;">
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 25px;">
-                                <div><strong style="color: #475569;">Railway:</strong> <?= htmlspecialchars($railwayName) ?></div>
-                                <div><strong style="color: #475569;">Date:</strong> <?= htmlspecialchars(date('d-m-Y', strtotime($sheet['report_date']))) ?></div>
-                                <div><strong style="color: #475569;">Division:</strong> <?= htmlspecialchars($divisionName) ?></div>
-                                <div><strong style="color: #475569;">Station:</strong> <?= htmlspecialchars($stationName) ?></div>
-                                <div><strong style="color: #475569;">Contractor:</strong> <?= htmlspecialchars($contractorName) ?></div>
-                                <div><strong style="color: #475569;">Auditor Name:</strong> <?= htmlspecialchars($sheet['auditor_name'] ?: '-') ?></div>
-                                <div><strong style="color: #475569;">Overall Compliance:</strong> <span style="font-weight: 800; color: #16a34a;"><?= htmlspecialchars($sheet['chemical_score']) ?>%</span></div>
-                                <div><strong style="color: #475569;">Penalty Deduction:</strong> <span style="font-weight: 800; color: #dc2626;">₹<?= number_format($sheet['total_penalty'], 2) ?></span></div>
+                            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px;">
+                                <div>
+                                    <strong>Railway:</strong> <?= htmlspecialchars($railwayName) ?> &nbsp;|&nbsp;
+                                    <strong>Division:</strong> <?= htmlspecialchars($divisionName) ?> &nbsp;|&nbsp;
+                                    <strong>Station:</strong> <?= htmlspecialchars($stationName) ?> &nbsp;|&nbsp;
+                                    <strong>Date:</strong> <?= htmlspecialchars($sheet['report_date'] ? date('d-m-Y', strtotime($sheet['report_date'])) : date('d-m-Y', strtotime($fromDate))) ?> &nbsp;|&nbsp;
+                                    <strong>Train No:</strong> <?= htmlspecialchars($sheet['train_no'] ?? '-') ?> &nbsp;|&nbsp;
+                                    <strong>No. of Coaches:</strong> <?= htmlspecialchars($sheet['total_coaches']) ?>
+                                </div>
+                                <div>
+                                    <strong>Contractor:</strong> <?= htmlspecialchars($contractorName) ?> &nbsp;|&nbsp;
+                                    <strong>Score:</strong> <span style="color: #15803d; font-weight: 700;"><?= $sheet['chemical_score'] ?>%</span> &nbsp;|&nbsp;
+                                    <strong>Total Penalty:</strong> <span style="color: #b91c1c; font-weight: 700;">Rs. <?= number_format($sheet['total_penalty'], 0) ?></span>
+                                </div>
                             </div>
                         </div>
 
@@ -366,46 +331,74 @@ include 'sidebar.php';
                             <table class="report-table">
                                 <thead>
                                     <tr>
-                                        <th style="width: 50px;">S.No</th>
-                                        <th style="text-align: left; padding-left: 15px;">Consumable Items</th>
-                                        <th style="width: 110px;">Units</th>
-                                        <th style="width: 140px;">Standard Qty (per coach)</th>
-                                        <th style="width: 140px;">Nominated Qty (total train)</th>
-                                        <th style="width: 140px;">Actual Quantity Consumed</th>
-                                        <th style="width: 140px;">Compliance (%)</th>
+                                        <th>S.No</th>
+                                        <th>Description Of Material</th>
+                                        <th>Units</th>
+                                        <th>Coaches</th>
+                                        <th>Target (ml)</th>
+                                        <th>Quantity Used (ml)</th>
+                                        <th>Deficit (ml)</th>
+                                        <th>Penalty (Rs.)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php 
                                     $serial = 1;
-                                    foreach ($sheet['parameters_list'] as $param): 
-                                        $scoreVal = floatval($param['compliance']);
-                                        $scoreClass = $scoreVal >= 90 ? 'text-success font-weight-bold' : ($scoreVal >= 75 ? 'text-primary font-weight-bold' : 'text-danger font-weight-bold');
+                                    foreach ($parametersList as $param): 
+                                        $pId = $param['parameter_id'];
+                                        $targetPerCoach = isset($sheet['targets'][$pId]['qty_ml']) ? floatval($sheet['targets'][$pId]['qty_ml']) : 0;
+                                        $totalTargetQty = $targetPerCoach * $sheet['total_coaches'];
+                                        
+                                        $rowTotalUsed = $sheet['report_data'][$pId] ?? 0;
+
+                                        $diff = $rowTotalUsed - $totalTargetQty;
+                                        $rowPenalty = 0;
+                                        if ($diff < 0) {
+                                            $deficitVal = abs($diff);
+                                            $penaltyQty = isset($sheet['targets'][$pId]['penalty_qty_ml']) ? floatval($sheet['targets'][$pId]['penalty_qty_ml']) : 0;
+                                            if ($penaltyQty <= 0) {
+                                                $penaltyQty = $targetPerCoach;
+                                            }
+                                            $basePenalty = isset($sheet['targets'][$pId]['penalty']) ? floatval($sheet['targets'][$pId]['penalty']) : 0;
+                                            if ($penaltyQty > 0 && $basePenalty > 0) {
+                                                $rowPenalty = ceil($deficitVal / $penaltyQty) * $basePenalty;
+                                            }
+                                        }
                                     ?>
                                         <tr>
                                             <td><?= $serial++ ?></td>
-                                            <td class="text-left"><strong><?= htmlspecialchars($param['parameter_name']) ?></strong></td>
-                                            <td><?= htmlspecialchars($param['units']) ?></td>
-                                            <td><?= number_format($param['target_qty'], 2) ?></td>
-                                            <td><?= number_format($param['total_target'], 2) ?></td>
-                                            <td><strong><?= number_format($param['actual_used'], 2) ?></strong></td>
-                                            <td class="<?= $scoreClass ?>"><?= number_format($param['compliance'], 1) ?>%</td>
+                                            <td class="text-left"><?= htmlspecialchars($param['parameter_name']) ?></td>
+                                            <td><?= htmlspecialchars($param['units'] ?? 'ml/coach') ?></td>
+                                            <td><?= $sheet['total_coaches'] ?></td>
+                                            <td><?= number_format($totalTargetQty, 2) ?></td>
+                                            <td><strong><?= $rowTotalUsed > 0 ? number_format($rowTotalUsed, 2) : '-' ?></strong></td>
+                                            <td><?= $diff < 0 ? number_format($diff, 2) : ($diff > 0 ? '+' . number_format($diff, 2) : '0.00') ?></td>
+                                            <td><?= $rowPenalty > 0 ? 'Rs. ' . number_format($rowPenalty, 0) : '0' ?></td>
                                         </tr>
                                     <?php endforeach; ?>
+                                    
+                                    <tr class="section-row">
+                                        <td colspan="5">Name Of Auditor</td>
+                                        <td colspan="3" style="text-align:center">
+                                            <?= htmlspecialchars($sheet['auditor_name_str'] ?: '-') ?>
+                                        </td>
+                                    </tr>
+                                    <tr class="section-row">
+                                        <td colspan="5">Signature of Supervisor</td>
+                                        <td colspan="3" style="text-align:center">_________________</td>
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>
 
-                        <!-- Footer and Signatures -->
-                        <div style="margin-top: 40px; display: flex; justify-content: space-between; align-items: flex-end; padding: 0 20px;">
-                            <div style="text-align: center;">
-                                <div style="border-top: 1px solid #475569; width: 200px; padding-top: 6px; font-size: 13px; font-weight: 700; color: #475569;">Contractor Representative</div>
+                        <div class="signature-row">
+                            <div class="signature-box">
+                                <div class="signature-line">Contractor's Supervisor</div>
                             </div>
-                            <div style="text-align: center;">
-                                <div style="border-top: 1px solid #475569; width: 200px; padding-top: 6px; font-size: 13px; font-weight: 700; color: #475569;">Authorized Railway Officer</div>
+                            <div class="signature-box">
+                                <div class="signature-line">Authorized Railway Officer</div>
                             </div>
                         </div>
-
                     </div>
                 <?php endforeach; ?>
             </div>

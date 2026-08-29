@@ -10,6 +10,15 @@ $stationId = $_SESSION['station_id'] ?? 1;
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
 
+// Fetch rating values from database
+$ratingStmt = $pdo->query("SELECT rating_name, rating_value FROM mcc_vb_rating ORDER BY rating_value DESC");
+$ratings = $ratingStmt->fetchAll(PDO::FETCH_ASSOC);
+$ratingStrings = [];
+foreach ($ratings as $r) {
+    $ratingStrings[] = htmlspecialchars($r['rating_name']) . "-" . htmlspecialchars($r['rating_value']);
+}
+$ratingText = implode(', ', $ratingStrings);
+
 // Fetch the current station's name & contractor for meta info
 $stationQuery = $pdo->prepare("SELECT station_name, contractor_name FROM mcc_stations WHERE station_id = :station_id");
 $stationQuery->execute(['station_id' => $stationId]);
@@ -65,9 +74,8 @@ if ($isFallback) {
 } else {
     // Fetch reports for each token
     $scoresStmt = $pdo->prepare("
-        SELECT s.*, u.full_name AS supervisor_name 
+        SELECT s.* 
         FROM mcc_vb_scorecard_report s
-        LEFT JOIN mcc_users u ON s.submitted_by = u.user_id
         WHERE s.station_id = :station_id AND s.token_id = :token_id
     ");
 
@@ -84,7 +92,7 @@ if ($isFallback) {
         $dbCoaches = [];
 
         if (!empty($rows)) {
-            $supervisorName = $rows[0]['supervisor_name'] ?? 'Shubham';
+            $supervisorName = $rows[0]['auditor_name'] ?? 'Shubham';
             foreach ($rows as $row) {
                 $scoresData[$row['sub_parameter_id']][$row['coach_no']] = $row['score_value'];
                 $dbCoaches[$row['coach_no']] = true;
@@ -517,12 +525,11 @@ include 'sidebar.php';
                             <strong>Scoring Guidelines:</strong>
                             <ul>
                                 <li>
-                                    Maximum Marks will be 12 for internal cleaning. This will be counted as under: Very
-                                    Good- 3, Satisfactory-2, Poor-1,Not attended-0
+                                    Maximum Marks will be 12 for internal cleaning. This will be counted as under: <?= $ratingText ?>
                                 </li>
                                 <li>
                                     Maximum Marks will be 3 for exterior cleaning & washing. This will be counted as under:
-                                    Very Good-3, Satisfactory-2, Poor-1, Not attended-0. % can be derived as per the marks
+                                    <?= $ratingText ?>. % can be derived as per the marks
                                     separately.
                                 </li>
                             </ul>

@@ -64,7 +64,7 @@ try {
     }
 
     // 2. Fetch rating groups and options dynamically
-    $ratingsStmt = $pdo->query("SELECT rating_group, rating_name, rating_value FROM mcc_normal_rating ORDER BY id ASC");
+    $ratingsStmt = $pdo->query("SELECT rating_group, rating_name, rating_value FROM mcc_vb_rating ORDER BY id ASC");
     $ratingsRows = $ratingsStmt->fetchAll(PDO::FETCH_ASSOC);
 
     $ratingGroups = [];

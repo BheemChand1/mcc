@@ -71,9 +71,8 @@ $tokens = $stmt->fetchAll();
 
 $sheets = [];
 $scoresStmt = $pdo->prepare("
-    SELECT s.*, u.full_name AS supervisor_name 
+    SELECT s.* 
     FROM mcc_vb_scorecard_report s
-    LEFT JOIN mcc_users u ON s.submitted_by = u.user_id
     WHERE s.station_id = :station_id AND s.token_id = :token_id
 ");
 
@@ -90,7 +89,7 @@ foreach ($tokens as $t) {
     $dbCoaches = [];
 
     if (!empty($rows)) {
-        $supervisorName = $rows[0]['supervisor_name'] ?? 'Supervisor';
+        $supervisorName = $rows[0]['auditor_name'] ?? 'Supervisor';
         foreach ($rows as $row) {
             $scoresData[$row['sub_parameter_id']][$row['coach_no']] = $row['score_value'];
             $dbCoaches[$row['coach_no']] = true;

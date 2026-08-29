@@ -194,6 +194,7 @@ $has_normal_any   = in_array(1, $active_report_ids) && ($has_normal_audit || $ha
 $has_int_audit        = in_array('intensive-report.php', $active_subreport_urls);
 $has_int_chem         = in_array('intensive-chemical-report.php', $active_subreport_urls);
 $has_int_mach         = in_array('machine-report-intensive.php', $active_subreport_urls);
+$has_int_scorecard_2  = in_array('intensive_scorecard_2.php', $active_subreport_urls);
 $has_int_pantry       = in_array('intensive_pantry_scorecard.php', $active_subreport_urls);
 $has_pantry_chem      = in_array('pantry-chemical.php', $active_subreport_urls);
 $has_pantry_mach      = in_array('pantry-machine.php', $active_subreport_urls);

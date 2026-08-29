@@ -24,16 +24,18 @@ $machinesStmt = $pdo->prepare("
 $machinesStmt->execute(['station_id' => $stationId]);
 $machinesList = $machinesStmt->fetchAll();
 
-// Fetch targets for selected month - DC
-$targetMonthDate = date('Y-m-01', strtotime($fromDate));
+// Fetch targets active on selected date (using SCD range logic) - DC
 $targetsStmt = $pdo->prepare("
     SELECT machine_id, shift_id, nominated_area 
     FROM dc_mcc_machine_target 
-    WHERE station_id = :station_id AND target_month = :target_month
+    WHERE station_id = :station_id 
+      AND :date_ref_1 >= effective_from
+      AND (effective_to IS NULL OR :date_ref_2 <= effective_to)
 ");
 $targetsStmt->execute([
     'station_id' => $stationId,
-    'target_month' => $targetMonthDate
+    'date_ref_1' => $fromDate,
+    'date_ref_2' => $fromDate
 ]);
 $targetsRows = $targetsStmt->fetchAll();
 
@@ -44,7 +46,7 @@ foreach ($targetsRows as $row) {
 
 // Fetch report data for selected date - DC
 $reportStmt = $pdo->prepare("
-    SELECT parameter_id AS machine_id, shift_id, used_status 
+    SELECT parameter_id AS machine_id, shift_id, used_status, auditor_name 
     FROM dc_mcc_machine_report 
     WHERE station_id = :station_id AND report_date = :report_date
 ");
@@ -55,9 +57,15 @@ $reportStmt->execute([
 $reportRows = $reportStmt->fetchAll();
 
 $reportsMap = [];
+$auditorName = '';
 foreach ($reportRows as $row) {
     $reportsMap[$row['machine_id']][$row['shift_id']] = $row['used_status'];
+    if (empty($auditorName) && !empty($row['auditor_name'])) {
+        $auditorName = $row['auditor_name'];
+    }
 }
+
+$isFallback = empty($reportRows);
 
 // Calculate score
 $totalNominated = 0;
@@ -79,7 +87,7 @@ foreach ($machinesList as $mach) {
     }
 }
 
-$totalScore = $totalNominated > 0 ? round(($totalOperated / $totalNominated) * 100, 1) . "%" : "100%";
+$totalScore = $isFallback ? "0%" : ($totalNominated > 0 ? round(($totalOperated / $totalNominated) * 100, 1) . "%" : "100%");
 
 $extraStyles = "";
 
@@ -102,6 +110,11 @@ include 'sidebar.php';
             </form>
 
             <div class="report-wrap">
+                <?php if ($isFallback): ?>
+                    <div class="alert alert-warning no-print" style="margin: 0 0 20px 0; border-radius: 8px; border: 1px solid #ffeeba; background-color: #fff3cd; color: #856404; padding: 12px 20px;">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> No daily machine reports found for the selected date. Displaying fallback/template values.
+                    </div>
+                <?php endif; ?>
 
                 <div class="report-frame">
                     <div class="report-header">
@@ -117,6 +130,7 @@ include 'sidebar.php';
                         </div>
                         <div class="meta-row">
                             <div class="meta-item"><span>Contractor:</span> <?= htmlspecialchars($contractorName) ?></div>
+                            <div class="meta-item"><span>Auditor Name:</span> <?= htmlspecialchars($auditorName ?: '-') ?></div>
                             <div class="meta-item"><span>Total Score:</span> <?= htmlspecialchars($totalScore) ?></div>
                         </div>
                     </div>
@@ -193,7 +207,7 @@ include 'sidebar.php';
 
                     <div class="signature-row">
                         <div class="signature-box">
-                            <div class="signature-line">Contractor's Supervisor</div>
+                            <div class="signature-line">Contractor's Representative</div>
                         </div>
                         <div class="signature-box">
                             <div class="signature-line">Authorized Railway Officer</div>

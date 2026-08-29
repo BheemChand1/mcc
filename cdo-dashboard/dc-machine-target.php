@@ -11,7 +11,7 @@ $selectedYear = intval($selectedYear);
 
 $targetMonthDate = $selectedYear . "-" . $selectedMonth . "-01";
 
-// Fetch active shifts for this station - DC
+// Fetch active shifts for this station (ordered by ID) - DC
 $shiftsStmt = $pdo->prepare("
     SELECT id AS shift_id, shift AS shift_name 
     FROM dc_mcc_machine_shifts 
@@ -38,6 +38,12 @@ $errorMsg = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
     $selectedMonth = $_POST['month'] ?? '';
     $selectedYear = $_POST['year'] ?? '';
+    $effectiveFrom = $_POST['effective_from'] ?? '';
+    
+    if (empty($effectiveFrom) || !strtotime($effectiveFrom)) {
+        $effectiveFrom = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
+    }
+
     if (!empty($selectedMonth) && !empty($selectedYear)) {
         $targetMonthDate = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
         $penalties = $_POST['penalty'] ?? []; // machine_id => penalty_amount
@@ -45,21 +51,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
         
         $pdo->beginTransaction();
         try {
-            // Delete existing machine targets for this station and month - DC
-            $deleteStmt = $pdo->prepare("
-                DELETE FROM dc_mcc_machine_target 
-                WHERE station_id = :station_id AND target_month = :target_month
+            // Prepare statements
+            $findActiveStmt = $pdo->prepare("
+                SELECT * FROM dc_mcc_machine_target 
+                WHERE station_id = :station_id 
+                  AND machine_id = :machine_id 
+                  AND shift_id = :shift_id 
+                  AND effective_to IS NULL
+                LIMIT 1
             ");
-            $deleteStmt->execute([
-                'station_id' => $stationId,
-                'target_month' => $targetMonthDate
-            ]);
-            
-            // Insert updated machine targets - DC
-            $insertStmt = $pdo->prepare("
+
+            $closeActiveStmt = $pdo->prepare("
+                UPDATE dc_mcc_machine_target 
+                SET effective_to = :effective_to 
+                WHERE id = :id
+            ");
+
+            $insertNewStmt = $pdo->prepare("
                 INSERT INTO dc_mcc_machine_target 
-                (station_id, machine_id, target_month, shift_id, nominated_area, penalty_amount) 
-                VALUES (:station_id, :machine_id, :target_month, :shift_id, :nominated_area, :penalty_amount)
+                (station_id, machine_id, shift_id, nominated_area, penalty_amount, effective_from, effective_to) 
+                VALUES (:station_id, :machine_id, :shift_id, :nominated_area, :penalty_amount, :effective_from, NULL)
             ");
             
             foreach ($machinesList as $mach) {
@@ -73,35 +84,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
                         $nom = 'N'; // default to 'N' if empty
                     }
                     
-                    $insertStmt->execute([
+                    // Find currently active target row for this machine and shift
+                    $findActiveStmt->execute([
                         'station_id' => $stationId,
                         'machine_id' => $mId,
-                        'target_month' => $targetMonthDate,
-                        'shift_id' => $sId,
-                        'nominated_area' => $nom,
-                        'penalty_amount' => $penalty
+                        'shift_id' => $sId
                     ]);
+                    $currentActive = $findActiveStmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    $needsUpdate = false;
+                    
+                    if ($currentActive) {
+                        $currNom = $currentActive['nominated_area'];
+                        $currPenalty = floatval($currentActive['penalty_amount']);
+                        
+                        if ($currNom !== $nom || $currPenalty !== $penalty) {
+                            $needsUpdate = true;
+                            
+                            // Close active row. Set effective_to to the day before effective_from
+                            $effectiveToDate = date('Y-m-d', strtotime($effectiveFrom . ' - 1 day'));
+                            if (strtotime($effectiveToDate) < strtotime($currentActive['effective_from'])) {
+                                $effectiveToDate = $currentActive['effective_from'];
+                            }
+                            
+                            $closeActiveStmt->execute([
+                                'effective_to' => $effectiveToDate,
+                                'id' => $currentActive['id']
+                            ]);
+                        }
+                    } else {
+                        // No active target row exists, insert one
+                        $needsUpdate = true;
+                    }
+                    
+                    if ($needsUpdate) {
+                        $insertNewStmt->execute([
+                            'station_id' => $stationId,
+                            'machine_id' => $mId,
+                            'shift_id' => $sId,
+                            'nominated_area' => $nom,
+                            'penalty_amount' => $penalty,
+                            'effective_from' => $effectiveFrom
+                        ]);
+                    }
                 }
             }
             
             $pdo->commit();
-            $successMsg = "Machine targets for " . date('F, Y', strtotime($targetMonthDate)) . " saved successfully!";
+            $successMsg = "DC Machine targets updated successfully starting from " . date('d-m-Y', strtotime($effectiveFrom)) . "!";
         } catch (Exception $e) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             $errorMsg = "Error saving machine targets: " . $e->getMessage();
         }
     }
 }
 
-// Fetch existing targets for the selected month to populate inputs - DC
+// Fetch existing targets active on the target date to populate inputs
 $existingTargetsStmt = $pdo->prepare("
     SELECT machine_id, shift_id, nominated_area, penalty_amount 
     FROM dc_mcc_machine_target 
-    WHERE station_id = :station_id AND target_month = :target_month
+    WHERE station_id = :station_id
+      AND :date_ref_1 >= effective_from
+      AND (effective_to IS NULL OR :date_ref_2 <= effective_to)
 ");
 $existingTargetsStmt->execute([
     'station_id' => $stationId,
-    'target_month' => $targetMonthDate
+    'date_ref_1' => $targetMonthDate,
+    'date_ref_2' => $targetMonthDate
 ]);
 $existingTargetsRows = $existingTargetsStmt->fetchAll();
 
@@ -164,6 +215,22 @@ $extraStyles = "
 .penalty-input:focus {
     border-color: #3b82f6;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+.nomination-select {
+    width: 65px;
+    padding: 3px 6px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    text-align: center;
+    background-color: #fff;
+    cursor: pointer;
+    font-weight: 600;
+    outline: none;
+    font-size: 13px;
+    height: 30px;
+}
+.nomination-select:focus {
+    border-color: #3b82f6;
 }
 .nomination-text-input {
     width: 120px;
@@ -251,6 +318,7 @@ include 'sidebar.php';
     <div class="app-content">
         <div class="container-fluid" style="padding-top: 15px;">
             
+            <!-- Filters & Navigation Bar -->
             <form class="report-filter no-print" method="GET" style="display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1px solid #e2e8f0; padding: 12px 20px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); flex-wrap: wrap; gap: 15px;">
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <label for="month" style="font-weight: 700; margin: 0; font-size: 14px; color: #334155; white-space: nowrap;">Target Month</label>
@@ -300,8 +368,8 @@ include 'sidebar.php';
                 </div>
             <?php endif; ?>
 
+            <!-- Printable Main Target Form / Sheet -->
             <div class="machine-sheet">
-                
                 <?php if (empty($machinesList)): ?>
                     <div class="alert alert-info" style="margin: 20px 0; border-radius: 8px; padding: 12px 20px; border: 1px solid #bee5eb; background-color: #d1ecf1; color: #0c5460; text-align: center;">
                         <i class="bi bi-info-circle-fill me-2"></i> No machines registered for this station.
@@ -310,6 +378,11 @@ include 'sidebar.php';
                     <form method="POST" action="">
                         <input type="hidden" name="month" value="<?= htmlspecialchars($selectedMonth); ?>">
                         <input type="hidden" name="year" value="<?= htmlspecialchars($selectedYear); ?>">
+                        
+                        <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;" class="no-print">
+                            <label style="font-weight: 700; font-size: 14px; color: #334155; margin: 0;">Effective From:</label>
+                            <input type="date" name="effective_from" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 12px; font-size: 14px; background-color: #f8fafc; color: #334155; width: 180px; height: 38px; outline: none;" value="<?= htmlspecialchars($targetMonthDate) ?>" required>
+                        </div>
                         
                         <div class="table-responsive">
                             <table class="report-table">
@@ -336,11 +409,13 @@ include 'sidebar.php';
                                     $serial = 1;
                                     foreach ($machinesList as $mach): 
                                         $mId = $mach['machine_id'];
+                                        // Take the penalty amount from first shift or default empty
                                         $firstShiftId = !empty($shiftsList) ? $shiftsList[0]['shift_id'] : 0;
                                         $penaltyVal = isset($existingTargets[$mId][$firstShiftId]['penalty_amount']) 
                                             ? floatval($existingTargets[$mId][$firstShiftId]['penalty_amount']) 
                                             : '';
                                         
+                                        // Remove decimal .00 for display cleanly if integer
                                         if ($penaltyVal !== '' && $penaltyVal == intval($penaltyVal)) {
                                             $penaltyVal = intval($penaltyVal);
                                         }
@@ -378,6 +453,7 @@ include 'sidebar.php';
                             </table>
                         </div>
 
+                        <!-- Center Save Target Button -->
                         <div style="text-align: center; margin-top: 25px;" class="no-print">
                             <button type="submit" name="save_target" class="btn btn-primary" style="background-color: #007bff; border: none; font-weight: 700; font-size: 15px; padding: 10px 30px; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.2s ease;">
                                 Save Target

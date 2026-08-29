@@ -1,7 +1,7 @@
 <?php
 require_once 'auth.php';
 
-$fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
+$fromDate = $_GET['from_date'] ?? date('Y-m-d');
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
 
 // Fetch active shifts for this station - DC

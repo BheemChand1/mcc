@@ -32,26 +32,23 @@ $machinesStmt = $pdo->prepare("
 $machinesStmt->execute(['station_id' => $stationId]);
 $machinesList = $machinesStmt->fetchAll();
 
-// Fetch targets for selected month - DC
-$targetMonthDate = "$selectedYear-$selectedMonth-01";
+// Fetch targets active in selected month (using SCD range logic) - DC
+$firstDay = "$selectedYear-$selectedMonth-01";
+$lastDay = date('Y-m-d', strtotime("$firstDay +1 month -1 day"));
+
 $targetsStmt = $pdo->prepare("
-    SELECT machine_id, shift_id, nominated_area, penalty_amount 
+    SELECT machine_id, shift_id, nominated_area, penalty_amount, effective_from, effective_to 
     FROM dc_mcc_machine_target 
-    WHERE station_id = :station_id AND target_month = :target_month
+    WHERE station_id = :station_id
+      AND effective_from <= :last_day
+      AND (effective_to IS NULL OR effective_to >= :first_day)
 ");
 $targetsStmt->execute([
     'station_id' => $stationId,
-    'target_month' => $targetMonthDate
+    'first_day' => $firstDay,
+    'last_day' => $lastDay
 ]);
-$targetsRows = $targetsStmt->fetchAll();
-
-$targetsMap = [];
-foreach ($targetsRows as $row) {
-    $targetsMap[$row['machine_id']][$row['shift_id']] = [
-        'nominated_area' => $row['nominated_area'],
-        'penalty_amount' => $row['penalty_amount']
-    ];
-}
+$monthlyTargets = $targetsStmt->fetchAll();
 
 // Fetch all report data for the selected month - DC
 $reportsStmt = $pdo->prepare("
@@ -78,7 +75,6 @@ foreach ($reportsRows as $row) {
 $dailySummary = [];
 $totalMonthlyPenalty = 0.0;
 $sumDailyScores = 0.0;
-$daysCountWithReports = 0;
 
 for ($d = 1; $d <= $daysInMonth; $d++) {
     $dayStr = str_pad($d, 2, '0', STR_PAD_LEFT);
@@ -87,41 +83,49 @@ for ($d = 1; $d <= $daysInMonth; $d++) {
     
     $dayScore = 0.0;
     $dayPenalty = 0.0;
-    $hasReport = isset($daysWithReports[$dateStr]);
     
-    // Calculate targets if nominated
-    $dayNominated = 0;
-    $dayOperated = 0;
-    
-    foreach ($machinesList as $mach) {
-        $mId = $mach['machine_id'];
-        foreach ($shiftsList as $shift) {
-            $sId = $shift['shift_id'];
-            $nomArea = $targetsMap[$mId][$sId]['nominated_area'] ?? '';
-            $isNominated = !empty($nomArea) && strtoupper($nomArea) !== 'N' && $nomArea !== '-';
-            if ($isNominated) {
-                $dayNominated++;
-                if ($hasReport) {
+    // Only calculate if reports exist for this day
+    if (isset($daysWithReports[$dateStr])) {
+        $dayNominated = 0;
+        $dayOperated = 0;
+        
+        // Resolve active target for this specific day
+        $dayTargetsMap = [];
+        foreach ($monthlyTargets as $t) {
+            $fromTs = strtotime($t['effective_from']);
+            $toTs = empty($t['effective_to']) ? null : strtotime($t['effective_to']);
+            $currTs = strtotime($dateStr);
+
+            if ($currTs >= $fromTs && ($toTs === null || $currTs <= $toTs)) {
+                $dayTargetsMap[$t['machine_id']][$t['shift_id']] = [
+                    'nominated_area' => $t['nominated_area'],
+                    'penalty_amount' => $t['penalty_amount']
+                ];
+            }
+        }
+        
+        foreach ($machinesList as $mach) {
+            $mId = $mach['machine_id'];
+            foreach ($shiftsList as $shift) {
+                $sId = $shift['shift_id'];
+                
+                $nomArea = $dayTargetsMap[$mId][$sId]['nominated_area'] ?? '';
+                $isNominated = !empty($nomArea) && strtoupper($nomArea) !== 'N' && $nomArea !== '-';
+                
+                if ($isNominated) {
+                    $dayNominated++;
                     $status = $reportsMap[$dateStr][$mId][$sId] ?? '-';
                     if ($status === 'Y') {
                         $dayOperated++;
                     } else {
                         // Charged penalty for nominated but not operated
-                        $penaltyRate = floatval($targetsMap[$mId][$sId]['penalty_amount'] ?? 0.0);
+                        $penaltyRate = floatval($dayTargetsMap[$mId][$sId]['penalty_amount'] ?? 0.0);
                         $dayPenalty += $penaltyRate;
                     }
-                } else {
-                    // Fallback scenario (if no report date is logged, count as Y / operated, penalty is 0)
-                    $dayOperated++;
                 }
             }
         }
-    }
-    
-    $dayScore = $dayNominated > 0 ? ($dayOperated / $dayNominated) * 100.0 : 100.0;
-    
-    if ($hasReport) {
-        $daysCountWithReports++;
+        $dayScore = $dayNominated > 0 ? ($dayOperated / $dayNominated) * 100.0 : 100.0;
     }
     
     $totalMonthlyPenalty += $dayPenalty;
@@ -135,7 +139,7 @@ for ($d = 1; $d <= $daysInMonth; $d++) {
     ];
 }
 
-$avgMonthlyScore = $daysInMonth > 0 ? ($sumDailyScores / $daysInMonth) : 100.0;
+$avgMonthlyScore = $daysInMonth > 0 ? ($sumDailyScores / $daysInMonth) : 0.0;
 
 $pageTitle = 'Monthly Machine Summary Report (DC) | MCC';
 

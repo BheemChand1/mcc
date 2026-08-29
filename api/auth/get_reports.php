@@ -28,7 +28,7 @@ if ($stationId === null || $stationId <= 0) {
 try {
     // 1. Fetch active reports for the station
     $reportsStmt = $pdo->prepare("
-        SELECT report_id, report_name 
+        SELECT report_id, report_name, app_key 
         FROM mcc_reports 
         WHERE station_id = :station_id AND status = 'Active'
         ORDER BY report_id ASC

@@ -133,22 +133,22 @@ if (isset($_GET['edit_station'])) {
         if ($chkStmt->fetchColumn() == 0) {
             $pdo->beginTransaction();
             $defaultReports = [
-                1 => 'Normal Cleaning',
-                2 => 'Intensive Cleaning',
-                3 => 'PLDC Cleaning',
-                4 => 'PRT Cleaning',
-                5 => 'Pantry Car',
-                6 => 'Surprise Visit Audits',
-                7 => 'Vande Bharat Modules',
-                8 => 'Attendance & Manpower',
-                9 => 'Cleanliness Modules',
-                10 => 'Photo Reports'
+                1 => ['name' => 'Normal Cleaning', 'key' => 'normal_cleaning'],
+                2 => ['name' => 'Intensive Cleaning', 'key' => 'intensive_cleaning'],
+                3 => ['name' => 'DC Cleaning', 'key' => 'dc_cleaning'],
+                4 => ['name' => 'PRT Cleaning', 'key' => 'prt_cleaning'],
+                5 => ['name' => 'Pantry Car', 'key' => 'pantry_car'],
+                6 => ['name' => 'Surprise Visit Audits', 'key' => 'surprise_visit_audits'],
+                7 => ['name' => 'Vande Bharat Modules', 'key' => 'vande_bharat_modules'],
+                8 => ['name' => 'Attendance & Manpower', 'key' => 'attendance_manpower'],
+                9 => ['name' => 'Cleanliness Modules', 'key' => 'cleanliness_modules'],
+                10 => ['name' => 'Photo Reports', 'key' => 'photo_reports']
             ];
             
-            $insStmt = $pdo->prepare("INSERT INTO mcc_reports (report_id, report_name, station_id, status) VALUES (?, ?, ?, 'Inactive')");
-            foreach ($defaultReports as $rid => $name) {
+            $insStmt = $pdo->prepare("INSERT INTO mcc_reports (report_id, report_name, app_key, station_id, status) VALUES (?, ?, ?, ?, 'Inactive')");
+            foreach ($defaultReports as $rid => $info) {
                 // Insert default reports for the station
-                $insStmt->execute([$rid, $name, $selected_station_id]);
+                $insStmt->execute([$rid, $info['name'], $info['key'], $selected_station_id]);
             }
             $pdo->commit();
         }

@@ -354,11 +354,6 @@ $has_photo_report = in_array(10, $active_report_ids) && in_array('photo-report.p
                 <p><?= htmlspecialchars($subreport_names[13] ?? 'Pantry Car Score Card') ?></p>
               </a>
             </li>
-            <li class="nav-item">
-              <a href="intensive_pantry_summary.php" class="nav-link <?= ($currentPage == 'intensive_pantry_summary.php') ? 'active' : '' ?>">
-                <p>Pantry Summary</p>
-              </a>
-            </li>
             <?php endif; ?>
             <?php if ($has_pantry_chem): ?>
             <li class="nav-item">

@@ -83,7 +83,7 @@ try {
     $insertStmt = $pdo->prepare("
         INSERT INTO mcc_vb_scorecard_report 
         (sub_parameter_id, station_id, token_id, train_no, coach_no, score_value, auditor_name, report_date)
-        VALUES (:sub_parameter_id, :station_id, :token_id, :train_no, :coach_no, NULL, :auditor_name, :report_date)
+        VALUES (:sub_parameter_id, :station_id, :token_id, :train_no, :coach_no, '', :auditor_name, :report_date)
     ");
 
     foreach ($coachNos as $coachNo) {

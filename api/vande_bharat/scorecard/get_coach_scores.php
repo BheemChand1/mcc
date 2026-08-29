@@ -106,7 +106,7 @@ try {
         $options = $ratingGroups[$inputType] ?? [];
 
         $scoreValue = $row['score_value'];
-        if ($scoreValue === null) {
+        if ($scoreValue === null || $scoreValue === '') {
             $parameters[$pId]['status'] = 0;
         }
 

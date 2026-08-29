@@ -30,7 +30,7 @@ try {
     // Query coach completion counts in intensive chemical reports table
     $stmt = $pdo->prepare("
         SELECT coach_no, 
-               SUM(CASE WHEN qty_used IS NULL THEN 1 ELSE 0 END) AS empty_count,
+               SUM(CASE WHEN qty_used IS NULL OR qty_used = '' THEN 1 ELSE 0 END) AS empty_count,
                COUNT(*) AS total_count
          FROM mcc_intensive_chemical_report
          WHERE token_id = :token_id AND train_no = :train_no

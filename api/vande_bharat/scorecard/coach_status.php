@@ -30,7 +30,7 @@ try {
     // Query coach completion counts
     $stmt = $pdo->prepare("
         SELECT coach_no, 
-               SUM(CASE WHEN score_value IS NULL THEN 1 ELSE 0 END) AS empty_count,
+               SUM(CASE WHEN score_value IS NULL OR score_value = '' THEN 1 ELSE 0 END) AS empty_count,
                COUNT(*) AS total_count
         FROM mcc_vb_scorecard_report
         WHERE token_id = :token_id AND train_no = :train_no

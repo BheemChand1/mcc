@@ -104,7 +104,7 @@ foreach ($sheets as $sheet) {
     $sheetsByDay[$day][] = $sheet;
 }
 
-$pageTitle = 'MCC | Monthly PLDC Scorecard Summary';
+$pageTitle = 'MCC | Monthly DC Scorecard Summary';
 
 $extraStyles = "
 .table-warning-subtle {
@@ -131,7 +131,7 @@ include 'sidebar.php';
       <!-- Month Filter -->
       <div class="card shadow-sm border-0 mb-4 bg-white no-print">
         <div class="card-body p-3 col-md-8 mx-auto">
-          <form method="GET" action="PLDC-Summary.php" class="row g-3 align-items-center justify-content-center">
+          <form method="GET" action="DC-Summary.php" class="row g-3 align-items-center justify-content-center">
             <div class="col-auto">
               <label for="month" class="form-label mb-0 fw-bold">Month:</label>
             </div>
@@ -172,7 +172,7 @@ include 'sidebar.php';
         <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
           <h5 class="mb-0 font-weight-bold text-dark d-flex align-items-center">
             <i class="bi bi-calendar-range text-primary me-2"></i>
-            PLDC Scorecard Monthly Summary: <?= date('F Y', strtotime($startDate)); ?>
+            DC Scorecard Monthly Summary: <?= date('F Y', strtotime($startDate)); ?>
           </h5>
           <div class="d-flex align-items-center gap-3">
             <span class="badge bg-indigo-subtle text-indigo p-2 px-3 border border-indigo-subtle rounded-pill font-weight-bold" style="font-size: 0.9rem;">
@@ -223,7 +223,7 @@ include 'sidebar.php';
                       <?php else: ?>
                         <?php foreach ($daySheets as $ds): ?>
                           <div class="mb-1">
-                            <a href="PLDC-Scorecard.php?from_date=<?= $ds['report_date']; ?>&to_date=<?= $ds['report_date']; ?>" class="btn btn-xs btn-outline-primary py-0 px-2 fw-bold" style="font-size: 0.78rem;">
+                            <a href="DC-Scorecard.php?from_date=<?= $ds['report_date']; ?>&to_date=<?= $ds['report_date']; ?>" class="btn btn-xs btn-outline-primary py-0 px-2 fw-bold" style="font-size: 0.78rem;">
                               <i class="bi bi-eye me-1"></i> View Sheet
                             </a>
                           </div>

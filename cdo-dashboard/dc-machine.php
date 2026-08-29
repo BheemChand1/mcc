@@ -4,7 +4,7 @@ require_once 'auth.php';
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
 
-// Fetch active shifts for this station - PLDC
+// Fetch active shifts for this station - DC
 $shiftsStmt = $pdo->prepare("
     SELECT id AS shift_id, shift AS shift_name 
     FROM dc_mcc_machine_shifts 
@@ -14,7 +14,7 @@ $shiftsStmt = $pdo->prepare("
 $shiftsStmt->execute(['station_id' => $stationId]);
 $shiftsList = $shiftsStmt->fetchAll();
 
-// Fetch active machines for this station - PLDC
+// Fetch active machines for this station - DC
 $machinesStmt = $pdo->prepare("
     SELECT id AS machine_id, machine_no, machine_name 
     FROM dc_mcc_machine_param 
@@ -24,7 +24,7 @@ $machinesStmt = $pdo->prepare("
 $machinesStmt->execute(['station_id' => $stationId]);
 $machinesList = $machinesStmt->fetchAll();
 
-// Fetch targets for selected month - PLDC
+// Fetch targets for selected month - DC
 $targetMonthDate = date('Y-m-01', strtotime($fromDate));
 $targetsStmt = $pdo->prepare("
     SELECT machine_id, shift_id, nominated_area 
@@ -42,7 +42,7 @@ foreach ($targetsRows as $row) {
     $targetsMap[$row['machine_id']][$row['shift_id']] = $row['nominated_area'];
 }
 
-// Fetch report data for selected date - PLDC
+// Fetch report data for selected date - DC
 $reportStmt = $pdo->prepare("
     SELECT parameter_id AS machine_id, shift_id, used_status 
     FROM dc_mcc_machine_report 
@@ -96,8 +96,8 @@ include 'sidebar.php';
                 <label for="to_date">To:</label>
                 <input type="date" id="to_date" name="to_date" value="<?= htmlspecialchars($toDate); ?>">
                 <button type="submit" class="btn-go">Go</button>
-                <a href="pldc-machine-target.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-summary" target="_blank">Machine Target</a>
-                <a href="pldc-machine-summary.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-summary">Summary</a>
+                <a href="dc-machine-target.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-summary" target="_blank">Machine Target</a>
+                <a href="dc-machine-summary.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-summary">Summary</a>
                 <button type="button" class="btn-print" onclick="window.print()">Print</button>
             </form>
 
@@ -105,7 +105,7 @@ include 'sidebar.php';
 
                 <div class="report-frame">
                     <div class="report-header">
-                        <h2>PLDC Machine Deployment Report</h2>
+                        <h2>DC Machine Deployment Report</h2>
                     </div>
 
                     <div class="report-meta-section">

@@ -210,14 +210,14 @@ include 'sidebar.php';
                 <input type="date" id="to_date" name="to_date" value="<?= htmlspecialchars($toDate); ?>">
                 
                 <button type="submit" class="btn-go">Go</button>
-                <a href="PLDC-Summary.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-summary" target="_blank">Summary</a>
+                <a href="DC-Summary.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-summary" target="_blank">Summary</a>
                 <button type="button" class="btn-print" onclick="window.print()">Print</button>
             </form>
 
             <div class="report-wrap">
                 <?php if ($isFallback): ?>
                     <div class="alert alert-warning no-print" style="margin: 0 0 20px 0; border-radius: 8px; border: 1px solid #ffeeba; background-color: #fff3cd; color: #856404; padding: 12px 20px;">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i> No PLDC scorecard reports found for the selected date range. 
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> No DC scorecard reports found for the selected date range. 
                     </div>
                 <?php endif; ?>
 

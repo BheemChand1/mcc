@@ -3,6 +3,7 @@
  * Database Connection Configuration
  * Handles both MySQLi and PDO database connections for the MCC application.
  */
+require_once __DIR__ . '/errors.php';
 
 // Database credentials
 define('DB_HOST', '184.168.122.185');

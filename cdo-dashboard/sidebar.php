@@ -154,7 +154,7 @@ if (isset($_SESSION['station_id'])) {
 // Fallback arrays for safety
 $report_names[1] = $report_names[1] ?? 'Normal Cleaning';
 $report_names[2] = $report_names[2] ?? 'Intensive Cleaning';
-$report_names[3] = $report_names[3] ?? 'PLDC Cleaning';
+$report_names[3] = $report_names[3] ?? 'DC Cleaning';
 $report_names[4] = $report_names[4] ?? 'PRT Cleaning';
 $report_names[5] = $report_names[5] ?? 'Pantry Car';
 $report_names[6] = $report_names[6] ?? 'Surprise Visit Audits';
@@ -169,7 +169,7 @@ $subreport_names[3] = $subreport_names[3] ?? 'Machine Report';
 $subreport_names[4] = $subreport_names[4] ?? 'Intensive Report';
 $subreport_names[5] = $subreport_names[5] ?? 'Chemical Report';
 $subreport_names[6] = $subreport_names[6] ?? 'Machine Report';
-$subreport_names[7] = $subreport_names[7] ?? 'PLDC Scorecard';
+$subreport_names[7] = $subreport_names[7] ?? 'DC Scorecard';
 $subreport_names[8] = $subreport_names[8] ?? 'Chemical Report';
 $subreport_names[9] = $subreport_names[9] ?? 'Machine Report';
 $subreport_names[10] = $subreport_names[10] ?? 'PRT ScoreCard';
@@ -198,10 +198,10 @@ $has_int_scorecard_2  = in_array('intensive_scorecard_2.php', $active_subreport_
 $has_int_pantry       = in_array('intensive_pantry_scorecard.php', $active_subreport_urls);
 $has_int_any          = in_array(2, $active_report_ids) && ($has_int_audit || $has_int_chem || $has_int_mach || $has_int_scorecard_2);
 
-$has_pldc_audit   = in_array('PLDC-Scorecard.php', $active_subreport_urls);
-$has_pldc_chem    = in_array('pldc-chemical.php', $active_subreport_urls);
-$has_pldc_mach    = in_array('pldc-machine.php', $active_subreport_urls);
-$has_pldc_any     = in_array(3, $active_report_ids) && ($has_pldc_audit || $has_pldc_chem || $has_pldc_mach);
+$has_dc_audit   = in_array('DC-Scorecard.php', $active_subreport_urls);
+$has_dc_chem    = in_array('dc-chemical.php', $active_subreport_urls);
+$has_dc_mach    = in_array('dc-machine.php', $active_subreport_urls);
+$has_dc_any     = in_array(3, $active_report_ids) && ($has_dc_audit || $has_dc_chem || $has_dc_mach);
 
 $has_prt_audit    = in_array('Platform-Return-TrainsScorecard.php', $active_subreport_urls);
 $has_prt_chem     = in_array('Platform-Return-Chemical.php', $active_subreport_urls);
@@ -359,11 +359,11 @@ $has_photo_report = in_array(10, $active_report_ids) && in_array('photo-report.p
         </li>
         <?php endif; ?>
 
-        <!-- PLDC Cleaning Dropdown -->
-        <?php if ($has_pldc_any): ?>
+        <!-- DC Cleaning Dropdown -->
+        <?php if ($has_dc_any): ?>
         <?php 
-        $pldcPages = ['PLDC-Scorecard.php', 'pldc-chemical.php', 'pldc-machine.php'];
-        $isPldcActive = in_array($currentPage, $pldcPages);
+        $dcPages = ['DC-Scorecard.php', 'dc-chemical.php', 'dc-machine.php'];
+        $isPldcActive = in_array($currentPage, $dcPages);
         ?>
         <li class="nav-item <?= $isPldcActive ? 'menu-open' : '' ?>">
           <a href="#" class="nav-link <?= $isPldcActive ? 'active' : '' ?>">
@@ -374,23 +374,23 @@ $has_photo_report = in_array(10, $active_report_ids) && in_array('photo-report.p
             </p>
           </a>
           <ul class="nav nav-treeview ms-3">
-            <?php if ($has_pldc_audit): ?>
+            <?php if ($has_dc_audit): ?>
             <li class="nav-item">
-              <a href="PLDC-Scorecard.php" class="nav-link <?= ($currentPage == 'PLDC-Scorecard.php') ? 'active' : '' ?>">
+              <a href="DC-Scorecard.php" class="nav-link <?= ($currentPage == 'DC-Scorecard.php') ? 'active' : '' ?>">
                 <p><?= htmlspecialchars($subreport_names[7]) ?></p>
               </a>
             </li>
             <?php endif; ?>
-            <?php if ($has_pldc_chem): ?>
+            <?php if ($has_dc_chem): ?>
             <li class="nav-item">
-              <a href="pldc-chemical.php" class="nav-link <?= ($currentPage == 'pldc-chemical.php') ? 'active' : '' ?>">
+              <a href="dc-chemical.php" class="nav-link <?= ($currentPage == 'dc-chemical.php') ? 'active' : '' ?>">
                 <p><?= htmlspecialchars($subreport_names[8]) ?></p>
               </a>
             </li>
             <?php endif; ?>
-            <?php if ($has_pldc_mach): ?>
+            <?php if ($has_dc_mach): ?>
             <li class="nav-item">
-              <a href="pldc-machine.php" class="nav-link <?= ($currentPage == 'pldc-machine.php') ? 'active' : '' ?>">
+              <a href="dc-machine.php" class="nav-link <?= ($currentPage == 'dc-machine.php') ? 'active' : '' ?>">
                 <p><?= htmlspecialchars($subreport_names[9]) ?></p>
               </a>
             </li>

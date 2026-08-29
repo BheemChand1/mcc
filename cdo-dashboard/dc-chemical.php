@@ -4,7 +4,7 @@ require_once 'auth.php';
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
 
-// Fetch all active shifts for station_id dynamically - PLDC
+// Fetch all active shifts for station_id dynamically - DC
 $shiftsStmt = $pdo->prepare("
     SELECT id AS shift_id, shift AS shift_name 
     FROM dc_mcc_chemical_shifts 
@@ -14,7 +14,7 @@ $shiftsStmt = $pdo->prepare("
 $shiftsStmt->execute(['station_id' => $stationId]);
 $shiftsList = $shiftsStmt->fetchAll();
 
-// Fetch all active parameters and their target values/penalties dynamically by month - PLDC
+// Fetch all active parameters and their target values/penalties dynamically by month - DC
 $paramsStmt = $pdo->prepare("
     SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
     FROM dc_mcc_chemical_param p
@@ -23,7 +23,7 @@ $paramsStmt = $pdo->prepare("
     ORDER BY p.id ASC
 ");
 
-// Fetch distinct tokens in this date range and station for PLDC chemical report
+// Fetch distinct tokens in this date range and station for DC chemical report
 $stmt = $pdo->prepare("
     SELECT DISTINCT token_id, report_date 
     FROM dc_mcc_chemical_report 
@@ -253,8 +253,8 @@ include 'sidebar.php';
                 <input type="date" id="to_date" name="to_date" value="<?= htmlspecialchars($toDate); ?>">
                 
                 <button type="submit" class="btn-go">Go</button>
-                <a href="pldc-chemical-summary.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-summary">Summary</a>
-                <a href="pldc-chemical-target.php" class="btn-summary" style="background: #6c757d !important;">Targets</a>
+                <a href="dc-chemical-summary.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-summary">Summary</a>
+                <a href="dc-chemical-target.php" class="btn-summary" style="background: #6c757d !important;">Targets</a>
                 <button type="button" class="btn-print" onclick="window.print()">Print</button>
             </form>
 
@@ -269,7 +269,7 @@ include 'sidebar.php';
                     <div class="chemical-sheet">
 
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;">
-                            <h2 style="font-size: 18px; font-weight: 700; color: #1e293b; margin: 0;">PLDC Chemical Consumption Report</h2>
+                            <h2 style="font-size: 18px; font-weight: 700; color: #1e293b; margin: 0;">DC Chemical Consumption Report</h2>
                             <?php if (!$sheet['is_fallback']): ?>
                                 <span style="font-family: monospace; font-weight: 700; font-size: 12px; background: #e2e8f0; color: #475569; padding: 3px 8px; border-radius: 4px; border: 1px solid #cbd5e1;">Token: <?= htmlspecialchars($sheet['token_id']) ?></span>
                             <?php endif; ?>

@@ -12,7 +12,7 @@ $selectedYear = intval($selectedYear);
 // Get number of days in selected month
 $daysInMonth = cal_days_in_month(CAL_GREGORIAN, intval($selectedMonth), $selectedYear);
 
-// Fetch active shifts for this station - PLDC
+// Fetch active shifts for this station - DC
 $shiftsStmt = $pdo->prepare("
     SELECT id AS shift_id, shift AS shift_name 
     FROM dc_mcc_machine_shifts 
@@ -22,7 +22,7 @@ $shiftsStmt = $pdo->prepare("
 $shiftsStmt->execute(['station_id' => $stationId]);
 $shiftsList = $shiftsStmt->fetchAll();
 
-// Fetch active machine parameters for this station - PLDC
+// Fetch active machine parameters for this station - DC
 $machinesStmt = $pdo->prepare("
     SELECT id AS machine_id, machine_no, machine_name 
     FROM dc_mcc_machine_param 
@@ -32,7 +32,7 @@ $machinesStmt = $pdo->prepare("
 $machinesStmt->execute(['station_id' => $stationId]);
 $machinesList = $machinesStmt->fetchAll();
 
-// Fetch targets for selected month - PLDC
+// Fetch targets for selected month - DC
 $targetMonthDate = "$selectedYear-$selectedMonth-01";
 $targetsStmt = $pdo->prepare("
     SELECT machine_id, shift_id, nominated_area, penalty_amount 
@@ -53,7 +53,7 @@ foreach ($targetsRows as $row) {
     ];
 }
 
-// Fetch all report data for the selected month - PLDC
+// Fetch all report data for the selected month - DC
 $reportsStmt = $pdo->prepare("
     SELECT report_date, parameter_id AS machine_id, shift_id, used_status 
     FROM dc_mcc_machine_report 
@@ -137,7 +137,7 @@ for ($d = 1; $d <= $daysInMonth; $d++) {
 
 $avgMonthlyScore = $daysInMonth > 0 ? ($sumDailyScores / $daysInMonth) : 100.0;
 
-$pageTitle = 'Monthly Machine Summary Report (PLDC) | MCC';
+$pageTitle = 'Monthly Machine Summary Report (DC) | MCC';
 
 $extraStyles = "
 .summary-sheet-frame {
@@ -243,7 +243,7 @@ include 'sidebar.php';
             
             <form class="report-filter no-print" method="GET" style="display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1px solid #e2e8f0; padding: 12px 20px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); flex-wrap: wrap; gap: 15px;">
                 <div style="display: flex; gap: 10px;">
-                    <a href="pldc-machine.php" class="btn-print" style="background: #1987C6 !important; color: white !important; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; border: none; height: 38px;">
+                    <a href="dc-machine.php" class="btn-print" style="background: #1987C6 !important; color: white !important; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; border: none; height: 38px;">
                         <i class="bi bi-arrow-left me-1"></i> Back
                     </a>
                     <button type="button" class="btn-print" onclick="window.print()" style="background: #1987C6 !important; color: white !important; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; border: none; height: 38px;">

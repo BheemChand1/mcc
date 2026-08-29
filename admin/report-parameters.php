@@ -68,26 +68,26 @@ $categories = [
         'shift_table' => 'mcc_intensive_machine_shifts',
         'required_report_keys' => ['int_mach']
     ],
-    'pldc_scorecard' => [
-        'label' => 'PLDC Cleanliness Scorecard',
+    'dc_scorecard' => [
+        'label' => 'DC Cleanliness Scorecard',
         'type' => 'flat_scorecard_with_shifts',
         'table' => 'dc_mcc_param',
         'shift_table' => 'dc_mcc_shifts',
-        'required_report_keys' => ['pldc_audit']
+        'required_report_keys' => ['dc_audit']
     ],
-    'pldc_chemical' => [
-        'label' => 'PLDC Chemical Report',
+    'dc_chemical' => [
+        'label' => 'DC Chemical Report',
         'type' => 'chemical_with_shifts',
         'table' => 'dc_mcc_chemical_param',
         'shift_table' => 'dc_mcc_chemical_shifts',
-        'required_report_keys' => ['pldc_chem']
+        'required_report_keys' => ['dc_chem']
     ],
-    'pldc_machine' => [
-        'label' => 'PLDC Machine Log',
+    'dc_machine' => [
+        'label' => 'DC Machine Log',
         'type' => 'machine_with_shifts',
         'table' => 'dc_mcc_machine_param',
         'shift_table' => 'dc_mcc_machine_shifts',
-        'required_report_keys' => ['pldc_mach']
+        'required_report_keys' => ['dc_mach']
     ],
     'prt_scorecard' => [
         'label' => 'PRT Cleanliness Scorecard',
@@ -851,7 +851,7 @@ include 'sidebar.php';
                     </table>
                   </div>
                 
-                <!-- 2. Flat scorecard view (PLDC Scorecard) -->
+                <!-- 2. Flat scorecard view (DC Scorecard) -->
                 <?php elseif ($meta['type'] === 'flat_scorecard_with_shifts'): ?>
                   <div class="table-responsive">
                     <table class="table table-hover table-striped align-middle mb-0">
@@ -870,7 +870,7 @@ include 'sidebar.php';
                         <?php else: ?>
                           <?php foreach ($flat_items as $item): ?>
                             <tr>
-                              <td class="ps-3"><strong>PLDC-<?php echo $item['id']; ?></strong></td>
+                              <td class="ps-3"><strong>DC-<?php echo $item['id']; ?></strong></td>
                               <td><strong><?php echo htmlspecialchars($item['parameter_name']); ?></strong></td>
                               <td class="text-center">
                                 <a href="report-parameters.php?station_id=<?php echo $station_id; ?>&type=<?php echo $module_type; ?>&action=edit&edit_id=<?php echo $item['id']; ?>" class="btn btn-sm btn-outline-secondary rounded-pill px-3 font-weight-bold me-1 text-uppercase" style="font-size: 0.72rem; text-decoration: none;">Edit</a>
@@ -1333,7 +1333,7 @@ include 'sidebar.php';
                 </div>
               </div>
               
-            <!-- 2. Flat Scorecard Form (PLDC Scorecard) -->
+            <!-- 2. Flat Scorecard Form (DC Scorecard) -->
             <?php elseif ($meta['type'] === 'flat_scorecard_with_shifts'): ?>
               <div class="card shadow-sm border-0">
                 <div class="card-header bg-white py-3">

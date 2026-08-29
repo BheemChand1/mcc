@@ -9,7 +9,7 @@ $selectedYear = $_GET['year'] ?? date('Y');
 $selectedMonth = str_pad($selectedMonth, 2, '0', STR_PAD_LEFT);
 $selectedYear = intval($selectedYear);
 
-// Fetch active shifts for this station (ordered by ID) - PLDC
+// Fetch active shifts for this station (ordered by ID) - DC
 $shiftsStmt = $pdo->prepare("
     SELECT id AS shift_id, shift AS shift_name 
     FROM dc_mcc_chemical_shifts 
@@ -19,7 +19,7 @@ $shiftsStmt = $pdo->prepare("
 $shiftsStmt->execute(['station_id' => $stationId]);
 $shiftsList = $shiftsStmt->fetchAll();
 
-// Fetch chemical parameters and target values for this station - PLDC
+// Fetch chemical parameters and target values for this station - DC
 $targetMonthDate = $selectedYear . "-" . $selectedMonth . "-01";
 $paramsStmt = $pdo->prepare("
     SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
@@ -35,7 +35,7 @@ $paramsStmt->execute([
 ]);
 $parametersList = $paramsStmt->fetchAll();
 
-// Fetch all reports (distinct tokens) in the selected month - PLDC
+// Fetch all reports (distinct tokens) in the selected month - DC
 $tokensStmt = $pdo->prepare("
     SELECT DISTINCT token_id, report_date 
     FROM dc_mcc_chemical_report 
@@ -69,7 +69,7 @@ foreach ($parametersList as $p) {
     }
 }
 
-// Fetch daily reports details to compute daily scores & penalties - PLDC
+// Fetch daily reports details to compute daily scores & penalties - DC
 $dailyReportStmt = $pdo->prepare("
     SELECT parameter_id, shift_id, qty_used 
     FROM dc_mcc_chemical_report 
@@ -155,7 +155,7 @@ foreach ($monthlyParamData as $pId => $data) {
 }
 $avgMonthlyScore = ($paramWithTargetCount > 0) ? ($totalAchieved / $paramWithTargetCount) : 0.0;
 
-$pageTitle = 'Monthly Chemical Summary Report (PLDC) | MCC';
+$pageTitle = 'Monthly Chemical Summary Report (DC) | MCC';
 
 $extraStyles = "
 .report-sheet-frame {
@@ -327,7 +327,7 @@ include 'sidebar.php';
             <!-- Filter Form Bar -->
             <form class="report-filter no-print" method="GET" style="display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1px solid #e2e8f0; padding: 12px 20px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
                 <div style="display: flex; gap: 10px;">
-                    <a href="pldc-chemical.php" class="btn-print" style="background: #1987C6 !important; color: white !important; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; border: none; height: 38px;">
+                    <a href="dc-chemical.php" class="btn-print" style="background: #1987C6 !important; color: white !important; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; border: none; height: 38px;">
                         <i class="bi bi-arrow-left me-1"></i> Back
                     </a>
                     <button type="button" class="btn-print" onclick="window.print()" style="background: #1987C6 !important; color: white !important; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; border: none; height: 38px;">
@@ -373,7 +373,7 @@ include 'sidebar.php';
                     </h1>
                     
                     <div style="border: 1px solid #000; padding: 6px 20px; display: inline-block; font-weight: bold; font-size: 14px; margin-top: 10px; margin-bottom: 10px;">
-                        MCC - PLDC Chemical Report
+                        MCC - DC Chemical Report
                     </div>
                 </div>
 

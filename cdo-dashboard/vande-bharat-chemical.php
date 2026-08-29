@@ -282,11 +282,12 @@ include 'sidebar.php';
             <div class="report-wrap">
                 <?php if ($sheetsData[0]['is_fallback']): ?>
                     <div class="alert alert-warning no-print" style="margin: 0 0 20px 0; border-radius: 8px; border: 1px solid #ffeeba; background-color: #fff3cd; color: #856404; padding: 12px 20px;">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i> No chemical reports found for the selected date range. Displaying empty template scorecard.
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> No chemical reports found for the selected date range.
                     </div>
                 <?php endif; ?>
 
                 <?php foreach ($sheetsData as $sheet): ?>
+                    <?php if ($sheet['is_fallback']) continue; ?>
                     <div class="chemical-sheet">
 
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;">

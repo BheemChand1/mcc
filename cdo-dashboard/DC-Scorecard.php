@@ -97,7 +97,7 @@ if ($isFallback) {
                 }
             }
         }
-        $averageScore = $totalRatingCount > 0 ? round(($totalScoreSum / ($totalRatingCount * 10)) * 100, 1) : 0;
+        $averageScore = $totalRatingCount > 0 ? round(($totalScoreSum / ($totalRatingCount * 3)) * 100, 1) : 0;
 
         $sheets[] = [
             'token_id' => $tokenId,
@@ -257,16 +257,30 @@ include 'sidebar.php';
                                         <?php foreach ($shiftsList as $shift): ?>
                                             <th style="width:150px"><?= htmlspecialchars($shift['shift']) ?></th>
                                         <?php endforeach; ?>
+                                        <th style="width:120px">Average Score</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($paramsList)): ?>
                                         <tr>
-                                            <td colspan="<?= 2 + count($shiftsList) ?>" class="text-center">No parameters found.</td>
+                                            <td colspan="<?= 3 + count($shiftsList) ?>" class="text-center">No parameters found.</td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($paramsList as $index => $param): 
                                             $pId = $param['id'];
+                                            
+                                            // Compute row average score
+                                            $rowScoreSum = 0;
+                                            $rowRatingCount = 0;
+                                            foreach ($shiftsList as $shift) {
+                                                $sId = $shift['id'];
+                                                $ratingVal = $sheet['reports_map'][$pId][$sId] ?? null;
+                                                if ($ratingVal !== null && $ratingVal !== '' && $ratingVal !== '-') {
+                                                    $rowScoreSum += intval($ratingVal);
+                                                    $rowRatingCount++;
+                                                }
+                                            }
+                                            $rowAvg = $rowRatingCount > 0 ? round(($rowScoreSum / ($rowRatingCount * 3)) * 100, 1) . '%' : '-';
                                         ?>
                                         <tr>
                                             <td><?= $index + 1 ?></td>
@@ -277,6 +291,7 @@ include 'sidebar.php';
                                             ?>
                                                 <td><?= htmlspecialchars($rating) ?></td>
                                             <?php endforeach; ?>
+                                            <td><strong><?= $rowAvg ?></strong></td>
                                         </tr>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
@@ -285,7 +300,7 @@ include 'sidebar.php';
                         </div>
 
                         <div class="report-info">
-                            <strong>Scoring Guidelines:</strong> 10 (Excellent), 8 (Very Good), 6 (Good), 4 (Average), 0 (Bad). 
+                            <strong>Scoring Guidelines:</strong> Very Good (3), Satisfactory (2), Poor (1), Not attended (0). 
                             Aim for 90-100%. Scores below 70% are not acceptable for payment.
                         </div>
 

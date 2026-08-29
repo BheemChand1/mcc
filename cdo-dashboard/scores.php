@@ -1068,7 +1068,7 @@ function getPLDCCleaningScore($stationId, $year, $month) {
                     }
                 }
             }
-            $averageScore = $totalRatingCount > 0 ? ($totalScoreSum / ($totalRatingCount * 10)) * 100.0 : 0.0;
+            $averageScore = $totalRatingCount > 0 ? ($totalScoreSum / ($totalRatingCount * 3)) * 100.0 : 0.0;
             $totalSheetsScore += $averageScore;
             $sheetsCount++;
         }

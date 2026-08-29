@@ -194,8 +194,10 @@ $has_normal_any   = in_array(1, $active_report_ids) && ($has_normal_audit || $ha
 $has_int_audit        = in_array('intensive-report.php', $active_subreport_urls);
 $has_int_chem         = in_array('intensive-chemical-report.php', $active_subreport_urls);
 $has_int_mach         = in_array('machine-report-intensive.php', $active_subreport_urls);
-$has_int_scorecard_2  = in_array('intensive_scorecard_2.php', $active_subreport_urls);
 $has_int_pantry       = in_array('intensive_pantry_scorecard.php', $active_subreport_urls);
+$has_pantry_chem      = in_array('pantry-chemical.php', $active_subreport_urls);
+$has_pantry_mach      = in_array('pantry-machine.php', $active_subreport_urls);
+$has_pantry_any       = in_array(5, $active_report_ids) && ($has_int_pantry || $has_pantry_chem || $has_pantry_mach);
 $has_int_any          = in_array(2, $active_report_ids) && ($has_int_audit || $has_int_chem || $has_int_mach || $has_int_scorecard_2);
 
 $has_dc_audit   = in_array('DC-Scorecard.php', $active_subreport_urls);
@@ -331,9 +333,9 @@ $has_photo_report = in_array(10, $active_report_ids) && in_array('photo-report.p
         <?php endif; ?>
 
         <!-- Pantry Car Dropdown -->
-        <?php if ($has_int_pantry): ?>
+        <?php if ($has_pantry_any): ?>
         <?php 
-        $pantryPages = ['intensive_pantry_scorecard.php', 'pantry_scorecard.php', 'intensive_pantry_summary.php'];
+        $pantryPages = ['intensive_pantry_scorecard.php', 'pantry_scorecard.php', 'intensive_pantry_summary.php', 'pantry-chemical.php', 'pantry-machine.php'];
         $isPantryActive = in_array($currentPage, $pantryPages);
         ?>
         <li class="nav-item <?= $isPantryActive ? 'menu-open' : '' ?>">
@@ -345,9 +347,10 @@ $has_photo_report = in_array(10, $active_report_ids) && in_array('photo-report.p
             </p>
           </a>
           <ul class="nav nav-treeview ms-3">
+            <?php if ($has_int_pantry): ?>
             <li class="nav-item">
               <a href="intensive_pantry_scorecard.php" class="nav-link <?= in_array($currentPage, ['intensive_pantry_scorecard.php', 'pantry_scorecard.php']) ? 'active' : '' ?>">
-                <p><?= htmlspecialchars($subreport_names[13]) ?></p>
+                <p><?= htmlspecialchars($subreport_names[13] ?? 'Pantry Car Score Card') ?></p>
               </a>
             </li>
             <li class="nav-item">
@@ -355,6 +358,21 @@ $has_photo_report = in_array(10, $active_report_ids) && in_array('photo-report.p
                 <p>Pantry Summary</p>
               </a>
             </li>
+            <?php endif; ?>
+            <?php if ($has_pantry_chem): ?>
+            <li class="nav-item">
+              <a href="pantry-chemical.php" class="nav-link <?= ($currentPage == 'pantry-chemical.php') ? 'active' : '' ?>">
+                <p>Chemical Report</p>
+              </a>
+            </li>
+            <?php endif; ?>
+            <?php if ($has_pantry_mach): ?>
+            <li class="nav-item">
+              <a href="pantry-machine.php" class="nav-link <?= ($currentPage == 'pantry-machine.php') ? 'active' : '' ?>">
+                <p>Machine Report</p>
+              </a>
+            </li>
+            <?php endif; ?>
           </ul>
         </li>
         <?php endif; ?>

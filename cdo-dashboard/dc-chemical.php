@@ -128,25 +128,6 @@ if (!empty($tokensList)) {
             'is_fallback' => false
         ];
     }
-} else {
-    $targetMonth = date('Y-m-01', strtotime($fromDate));
-    $paramsStmt->execute([
-        'station_id_target' => $stationId,
-        'station_id_param' => $stationId,
-        'target_month' => $targetMonth
-    ]);
-    $fallbackParams = $paramsStmt->fetchAll();
-
-    $sheetsData[] = [
-        'token_id' => '',
-        'report_date' => $fromDate,
-        'report_data' => [],
-        'auditors_by_shift' => [],
-        'chemical_score' => 100,
-        'total_penalty' => 0,
-        'parameters_list' => $fallbackParams,
-        'is_fallback' => true
-    ];
 }
 
 $pageTitle = 'Consumables Usage Report | MCC';
@@ -259,9 +240,9 @@ include 'sidebar.php';
             </form>
 
             <div class="report-wrap">
-                <?php if ($sheetsData[0]['is_fallback']): ?>
+                <?php if (empty($sheetsData)): ?>
                     <div class="alert alert-warning no-print" style="margin: 0 0 20px 0; border-radius: 8px; border: 1px solid #ffeeba; background-color: #fff3cd; color: #856404; padding: 12px 20px;">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i> No chemical reports found for the selected date range. Displaying empty template scorecard.
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> No chemical reports found for the selected date range.
                     </div>
                 <?php endif; ?>
 

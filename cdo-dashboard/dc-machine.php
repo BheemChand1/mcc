@@ -112,9 +112,9 @@ include 'sidebar.php';
             <div class="report-wrap">
                 <?php if ($isFallback): ?>
                     <div class="alert alert-warning no-print" style="margin: 0 0 20px 0; border-radius: 8px; border: 1px solid #ffeeba; background-color: #fff3cd; color: #856404; padding: 12px 20px;">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i> No daily machine reports found for the selected date. Displaying fallback/template values.
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> No daily machine reports found for the selected date.
                     </div>
-                <?php endif; ?>
+                <?php else: ?>
 
                 <div class="report-frame">
                     <div class="report-header">
@@ -214,6 +214,7 @@ include 'sidebar.php';
                         </div>
                     </div>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>

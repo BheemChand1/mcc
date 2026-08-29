@@ -42,11 +42,11 @@ try {
     $shiftsStmt->execute(['station_id' => $stationId]);
     $shifts = $shiftsStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Calculate start time and end time for the shifts: 6 AM on the given date to 7 AM on the next day
-    $startTime = $reportDate . ' 06:00:00';
-    $endTime = date('Y-m-d', strtotime($reportDate . ' +1 day')) . ' 07:00:00';
+    // Calculate start time and end time for the shifts: 7 AM yesterday to 6 AM today
+    $startTime = date('Y-m-d', strtotime($reportDate . ' -1 day')) . ' 07:00:00';
+    $endTime = $reportDate . ' 06:00:00';
 
-    // 3. Fetch filled count per shift for the given date range (6 AM to 7 AM next day)
+    // 3. Fetch filled count per shift for the given date range (yesterday 7 AM to today 6 AM)
     $filledStmt = $pdo->prepare("
         SELECT shift_id, COUNT(*) AS filled_count 
         FROM dc_mcc_report 
@@ -68,14 +68,14 @@ try {
         $filledByShift[intval($row['shift_id'])] = intval($row['filled_count']);
     }
 
-    // 4. Determine status (1 if all parameters filled, else 0)
+    // 4. Determine status (1 if at least one parameter is filled, else 0)
     $updatedShifts = [];
     foreach ($shifts as $s) {
         $sId = intval($s['shift_id']);
         $filledCount = $filledByShift[$sId] ?? 0;
         
-        // If total parameters is > 0 and we filled all, status is 1. Otherwise 0.
-        $status = ($totalParams > 0 && $filledCount === $totalParams) ? 1 : 0;
+        // If one or more parameters are available, status is 1. Otherwise 0.
+        $status = ($filledCount > 0) ? 1 : 0;
         
         $s['status'] = $status;
         $updatedShifts[] = $s;

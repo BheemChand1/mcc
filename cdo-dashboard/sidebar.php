@@ -205,7 +205,8 @@ $has_pldc_any     = in_array(3, $active_report_ids) && ($has_pldc_audit || $has_
 
 $has_prt_audit    = in_array('Platform-Return-TrainsScorecard.php', $active_subreport_urls);
 $has_prt_chem     = in_array('Platform-Return-Chemical.php', $active_subreport_urls);
-$has_prt_any      = in_array(4, $active_report_ids) && ($has_prt_audit || $has_prt_chem);
+$has_prt_mach     = in_array('Platform-Return-Machine.php', $active_subreport_urls);
+$has_prt_any      = in_array(4, $active_report_ids) && ($has_prt_audit || $has_prt_chem || $has_prt_mach);
 
 $has_sur_pit      = in_array('surprise-pit-office.php', $active_subreport_urls);
 $has_sur_pf       = in_array('surprise-pf-trains.php', $active_subreport_urls);
@@ -401,7 +402,7 @@ $has_photo_report = in_array(10, $active_report_ids) && in_array('photo-report.p
         <!-- PRT Cleaning Dropdown -->
         <?php if ($has_prt_any): ?>
         <?php 
-        $prtPages = ['Platform-Return-TrainsScorecard.php', 'Platform-Return-Chemical.php'];
+        $prtPages = ['Platform-Return-TrainsScorecard.php', 'Platform-Return-Chemical.php', 'Platform-Return-Machine.php'];
         $isPrtActive = in_array($currentPage, $prtPages);
         ?>
         <li class="nav-item <?= $isPrtActive ? 'menu-open' : '' ?>">
@@ -424,6 +425,13 @@ $has_photo_report = in_array(10, $active_report_ids) && in_array('photo-report.p
             <li class="nav-item">
               <a href="Platform-Return-Chemical.php" class="nav-link <?= ($currentPage == 'Platform-Return-Chemical.php') ? 'active' : '' ?>">
                 <p><?= htmlspecialchars($subreport_names[11]) ?></p>
+              </a>
+            </li>
+            <?php endif; ?>
+            <?php if ($has_prt_mach): ?>
+            <li class="nav-item">
+              <a href="Platform-Return-Machine.php" class="nav-link <?= ($currentPage == 'Platform-Return-Machine.php') ? 'active' : '' ?>">
+                <p><?= htmlspecialchars($subreport_names[22]) ?></p>
               </a>
             </li>
             <?php endif; ?>

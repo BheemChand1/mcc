@@ -42,11 +42,11 @@ try {
     $shiftsStmt->execute(['station_id' => $stationId]);
     $shifts = $shiftsStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Calculate start time and end time for the shifts: 7 AM yesterday to 6 AM today
-    $startTime = date('Y-m-d', strtotime($reportDate . ' -1 day')) . ' 07:00:00';
-    $endTime = $reportDate . ' 06:00:00';
+    // Calculate start time and end time for the shifts: 6 AM today to 7 AM next day
+    $startTime = $reportDate . ' 06:00:00';
+    $endTime = date('Y-m-d', strtotime($reportDate . ' +1 day')) . ' 07:00:00';
 
-    // 3. Fetch filled count per shift for the given date range (yesterday 7 AM to today 6 AM)
+    // 3. Fetch filled count per shift for the given date range (today 6 AM to next day 7 AM)
     $filledStmt = $pdo->prepare("
         SELECT shift_id, COUNT(*) AS filled_count 
         FROM dc_mcc_report 

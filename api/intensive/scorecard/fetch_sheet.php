@@ -67,7 +67,7 @@ try {
             $statusRow = $statusStmt->fetch(PDO::FETCH_ASSOC);
             $totalRows = intval($statusRow['total_rows'] ?? 0);
             $emptyRows = intval($statusRow['empty_rows'] ?? 0);
-            $trainStatus = ($totalRows > 0 && $emptyRows === 0) ? "done" : "pending";
+            $trainStatus = ($totalRows > 0 && $emptyRows === 0) ? 1 : 0;
 
             $sheets[] = [
                 "token_id" => $tokenItem['token_id'],

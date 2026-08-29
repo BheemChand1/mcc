@@ -54,7 +54,7 @@ try {
         $statusStmt = $pdo->prepare("
             SELECT 
                 COUNT(*) AS total_rows,
-                SUM(CASE WHEN qty_used IS NULL THEN 1 ELSE 0 END) AS empty_rows
+                SUM(CASE WHEN qty_used IS NULL OR qty_used = '' THEN 1 ELSE 0 END) AS empty_rows
             FROM mcc_normal_chemical_report
             WHERE token_id = :token_id
         ");
@@ -67,7 +67,7 @@ try {
             $statusRow = $statusStmt->fetch(PDO::FETCH_ASSOC);
             $totalRows = intval($statusRow['total_rows'] ?? 0);
             $emptyRows = intval($statusRow['empty_rows'] ?? 0);
-            $trainStatus = ($totalRows > 0 && $emptyRows === 0) ? "done" : "pending";
+            $trainStatus = ($totalRows > 0 && $emptyRows === 0) ? 1 : 0;
 
             $sheets[] = [
                 "token_id" => $tokenItem['token_id'],

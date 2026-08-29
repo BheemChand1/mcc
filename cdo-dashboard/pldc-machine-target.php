@@ -14,7 +14,7 @@ $targetMonthDate = $selectedYear . "-" . $selectedMonth . "-01";
 // Fetch active shifts for this station - PLDC
 $shiftsStmt = $pdo->prepare("
     SELECT id AS shift_id, shift AS shift_name 
-    FROM mcc_pldc_machine_shifts 
+    FROM dc_mcc_machine_shifts 
     WHERE station_id = :station_id
     ORDER BY id ASC
 ");
@@ -24,7 +24,7 @@ $shiftsList = $shiftsStmt->fetchAll();
 // Fetch active machines for this station - PLDC
 $machinesStmt = $pdo->prepare("
     SELECT id AS machine_id, machine_no, machine_name 
-    FROM mcc_pldc_machine_param 
+    FROM dc_mcc_machine_param 
     WHERE station_id = :station_id
     ORDER BY id ASC
 ");
@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
         try {
             // Delete existing machine targets for this station and month - PLDC
             $deleteStmt = $pdo->prepare("
-                DELETE FROM mcc_pldc_machine_target 
+                DELETE FROM dc_mcc_machine_target 
                 WHERE station_id = :station_id AND target_month = :target_month
             ");
             $deleteStmt->execute([
@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
             
             // Insert updated machine targets - PLDC
             $insertStmt = $pdo->prepare("
-                INSERT INTO mcc_pldc_machine_target 
+                INSERT INTO dc_mcc_machine_target 
                 (station_id, machine_id, target_month, shift_id, nominated_area, penalty_amount) 
                 VALUES (:station_id, :machine_id, :target_month, :shift_id, :nominated_area, :penalty_amount)
             ");
@@ -96,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
 // Fetch existing targets for the selected month to populate inputs - PLDC
 $existingTargetsStmt = $pdo->prepare("
     SELECT machine_id, shift_id, nominated_area, penalty_amount 
-    FROM mcc_pldc_machine_target 
+    FROM dc_mcc_machine_target 
     WHERE station_id = :station_id AND target_month = :target_month
 ");
 $existingTargetsStmt->execute([

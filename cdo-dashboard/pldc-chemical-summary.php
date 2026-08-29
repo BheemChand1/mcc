@@ -12,7 +12,7 @@ $selectedYear = intval($selectedYear);
 // Fetch active shifts for this station (ordered by ID) - PLDC
 $shiftsStmt = $pdo->prepare("
     SELECT id AS shift_id, shift AS shift_name 
-    FROM mcc_pldc_chemical_shifts 
+    FROM dc_mcc_chemical_shifts 
     WHERE station_id = :station_id
     ORDER BY id ASC
 ");
@@ -23,8 +23,8 @@ $shiftsList = $shiftsStmt->fetchAll();
 $targetMonthDate = $selectedYear . "-" . $selectedMonth . "-01";
 $paramsStmt = $pdo->prepare("
     SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
-    FROM mcc_pldc_chemical_param p
-    LEFT JOIN mcc_pldc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.target_month = :target_month
+    FROM dc_mcc_chemical_param p
+    LEFT JOIN dc_mcc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.target_month = :target_month
     WHERE p.station_id = :station_id_param
     ORDER BY p.id ASC
 ");
@@ -38,7 +38,7 @@ $parametersList = $paramsStmt->fetchAll();
 // Fetch all reports (distinct tokens) in the selected month - PLDC
 $tokensStmt = $pdo->prepare("
     SELECT DISTINCT token_id, report_date 
-    FROM mcc_pldc_chemical_report 
+    FROM dc_mcc_chemical_report 
     WHERE YEAR(report_date) = :year AND MONTH(report_date) = :month AND station_id = :station_id
     ORDER BY report_date ASC, token_id ASC
 ");
@@ -72,7 +72,7 @@ foreach ($parametersList as $p) {
 // Fetch daily reports details to compute daily scores & penalties - PLDC
 $dailyReportStmt = $pdo->prepare("
     SELECT parameter_id, shift_id, qty_used 
-    FROM mcc_pldc_chemical_report 
+    FROM dc_mcc_chemical_report 
     WHERE token_id = :token_id AND station_id = :station_id
 ");
 

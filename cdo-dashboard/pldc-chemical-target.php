@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_targets'])) {
         $pdo->beginTransaction();
         try {
             // Query active parameters to check update list
-            $pStmt = $pdo->prepare("SELECT id FROM mcc_pldc_chemical_param WHERE station_id = :station_id");
+            $pStmt = $pdo->prepare("SELECT id FROM dc_mcc_chemical_param WHERE station_id = :station_id");
             $pStmt->execute(['station_id' => $stationId]);
             $paramIds = $pStmt->fetchAll(PDO::FETCH_COLUMN);
 
@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_targets'])) {
 
                 // Check if target row already exists
                 $checkStmt = $pdo->prepare("
-                    SELECT id FROM mcc_pldc_chemical_target 
+                    SELECT id FROM dc_mcc_chemical_target 
                     WHERE parameter_id = :param_id AND target_month = :target_month AND station_id = :station_id
                 ");
                 $checkStmt->execute([
@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_targets'])) {
 
                 if ($existingId) {
                     $updStmt = $pdo->prepare("
-                        UPDATE mcc_pldc_chemical_target 
+                        UPDATE dc_mcc_chemical_target 
                         SET `qty(ml)` = :qty, penalty = :penalty, `penalty_qty(ml)` = :penalty_qty 
                         WHERE id = :id
                     ");
@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_targets'])) {
                     ]);
                 } else {
                     $insStmt = $pdo->prepare("
-                        INSERT INTO mcc_pldc_chemical_target (parameter_id, target_month, `qty(ml)`, penalty, `penalty_qty(ml)`, station_id) 
+                        INSERT INTO dc_mcc_chemical_target (parameter_id, target_month, `qty(ml)`, penalty, `penalty_qty(ml)`, station_id) 
                         VALUES (:param_id, :target_month, :qty, :penalty, :penalty_qty, :station_id)
                     ");
                     $insStmt->execute([
@@ -88,8 +88,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_targets'])) {
 // Fetch all active parameters and current targets for the selected month
 $paramsStmt = $pdo->prepare("
     SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
-    FROM mcc_pldc_chemical_param p
-    LEFT JOIN mcc_pldc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.target_month = :target_month
+    FROM dc_mcc_chemical_param p
+    LEFT JOIN dc_mcc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.target_month = :target_month
     WHERE p.station_id = :station_id_param
     ORDER BY p.id ASC
 ");

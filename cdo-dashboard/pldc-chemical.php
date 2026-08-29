@@ -7,7 +7,7 @@ $toDate = $_GET['to_date'] ?? date('Y-m-d');
 // Fetch all active shifts for station_id dynamically - PLDC
 $shiftsStmt = $pdo->prepare("
     SELECT id AS shift_id, shift AS shift_name 
-    FROM mcc_pldc_chemical_shifts 
+    FROM dc_mcc_chemical_shifts 
     WHERE station_id = :station_id
     ORDER BY id ASC
 ");
@@ -17,8 +17,8 @@ $shiftsList = $shiftsStmt->fetchAll();
 // Fetch all active parameters and their target values/penalties dynamically by month - PLDC
 $paramsStmt = $pdo->prepare("
     SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
-    FROM mcc_pldc_chemical_param p
-    LEFT JOIN mcc_pldc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.target_month = :target_month
+    FROM dc_mcc_chemical_param p
+    LEFT JOIN dc_mcc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.target_month = :target_month
     WHERE p.station_id = :station_id_param
     ORDER BY p.id ASC
 ");
@@ -26,7 +26,7 @@ $paramsStmt = $pdo->prepare("
 // Fetch distinct tokens in this date range and station for PLDC chemical report
 $stmt = $pdo->prepare("
     SELECT DISTINCT token_id, report_date 
-    FROM mcc_pldc_chemical_report 
+    FROM dc_mcc_chemical_report 
     WHERE report_date BETWEEN :from_date AND :to_date AND station_id = :station_id
     ORDER BY report_date DESC, token_id DESC
 ");
@@ -38,8 +38,8 @@ $sheetsData = [];
 if (!empty($tokensList)) {
     $reportStmt = $pdo->prepare("
         SELECT r.*, s.shift 
-        FROM mcc_pldc_chemical_report r
-        JOIN mcc_pldc_chemical_shifts s ON r.shift_id = s.id
+        FROM dc_mcc_chemical_report r
+        JOIN dc_mcc_chemical_shifts s ON r.shift_id = s.id
         WHERE r.token_id = :token_id AND r.station_id = :station_id
     ");
 

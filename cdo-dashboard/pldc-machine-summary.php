@@ -15,7 +15,7 @@ $daysInMonth = cal_days_in_month(CAL_GREGORIAN, intval($selectedMonth), $selecte
 // Fetch active shifts for this station - PLDC
 $shiftsStmt = $pdo->prepare("
     SELECT id AS shift_id, shift AS shift_name 
-    FROM mcc_pldc_machine_shifts 
+    FROM dc_mcc_machine_shifts 
     WHERE station_id = :station_id
     ORDER BY id ASC
 ");
@@ -25,7 +25,7 @@ $shiftsList = $shiftsStmt->fetchAll();
 // Fetch active machine parameters for this station - PLDC
 $machinesStmt = $pdo->prepare("
     SELECT id AS machine_id, machine_no, machine_name 
-    FROM mcc_pldc_machine_param 
+    FROM dc_mcc_machine_param 
     WHERE station_id = :station_id
     ORDER BY id ASC
 ");
@@ -36,7 +36,7 @@ $machinesList = $machinesStmt->fetchAll();
 $targetMonthDate = "$selectedYear-$selectedMonth-01";
 $targetsStmt = $pdo->prepare("
     SELECT machine_id, shift_id, nominated_area, penalty_amount 
-    FROM mcc_pldc_machine_target 
+    FROM dc_mcc_machine_target 
     WHERE station_id = :station_id AND target_month = :target_month
 ");
 $targetsStmt->execute([
@@ -56,7 +56,7 @@ foreach ($targetsRows as $row) {
 // Fetch all report data for the selected month - PLDC
 $reportsStmt = $pdo->prepare("
     SELECT report_date, parameter_id AS machine_id, shift_id, used_status 
-    FROM mcc_pldc_machine_report 
+    FROM dc_mcc_machine_report 
     WHERE station_id = :station_id AND YEAR(report_date) = :year AND MONTH(report_date) = :month
 ");
 $reportsStmt->execute([

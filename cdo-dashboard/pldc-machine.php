@@ -7,7 +7,7 @@ $toDate = $_GET['to_date'] ?? date('Y-m-d');
 // Fetch active shifts for this station - PLDC
 $shiftsStmt = $pdo->prepare("
     SELECT id AS shift_id, shift AS shift_name 
-    FROM mcc_pldc_machine_shifts 
+    FROM dc_mcc_machine_shifts 
     WHERE station_id = :station_id
     ORDER BY id ASC
 ");
@@ -17,7 +17,7 @@ $shiftsList = $shiftsStmt->fetchAll();
 // Fetch active machines for this station - PLDC
 $machinesStmt = $pdo->prepare("
     SELECT id AS machine_id, machine_no, machine_name 
-    FROM mcc_pldc_machine_param 
+    FROM dc_mcc_machine_param 
     WHERE station_id = :station_id
     ORDER BY id ASC
 ");
@@ -28,7 +28,7 @@ $machinesList = $machinesStmt->fetchAll();
 $targetMonthDate = date('Y-m-01', strtotime($fromDate));
 $targetsStmt = $pdo->prepare("
     SELECT machine_id, shift_id, nominated_area 
-    FROM mcc_pldc_machine_target 
+    FROM dc_mcc_machine_target 
     WHERE station_id = :station_id AND target_month = :target_month
 ");
 $targetsStmt->execute([
@@ -45,7 +45,7 @@ foreach ($targetsRows as $row) {
 // Fetch report data for selected date - PLDC
 $reportStmt = $pdo->prepare("
     SELECT parameter_id AS machine_id, shift_id, used_status 
-    FROM mcc_pldc_machine_report 
+    FROM dc_mcc_machine_report 
     WHERE station_id = :station_id AND report_date = :report_date
 ");
 $reportStmt->execute([

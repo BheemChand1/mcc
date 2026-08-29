@@ -71,22 +71,22 @@ $categories = [
     'pldc_scorecard' => [
         'label' => 'PLDC Cleanliness Scorecard',
         'type' => 'flat_scorecard_with_shifts',
-        'table' => 'mcc_pldc_param',
-        'shift_table' => 'mcc_pldc_shifts',
+        'table' => 'dc_mcc_param',
+        'shift_table' => 'dc_mcc_shifts',
         'required_report_keys' => ['pldc_audit']
     ],
     'pldc_chemical' => [
         'label' => 'PLDC Chemical Report',
         'type' => 'chemical_with_shifts',
-        'table' => 'mcc_pldc_chemical_param',
-        'shift_table' => 'mcc_pldc_chemical_shifts',
+        'table' => 'dc_mcc_chemical_param',
+        'shift_table' => 'dc_mcc_chemical_shifts',
         'required_report_keys' => ['pldc_chem']
     ],
     'pldc_machine' => [
         'label' => 'PLDC Machine Log',
         'type' => 'machine_with_shifts',
-        'table' => 'mcc_pldc_machine_param',
-        'shift_table' => 'mcc_pldc_machine_shifts',
+        'table' => 'dc_mcc_machine_param',
+        'shift_table' => 'dc_mcc_machine_shifts',
         'required_report_keys' => ['pldc_mach']
     ],
     'prt_scorecard' => [

@@ -16,7 +16,7 @@ $daysInMonth = cal_days_in_month(CAL_GREGORIAN, intval($selectedMonth), $selecte
 // Fetch active parameters and shifts
 $paramsStmt = $pdo->prepare("
     SELECT id, parameter_name 
-    FROM mcc_pldc_param 
+    FROM dc_mcc_param 
     WHERE station_id = :station_id
     ORDER BY id ASC
 ");
@@ -25,7 +25,7 @@ $paramsList = $paramsStmt->fetchAll();
 
 $shiftsStmt = $pdo->prepare("
     SELECT id, shift 
-    FROM mcc_pldc_shifts 
+    FROM dc_mcc_shifts 
     WHERE station_id = :station_id
     ORDER BY id ASC
 ");
@@ -35,7 +35,7 @@ $shiftsList = $shiftsStmt->fetchAll();
 // Fetch distinct tokens in selected month
 $stmt = $pdo->prepare("
     SELECT DISTINCT token_id, report_date 
-    FROM mcc_pldc_report 
+    FROM dc_mcc_report 
     WHERE station_id = :station_id AND report_date BETWEEN :start_date AND :end_date 
     ORDER BY report_date ASC, token_id ASC
 ");
@@ -46,7 +46,7 @@ $sheets = [];
 
 $reportStmt = $pdo->prepare("
     SELECT parameter_id, shift_id, rating 
-    FROM mcc_pldc_report 
+    FROM dc_mcc_report 
     WHERE station_id = :station_id AND token_id = :token_id
 ");
 

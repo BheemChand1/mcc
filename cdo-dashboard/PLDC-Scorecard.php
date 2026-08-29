@@ -7,7 +7,7 @@ $toDate = $_GET['to_date'] ?? date('Y-m-d');
 // Fetch distinct tokens in date range
 $tokensStmt = $pdo->prepare("
     SELECT DISTINCT token_id, report_date 
-    FROM mcc_pldc_report 
+    FROM dc_mcc_report 
     WHERE station_id = :station_id AND report_date BETWEEN :from_date AND :to_date
     ORDER BY report_date DESC, token_id DESC
 ");
@@ -21,7 +21,7 @@ $tokens = $tokensStmt->fetchAll();
 // Fetch active parameters and shifts
 $paramsStmt = $pdo->prepare("
     SELECT id, parameter_name 
-    FROM mcc_pldc_param 
+    FROM dc_mcc_param 
     WHERE station_id = :station_id
     ORDER BY id ASC
 ");
@@ -29,7 +29,7 @@ $paramsStmt->execute(['station_id' => $stationId]);
 $paramsList = $paramsStmt->fetchAll();
 $shiftsStmt = $pdo->prepare("
     SELECT id, shift 
-    FROM mcc_pldc_shifts 
+    FROM dc_mcc_shifts 
     WHERE station_id = :station_id
     ORDER BY id ASC
 ");
@@ -65,7 +65,7 @@ if ($isFallback) {
     // Fetch reports for each token
     $reportStmt = $pdo->prepare("
         SELECT parameter_id, shift_id, rating 
-        FROM mcc_pldc_report 
+        FROM dc_mcc_report 
         WHERE station_id = :station_id AND token_id = :token_id
     ");
 

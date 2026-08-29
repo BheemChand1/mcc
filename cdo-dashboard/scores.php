@@ -1015,11 +1015,11 @@ function getPLDCCleaningScore($stationId, $year, $month) {
     $endDate = date('Y-m-t', strtotime($startDate));
 
     try {
-        $paramsStmt = $pdo->prepare("SELECT id FROM mcc_pldc_param WHERE station_id = :station_id");
+        $paramsStmt = $pdo->prepare("SELECT id FROM dc_mcc_param WHERE station_id = :station_id");
         $paramsStmt->execute(['station_id' => $stationId]);
         $paramsList = $paramsStmt->fetchAll(PDO::FETCH_COLUMN);
 
-        $shiftsStmt = $pdo->prepare("SELECT id FROM mcc_pldc_shifts WHERE station_id = :station_id");
+        $shiftsStmt = $pdo->prepare("SELECT id FROM dc_mcc_shifts WHERE station_id = :station_id");
         $shiftsStmt->execute(['station_id' => $stationId]);
         $shiftsList = $shiftsStmt->fetchAll(PDO::FETCH_COLUMN);
 
@@ -1029,7 +1029,7 @@ function getPLDCCleaningScore($stationId, $year, $month) {
 
         $stmt = $pdo->prepare("
             SELECT DISTINCT token_id, report_date 
-            FROM mcc_pldc_report 
+            FROM dc_mcc_report 
             WHERE station_id = :station_id AND report_date BETWEEN :start_date AND :end_date
         ");
         $stmt->execute(['station_id' => $stationId, 'start_date' => $startDate, 'end_date' => $endDate]);
@@ -1041,7 +1041,7 @@ function getPLDCCleaningScore($stationId, $year, $month) {
 
         $reportStmt = $pdo->prepare("
             SELECT parameter_id, shift_id, rating 
-            FROM mcc_pldc_report 
+            FROM dc_mcc_report 
             WHERE station_id = :station_id AND token_id = :token_id
         ");
 
@@ -1210,8 +1210,8 @@ function getPLDCChemicalSummary($stationId, $year, $month) {
     try {
         $paramsStmt = $pdo->prepare("
             SELECT p.id AS parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
-            FROM mcc_pldc_chemical_param p
-            LEFT JOIN mcc_pldc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.target_month = :target_month
+            FROM dc_mcc_chemical_param p
+            LEFT JOIN dc_mcc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.target_month = :target_month
             WHERE p.station_id = :station_id_param
         ");
         $paramsStmt->execute([
@@ -1224,7 +1224,7 @@ function getPLDCChemicalSummary($stationId, $year, $month) {
 
         $tokensStmt = $pdo->prepare("
             SELECT DISTINCT token_id, report_date 
-            FROM mcc_pldc_chemical_report 
+            FROM dc_mcc_chemical_report 
             WHERE YEAR(report_date) = :year AND MONTH(report_date) = :month AND station_id = :station_id
         ");
         $tokensStmt->execute(['year' => $year, 'month' => $month, 'station_id' => $stationId]);
@@ -1233,7 +1233,7 @@ function getPLDCChemicalSummary($stationId, $year, $month) {
 
         $logsStmt = $pdo->prepare("
             SELECT token_id, parameter_id, SUM(qty_used) as total_qty
-            FROM mcc_pldc_chemical_report
+            FROM dc_mcc_chemical_report
             WHERE station_id = :station_id AND MONTH(report_date) = :month AND YEAR(report_date) = :year
             GROUP BY token_id, parameter_id
         ");
@@ -1519,11 +1519,11 @@ function getPLDCMachineSummary($stationId, $year, $month) {
     $daysInMonth = cal_days_in_month(CAL_GREGORIAN, intval($month), intval($year));
 
     try {
-        $machStmt = $pdo->prepare("SELECT id FROM mcc_pldc_machine_param WHERE station_id = :station_id");
+        $machStmt = $pdo->prepare("SELECT id FROM dc_mcc_machine_param WHERE station_id = :station_id");
         $machStmt->execute(['station_id' => $stationId]);
         $machinesList = $machStmt->fetchAll(PDO::FETCH_COLUMN);
 
-        $shiftStmt = $pdo->prepare("SELECT id FROM mcc_pldc_machine_shifts WHERE station_id = :station_id");
+        $shiftStmt = $pdo->prepare("SELECT id FROM dc_mcc_machine_shifts WHERE station_id = :station_id");
         $shiftStmt->execute(['station_id' => $stationId]);
         $shiftsList = $shiftStmt->fetchAll(PDO::FETCH_COLUMN);
 
@@ -1532,7 +1532,7 @@ function getPLDCMachineSummary($stationId, $year, $month) {
         // Fetch targets
         $targetsMap = [];
         $targetsStmt = $pdo->prepare("
-            SELECT machine_id, shift_id, nominated_area, penalty_amount FROM mcc_pldc_machine_target 
+            SELECT machine_id, shift_id, nominated_area, penalty_amount FROM dc_mcc_machine_target 
             WHERE station_id = :station_id AND target_month = :target_month
         ");
         $targetsStmt->execute(['station_id' => $stationId, 'target_month' => "$year-$month-01"]);
@@ -1545,7 +1545,7 @@ function getPLDCMachineSummary($stationId, $year, $month) {
 
         // Fetch reports
         $reportsStmt = $pdo->prepare("
-            SELECT report_date, parameter_id AS machine_id, shift_id, used_status FROM mcc_pldc_machine_report 
+            SELECT report_date, parameter_id AS machine_id, shift_id, used_status FROM dc_mcc_machine_report 
             WHERE station_id = :station_id AND YEAR(report_date) = :year AND MONTH(report_date) = :month
         ");
         $reportsStmt->execute(['station_id' => $stationId, 'year' => $year, 'month' => intval($month)]);

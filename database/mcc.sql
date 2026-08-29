@@ -2883,10 +2883,10 @@ INSERT INTO `mcc_photo_report` (`id`, `station_id`, `report_date`, `before_photo
 -- --------------------------------------------------------
 
 --
--- Table structure for table `mcc_pldc_chemical_param`
+-- Table structure for table `dc_mcc_chemical_param`
 --
 
-CREATE TABLE `mcc_pldc_chemical_param` (
+CREATE TABLE `dc_mcc_chemical_param` (
   `id` int(11) NOT NULL,
   `name` varchar(255) NOT NULL,
   `units` varchar(100) DEFAULT NULL,
@@ -2897,10 +2897,10 @@ CREATE TABLE `mcc_pldc_chemical_param` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `mcc_pldc_chemical_param`
+-- Dumping data for table `dc_mcc_chemical_param`
 --
 
-INSERT INTO `mcc_pldc_chemical_param` (`id`, `name`, `units`, `station_id`, `created_at`, `updated_at`) VALUES
+INSERT INTO `dc_mcc_chemical_param` (`id`, `name`, `units`, `station_id`, `created_at`, `updated_at`) VALUES
 (1, 'Brooms (Bamboo Stick)', 'Nos.', 1, '2026-06-06 11:13:48', '2026-06-06 11:13:48'),
 (2, 'Bleaching Power (10 kg per pit per two day)', 'Nos.', 1, '2026-06-06 11:13:48', '2026-06-06 11:13:48'),
 (3, 'Iron Brush', 'Nos.', 1, '2026-06-06 11:13:48', '2026-06-06 11:13:48'),
@@ -2925,10 +2925,10 @@ INSERT INTO `mcc_pldc_chemical_param` (`id`, `name`, `units`, `station_id`, `cre
 -- --------------------------------------------------------
 
 --
--- Table structure for table `mcc_pldc_chemical_report`
+-- Table structure for table `dc_mcc_chemical_report`
 --
 
-CREATE TABLE `mcc_pldc_chemical_report` (
+CREATE TABLE `dc_mcc_chemical_report` (
   `id` int(11) NOT NULL,
   `parameter_id` int(11) NOT NULL,
   `qty_used` decimal(10,2) DEFAULT NULL,
@@ -2942,10 +2942,10 @@ CREATE TABLE `mcc_pldc_chemical_report` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `mcc_pldc_chemical_report`
+-- Dumping data for table `dc_mcc_chemical_report`
 --
 
-INSERT INTO `mcc_pldc_chemical_report` (`id`, `parameter_id`, `qty_used`, `auditor_name`, `station_id`, `token_id`, `report_date`, `created_at`, `updated_at`) VALUES
+INSERT INTO `dc_mcc_chemical_report` (`id`, `parameter_id`, `qty_used`, `auditor_name`, `station_id`, `token_id`, `report_date`, `created_at`, `updated_at`) VALUES
 (6, 1, 0.67, 'R. K. Verma', 1, 'PLDC-CHEM-20260601-01', '2026-06-01', '2026-06-06 12:44:53', '2026-06-06 12:44:53'),
 (7, 1, 0.67, 'Aman Preet', 1, 'PLDC-CHEM-20260601-01', '2026-06-01', '2026-06-06 12:44:53', '2026-06-06 12:44:53'),
 (8, 1, 0.66, 'M. S. Roy', 1, 'PLDC-CHEM-20260601-01', '2026-06-01', '2026-06-06 12:44:53', '2026-06-06 12:44:53'),
@@ -3130,10 +3130,10 @@ INSERT INTO `mcc_pldc_chemical_report` (`id`, `parameter_id`, `qty_used`, `audit
 -- --------------------------------------------------------
 
 --
--- Table structure for table `mcc_pldc_chemical_shifts`
+-- Table structure for table `dc_mcc_chemical_shifts`
 --
 
-CREATE TABLE `mcc_pldc_chemical_shifts` (
+CREATE TABLE `dc_mcc_chemical_shifts` (
   `id` int(11) NOT NULL,
   `shift` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
@@ -3143,10 +3143,10 @@ CREATE TABLE `mcc_pldc_chemical_shifts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `mcc_pldc_chemical_shifts`
+-- Dumping data for table `dc_mcc_chemical_shifts`
 --
 
-INSERT INTO `mcc_pldc_chemical_shifts` (`id`, `shift`, `station_id`, `created_at`, `updated_at`) VALUES
+INSERT INTO `dc_mcc_chemical_shifts` (`id`, `shift`, `station_id`, `created_at`, `updated_at`) VALUES
 (1, 'Shift 1', 1, '2026-06-06 11:13:48', '2026-06-06 11:13:48'),
 (2, 'Shift 2', 1, '2026-06-06 11:13:48', '2026-06-06 11:13:48'),
 (3, 'Shift 3', 1, '2026-06-06 11:13:48', '2026-06-06 11:13:48'),
@@ -3157,10 +3157,10 @@ INSERT INTO `mcc_pldc_chemical_shifts` (`id`, `shift`, `station_id`, `created_at
 -- --------------------------------------------------------
 
 --
--- Table structure for table `mcc_pldc_chemical_target`
+-- Table structure for table `dc_mcc_chemical_target`
 --
 
-CREATE TABLE `mcc_pldc_chemical_target` (
+CREATE TABLE `dc_mcc_chemical_target` (
   `id` int(11) NOT NULL,
   `parameter_id` int(11) NOT NULL,
   `target_month` date NOT NULL,
@@ -3174,10 +3174,10 @@ CREATE TABLE `mcc_pldc_chemical_target` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `mcc_pldc_chemical_target`
+-- Dumping data for table `dc_mcc_chemical_target`
 --
 
-INSERT INTO `mcc_pldc_chemical_target` (`id`, `parameter_id`, `target_month`, `qty(ml)`, `penalty`, `penalty_qty(ml)`, `station_id`, `created_at`, `updated_at`) VALUES
+INSERT INTO `dc_mcc_chemical_target` (`id`, `parameter_id`, `target_month`, `qty(ml)`, `penalty`, `penalty_qty(ml)`, `station_id`, `created_at`, `updated_at`) VALUES
 (1, 1, '2026-06-01', 60.00, 50.00, 1.00, 1, '2026-06-06 12:31:39', '2026-06-06 12:34:52'),
 (2, 1, '2026-07-01', 60.00, 50.00, 1.00, 1, '2026-06-06 12:31:39', '2026-06-06 12:31:39'),
 (3, 2, '2026-06-01', 10.00, 100.00, 1.00, 1, '2026-06-06 12:31:39', '2026-06-06 12:31:39'),
@@ -3222,10 +3222,10 @@ INSERT INTO `mcc_pldc_chemical_target` (`id`, `parameter_id`, `target_month`, `q
 -- --------------------------------------------------------
 
 --
--- Table structure for table `mcc_pldc_machine_param`
+-- Table structure for table `dc_mcc_machine_param`
 --
 
-CREATE TABLE `mcc_pldc_machine_param` (
+CREATE TABLE `dc_mcc_machine_param` (
   `id` int(11) NOT NULL,
   `machine_no` varchar(100) NOT NULL,
   `machine_name` varchar(255) NOT NULL,
@@ -3236,10 +3236,10 @@ CREATE TABLE `mcc_pldc_machine_param` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `mcc_pldc_machine_param`
+-- Dumping data for table `dc_mcc_machine_param`
 --
 
-INSERT INTO `mcc_pldc_machine_param` (`id`, `machine_no`, `machine_name`, `station_id`, `created_at`, `updated_at`) VALUES
+INSERT INTO `dc_mcc_machine_param` (`id`, `machine_no`, `machine_name`, `station_id`, `created_at`, `updated_at`) VALUES
 (1, 'HPWJ 1', 'High pressure water Jet for Pit cleaning', 1, '2026-06-08 12:11:51', '2026-06-08 12:11:51'),
 (2, 'HPWJ 2', 'High pressure water Jet for Pit cleaning', 1, '2026-06-08 12:11:51', '2026-06-08 12:11:51'),
 (3, 'ROSM 1', 'Ride on sweeper comac CS700 H FP', 1, '2026-06-08 12:11:51', '2026-06-08 12:11:51');
@@ -3247,10 +3247,10 @@ INSERT INTO `mcc_pldc_machine_param` (`id`, `machine_no`, `machine_name`, `stati
 -- --------------------------------------------------------
 
 --
--- Table structure for table `mcc_pldc_machine_report`
+-- Table structure for table `dc_mcc_machine_report`
 --
 
-CREATE TABLE `mcc_pldc_machine_report` (
+CREATE TABLE `dc_mcc_machine_report` (
   `id` int(11) NOT NULL,
   `parameter_id` int(11) NOT NULL,
   `used_status` varchar(50) DEFAULT NULL,
@@ -3263,10 +3263,10 @@ CREATE TABLE `mcc_pldc_machine_report` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `mcc_pldc_machine_report`
+-- Dumping data for table `dc_mcc_machine_report`
 --
 
-INSERT INTO `mcc_pldc_machine_report` (`id`, `parameter_id`, `used_status`, `token_id`, `station_id`, `report_date`, `created_at`, `updated_at`) VALUES
+INSERT INTO `dc_mcc_machine_report` (`id`, `parameter_id`, `used_status`, `token_id`, `station_id`, `report_date`, `created_at`, `updated_at`) VALUES
 (1, 1, 'Y', 'PLDC-MACH-20260601-01', 1, '2026-06-01', '2026-06-08 12:52:39', '2026-06-08 12:52:39'),
 (2, 1, 'Y', 'PLDC-MACH-20260601-01', 1, '2026-06-01', '2026-06-08 12:52:39', '2026-06-08 12:52:39'),
 (3, 1, 'Y', 'PLDC-MACH-20260601-01', 1, '2026-06-01', '2026-06-08 12:52:39', '2026-06-08 12:52:39'),
@@ -3343,10 +3343,10 @@ INSERT INTO `mcc_pldc_machine_report` (`id`, `parameter_id`, `used_status`, `tok
 -- --------------------------------------------------------
 
 --
--- Table structure for table `mcc_pldc_machine_shifts`
+-- Table structure for table `dc_mcc_machine_shifts`
 --
 
-CREATE TABLE `mcc_pldc_machine_shifts` (
+CREATE TABLE `dc_mcc_machine_shifts` (
   `id` int(11) NOT NULL,
   `shift` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
@@ -3356,10 +3356,10 @@ CREATE TABLE `mcc_pldc_machine_shifts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `mcc_pldc_machine_shifts`
+-- Dumping data for table `dc_mcc_machine_shifts`
 --
 
-INSERT INTO `mcc_pldc_machine_shifts` (`id`, `shift`, `station_id`, `created_at`, `updated_at`) VALUES
+INSERT INTO `dc_mcc_machine_shifts` (`id`, `shift`, `station_id`, `created_at`, `updated_at`) VALUES
 (1, 'Shift 1', 1, '2026-06-08 12:11:51', '2026-06-08 12:11:51'),
 (2, 'Shift 2', 1, '2026-06-08 12:11:51', '2026-06-08 12:11:51'),
 (3, 'Shift 3', 1, '2026-06-08 12:11:51', '2026-06-08 12:11:51');
@@ -3367,10 +3367,10 @@ INSERT INTO `mcc_pldc_machine_shifts` (`id`, `shift`, `station_id`, `created_at`
 -- --------------------------------------------------------
 
 --
--- Table structure for table `mcc_pldc_machine_target`
+-- Table structure for table `dc_mcc_machine_target`
 --
 
-CREATE TABLE `mcc_pldc_machine_target` (
+CREATE TABLE `dc_mcc_machine_target` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
   `input_type` varchar(50) DEFAULT 'cleaning',
@@ -3383,10 +3383,10 @@ CREATE TABLE `mcc_pldc_machine_target` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `mcc_pldc_machine_target`
+-- Dumping data for table `dc_mcc_machine_target`
 --
 
-INSERT INTO `mcc_pldc_machine_target` (`id`, `station_id`, `machine_id`, `target_month`, `nominated_area`, `penalty_amount`, `created_at`, `updated_at`) VALUES
+INSERT INTO `dc_mcc_machine_target` (`id`, `station_id`, `machine_id`, `target_month`, `nominated_area`, `penalty_amount`, `created_at`, `updated_at`) VALUES
 (1, 1, '2026-05-01', 1, 'Pit Line 1', 500.00, '2026-06-08 12:11:51', '2026-06-08 12:11:51'),
 (2, 1, '2026-05-01', 2, 'Pit Line 1', 500.00, '2026-06-08 12:11:51', '2026-06-08 12:11:51'),
 (3, 1, '2026-05-01', 3, 'Pit Line 1', 500.00, '2026-06-08 12:11:51', '2026-06-08 12:11:51'),
@@ -3418,10 +3418,10 @@ INSERT INTO `mcc_pldc_machine_target` (`id`, `station_id`, `machine_id`, `target
 -- --------------------------------------------------------
 
 --
--- Table structure for table `mcc_pldc_param`
+-- Table structure for table `dc_mcc_param`
 --
 
-CREATE TABLE `mcc_pldc_param` (
+CREATE TABLE `dc_mcc_param` (
   `id` int(11) NOT NULL,
   `parameter_name` varchar(255) NOT NULL,
   `station_id` int(11) NOT NULL,
@@ -3431,10 +3431,10 @@ CREATE TABLE `mcc_pldc_param` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `mcc_pldc_param`
+-- Dumping data for table `dc_mcc_param`
 --
 
-INSERT INTO `mcc_pldc_param` (`id`, `parameter_name`, `station_id`, `created_at`, `updated_at`) VALUES
+INSERT INTO `dc_mcc_param` (`id`, `parameter_name`, `station_id`, `created_at`, `updated_at`) VALUES
 (1, 'Cleaning of drains', 1, '2026-05-30 08:53:53', '2026-05-30 08:53:53'),
 (2, 'Cleaning of catwalk and pathways', 1, '2026-05-30 08:53:53', '2026-05-30 08:53:53'),
 (3, 'Cleaning of pits', 1, '2026-05-30 08:53:53', '2026-05-30 08:53:53'),
@@ -3449,10 +3449,10 @@ INSERT INTO `mcc_pldc_param` (`id`, `parameter_name`, `station_id`, `created_at`
 -- --------------------------------------------------------
 
 --
--- Table structure for table `mcc_pldc_report`
+-- Table structure for table `dc_mcc_report`
 --
 
-CREATE TABLE `mcc_pldc_report` (
+CREATE TABLE `dc_mcc_report` (
   `id` int(11) NOT NULL,
   `parameter_id` int(11) NOT NULL,
   `rating` int(11) DEFAULT NULL,
@@ -3465,10 +3465,10 @@ CREATE TABLE `mcc_pldc_report` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `mcc_pldc_report`
+-- Dumping data for table `dc_mcc_report`
 --
 
-INSERT INTO `mcc_pldc_report` (`id`, `parameter_id`, `rating`, `token_id`, `station_id`, `report_date`, `created_at`, `updated_at`) VALUES
+INSERT INTO `dc_mcc_report` (`id`, `parameter_id`, `rating`, `token_id`, `station_id`, `report_date`, `created_at`, `updated_at`) VALUES
 (1, 1, 8, 'TKN-PLDC-20260530', 1, '2026-05-30', '2026-05-30 08:53:53', '2026-05-30 11:38:37'),
 (2, 1, 4, 'TKN-PLDC-20260530', 1, '2026-05-30', '2026-05-30 08:53:53', '2026-05-30 11:38:37'),
 (3, 1, 10, 'TKN-PLDC-20260530', 1, '2026-05-30', '2026-05-30 08:53:53', '2026-05-30 11:38:37'),
@@ -3503,10 +3503,10 @@ INSERT INTO `mcc_pldc_report` (`id`, `parameter_id`, `rating`, `token_id`, `stat
 -- --------------------------------------------------------
 
 --
--- Table structure for table `mcc_pldc_shifts`
+-- Table structure for table `dc_mcc_shifts`
 --
 
-CREATE TABLE `mcc_pldc_shifts` (
+CREATE TABLE `dc_mcc_shifts` (
   `id` int(11) NOT NULL,
   `shift` varchar(100) NOT NULL,
   `station_id` int(11) NOT NULL,
@@ -3516,10 +3516,10 @@ CREATE TABLE `mcc_pldc_shifts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `mcc_pldc_shifts`
+-- Dumping data for table `dc_mcc_shifts`
 --
 
-INSERT INTO `mcc_pldc_shifts` (`id`, `shift`, `station_id`, `created_at`, `updated_at`) VALUES
+INSERT INTO `dc_mcc_shifts` (`id`, `shift`, `station_id`, `created_at`, `updated_at`) VALUES
 (1, 'Check 1', 1, '2026-05-30 08:53:53', '2026-05-30 08:53:53'),
 (2, 'Check 2', 1, '2026-05-30 08:53:53', '2026-05-30 08:53:53'),
 (3, 'Check 3', 1, '2026-05-30 08:53:53', '2026-05-30 08:53:53');
@@ -4769,16 +4769,16 @@ ALTER TABLE `mcc_photo_report`
   ADD KEY `station_id` (`station_id`);
 
 --
--- Indexes for table `mcc_pldc_chemical_param`
+-- Indexes for table `dc_mcc_chemical_param`
 --
-ALTER TABLE `mcc_pldc_chemical_param`
+ALTER TABLE `dc_mcc_chemical_param`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_pldc_chem_param_station` (`station_id`);
 
 --
--- Indexes for table `mcc_pldc_chemical_report`
+-- Indexes for table `dc_mcc_chemical_report`
 --
-ALTER TABLE `mcc_pldc_chemical_report`
+ALTER TABLE `dc_mcc_chemical_report`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_pldc_chem_rep_param` (`parameter_id`),
   ADD KEY `idx_pldc_chem_rep_shift` (`shift_id`),
@@ -4787,63 +4787,63 @@ ALTER TABLE `mcc_pldc_chemical_report`
   ADD KEY `idx_pldc_chem_rep_date` (`report_date`);
 
 --
--- Indexes for table `mcc_pldc_chemical_shifts`
+-- Indexes for table `dc_mcc_chemical_shifts`
 --
-ALTER TABLE `mcc_pldc_chemical_shifts`
+ALTER TABLE `dc_mcc_chemical_shifts`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_pldc_chem_shift_station` (`station_id`);
 
 --
--- Indexes for table `mcc_pldc_chemical_target`
+-- Indexes for table `dc_mcc_chemical_target`
 --
-ALTER TABLE `mcc_pldc_chemical_target`
+ALTER TABLE `dc_mcc_chemical_target`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `uk_pldc_chem_target` (`parameter_id`,`target_month`,`station_id`),
   ADD KEY `idx_pldc_chem_target_station` (`station_id`);
 
 --
--- Indexes for table `mcc_pldc_machine_param`
+-- Indexes for table `dc_mcc_machine_param`
 --
-ALTER TABLE `mcc_pldc_machine_param`
+ALTER TABLE `dc_mcc_machine_param`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_pldc_mach_param_station` (`station_id`);
 
 --
--- Indexes for table `mcc_pldc_machine_report`
+-- Indexes for table `dc_mcc_machine_report`
 --
-ALTER TABLE `mcc_pldc_machine_report`
+ALTER TABLE `dc_mcc_machine_report`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_pldc_mach_rep_param` (`parameter_id`),
   ADD KEY `idx_pldc_mach_rep_shift` (`shift_id`),
   ADD KEY `idx_pldc_mach_rep_station` (`station_id`);
 
 --
--- Indexes for table `mcc_pldc_machine_shifts`
+-- Indexes for table `dc_mcc_machine_shifts`
 --
-ALTER TABLE `mcc_pldc_machine_shifts`
+ALTER TABLE `dc_mcc_machine_shifts`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_pldc_mach_shift_station` (`station_id`);
 
 --
--- Indexes for table `mcc_pldc_machine_target`
+-- Indexes for table `dc_mcc_machine_target`
 --
-ALTER TABLE `mcc_pldc_machine_target`
+ALTER TABLE `dc_mcc_machine_target`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_pldc_mach_target_station` (`station_id`),
   ADD KEY `idx_pldc_mach_target_machine` (`machine_id`),
   ADD KEY `idx_pldc_mach_target_shift` (`shift_id`);
 
 --
--- Indexes for table `mcc_pldc_param`
+-- Indexes for table `dc_mcc_param`
 --
-ALTER TABLE `mcc_pldc_param`
+ALTER TABLE `dc_mcc_param`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_pldc_param_station` (`station_id`);
 
 --
--- Indexes for table `mcc_pldc_report`
+-- Indexes for table `dc_mcc_report`
 --
-ALTER TABLE `mcc_pldc_report`
+ALTER TABLE `dc_mcc_report`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_pldc_rep_param` (`parameter_id`),
   ADD KEY `idx_pldc_rep_shift` (`shift_id`),
@@ -4852,9 +4852,9 @@ ALTER TABLE `mcc_pldc_report`
   ADD KEY `idx_pldc_rep_date` (`report_date`);
 
 --
--- Indexes for table `mcc_pldc_shifts`
+-- Indexes for table `dc_mcc_shifts`
 --
-ALTER TABLE `mcc_pldc_shifts`
+ALTER TABLE `dc_mcc_shifts`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_pldc_shift_station` (`station_id`);
 
@@ -5230,69 +5230,69 @@ ALTER TABLE `mcc_photo_report`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
--- AUTO_INCREMENT for table `mcc_pldc_chemical_param`
+-- AUTO_INCREMENT for table `dc_mcc_chemical_param`
 --
-ALTER TABLE `mcc_pldc_chemical_param`
+ALTER TABLE `dc_mcc_chemical_param`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
--- AUTO_INCREMENT for table `mcc_pldc_chemical_report`
+-- AUTO_INCREMENT for table `dc_mcc_chemical_report`
 --
-ALTER TABLE `mcc_pldc_chemical_report`
+ALTER TABLE `dc_mcc_chemical_report`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=186;
 
 --
--- AUTO_INCREMENT for table `mcc_pldc_chemical_shifts`
+-- AUTO_INCREMENT for table `dc_mcc_chemical_shifts`
 --
-ALTER TABLE `mcc_pldc_chemical_shifts`
+ALTER TABLE `dc_mcc_chemical_shifts`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
--- AUTO_INCREMENT for table `mcc_pldc_chemical_target`
+-- AUTO_INCREMENT for table `dc_mcc_chemical_target`
 --
-ALTER TABLE `mcc_pldc_chemical_target`
+ALTER TABLE `dc_mcc_chemical_target`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
 
 --
--- AUTO_INCREMENT for table `mcc_pldc_machine_param`
+-- AUTO_INCREMENT for table `dc_mcc_machine_param`
 --
-ALTER TABLE `mcc_pldc_machine_param`
+ALTER TABLE `dc_mcc_machine_param`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
--- AUTO_INCREMENT for table `mcc_pldc_machine_report`
+-- AUTO_INCREMENT for table `dc_mcc_machine_report`
 --
-ALTER TABLE `mcc_pldc_machine_report`
+ALTER TABLE `dc_mcc_machine_report`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=73;
 
 --
--- AUTO_INCREMENT for table `mcc_pldc_machine_shifts`
+-- AUTO_INCREMENT for table `dc_mcc_machine_shifts`
 --
-ALTER TABLE `mcc_pldc_machine_shifts`
+ALTER TABLE `dc_mcc_machine_shifts`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
--- AUTO_INCREMENT for table `mcc_pldc_machine_target`
+-- AUTO_INCREMENT for table `dc_mcc_machine_target`
 --
-ALTER TABLE `mcc_pldc_machine_target`
+ALTER TABLE `dc_mcc_machine_target`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=46;
 
 --
--- AUTO_INCREMENT for table `mcc_pldc_param`
+-- AUTO_INCREMENT for table `dc_mcc_param`
 --
-ALTER TABLE `mcc_pldc_param`
+ALTER TABLE `dc_mcc_param`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
--- AUTO_INCREMENT for table `mcc_pldc_report`
+-- AUTO_INCREMENT for table `dc_mcc_report`
 --
-ALTER TABLE `mcc_pldc_report`
+ALTER TABLE `dc_mcc_report`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=31;
 
 --
--- AUTO_INCREMENT for table `mcc_pldc_shifts`
+-- AUTO_INCREMENT for table `dc_mcc_shifts`
 --
-ALTER TABLE `mcc_pldc_shifts`
+ALTER TABLE `dc_mcc_shifts`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
@@ -5620,78 +5620,78 @@ ALTER TABLE `mcc_photo_report`
   ADD CONSTRAINT `mcc_photo_report_ibfk_1` FOREIGN KEY (`station_id`) REFERENCES `mcc_stations` (`station_id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `mcc_pldc_chemical_param`
+-- Constraints for table `dc_mcc_chemical_param`
 --
-ALTER TABLE `mcc_pldc_chemical_param`
+ALTER TABLE `dc_mcc_chemical_param`
   ADD CONSTRAINT `fk_pldc_chem_param_station` FOREIGN KEY (`station_id`) REFERENCES `mcc_stations` (`station_id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `mcc_pldc_chemical_report`
+-- Constraints for table `dc_mcc_chemical_report`
 --
-ALTER TABLE `mcc_pldc_chemical_report`
-  ADD CONSTRAINT `fk_pldc_chem_rep_param` FOREIGN KEY (`parameter_id`) REFERENCES `mcc_pldc_chemical_param` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `fk_pldc_chem_rep_shift` FOREIGN KEY (`shift_id`) REFERENCES `mcc_pldc_chemical_shifts` (`id`) ON DELETE CASCADE,
+ALTER TABLE `dc_mcc_chemical_report`
+  ADD CONSTRAINT `fk_pldc_chem_rep_param` FOREIGN KEY (`parameter_id`) REFERENCES `dc_mcc_chemical_param` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_pldc_chem_rep_shift` FOREIGN KEY (`shift_id`) REFERENCES `dc_mcc_chemical_shifts` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_pldc_chem_rep_station` FOREIGN KEY (`station_id`) REFERENCES `mcc_stations` (`station_id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `mcc_pldc_chemical_shifts`
+-- Constraints for table `dc_mcc_chemical_shifts`
 --
-ALTER TABLE `mcc_pldc_chemical_shifts`
+ALTER TABLE `dc_mcc_chemical_shifts`
   ADD CONSTRAINT `fk_pldc_chem_shift_station` FOREIGN KEY (`station_id`) REFERENCES `mcc_stations` (`station_id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `mcc_pldc_chemical_target`
+-- Constraints for table `dc_mcc_chemical_target`
 --
-ALTER TABLE `mcc_pldc_chemical_target`
-  ADD CONSTRAINT `fk_pldc_chem_target_param` FOREIGN KEY (`parameter_id`) REFERENCES `mcc_pldc_chemical_param` (`id`) ON DELETE CASCADE,
+ALTER TABLE `dc_mcc_chemical_target`
+  ADD CONSTRAINT `fk_pldc_chem_target_param` FOREIGN KEY (`parameter_id`) REFERENCES `dc_mcc_chemical_param` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_pldc_chem_target_station` FOREIGN KEY (`station_id`) REFERENCES `mcc_stations` (`station_id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `mcc_pldc_machine_param`
+-- Constraints for table `dc_mcc_machine_param`
 --
-ALTER TABLE `mcc_pldc_machine_param`
+ALTER TABLE `dc_mcc_machine_param`
   ADD CONSTRAINT `fk_pldc_mach_param_station` FOREIGN KEY (`station_id`) REFERENCES `mcc_stations` (`station_id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `mcc_pldc_machine_report`
+-- Constraints for table `dc_mcc_machine_report`
 --
-ALTER TABLE `mcc_pldc_machine_report`
-  ADD CONSTRAINT `fk_pldc_mach_rep_param` FOREIGN KEY (`parameter_id`) REFERENCES `mcc_pldc_machine_param` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `fk_pldc_mach_rep_shift` FOREIGN KEY (`shift_id`) REFERENCES `mcc_pldc_machine_shifts` (`id`) ON DELETE CASCADE,
+ALTER TABLE `dc_mcc_machine_report`
+  ADD CONSTRAINT `fk_pldc_mach_rep_param` FOREIGN KEY (`parameter_id`) REFERENCES `dc_mcc_machine_param` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_pldc_mach_rep_shift` FOREIGN KEY (`shift_id`) REFERENCES `dc_mcc_machine_shifts` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_pldc_mach_rep_station` FOREIGN KEY (`station_id`) REFERENCES `mcc_stations` (`station_id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `mcc_pldc_machine_shifts`
+-- Constraints for table `dc_mcc_machine_shifts`
 --
-ALTER TABLE `mcc_pldc_machine_shifts`
+ALTER TABLE `dc_mcc_machine_shifts`
   ADD CONSTRAINT `fk_pldc_mach_shift_station` FOREIGN KEY (`station_id`) REFERENCES `mcc_stations` (`station_id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `mcc_pldc_machine_target`
+-- Constraints for table `dc_mcc_machine_target`
 --
-ALTER TABLE `mcc_pldc_machine_target`
-  ADD CONSTRAINT `fk_pldc_mach_target_machine` FOREIGN KEY (`machine_id`) REFERENCES `mcc_pldc_machine_param` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `fk_pldc_mach_target_shift` FOREIGN KEY (`shift_id`) REFERENCES `mcc_pldc_machine_shifts` (`id`) ON DELETE CASCADE,
+ALTER TABLE `dc_mcc_machine_target`
+  ADD CONSTRAINT `fk_pldc_mach_target_machine` FOREIGN KEY (`machine_id`) REFERENCES `dc_mcc_machine_param` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_pldc_mach_target_shift` FOREIGN KEY (`shift_id`) REFERENCES `dc_mcc_machine_shifts` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_pldc_mach_target_station` FOREIGN KEY (`station_id`) REFERENCES `mcc_stations` (`station_id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `mcc_pldc_param`
+-- Constraints for table `dc_mcc_param`
 --
-ALTER TABLE `mcc_pldc_param`
+ALTER TABLE `dc_mcc_param`
   ADD CONSTRAINT `fk_pldc_param_station` FOREIGN KEY (`station_id`) REFERENCES `mcc_stations` (`station_id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `mcc_pldc_report`
+-- Constraints for table `dc_mcc_report`
 --
-ALTER TABLE `mcc_pldc_report`
-  ADD CONSTRAINT `fk_pldc_rep_param` FOREIGN KEY (`parameter_id`) REFERENCES `mcc_pldc_param` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `fk_pldc_rep_shift` FOREIGN KEY (`shift_id`) REFERENCES `mcc_pldc_shifts` (`id`) ON DELETE CASCADE,
+ALTER TABLE `dc_mcc_report`
+  ADD CONSTRAINT `fk_pldc_rep_param` FOREIGN KEY (`parameter_id`) REFERENCES `dc_mcc_param` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_pldc_rep_shift` FOREIGN KEY (`shift_id`) REFERENCES `dc_mcc_shifts` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_pldc_rep_station` FOREIGN KEY (`station_id`) REFERENCES `mcc_stations` (`station_id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `mcc_pldc_shifts`
+-- Constraints for table `dc_mcc_shifts`
 --
-ALTER TABLE `mcc_pldc_shifts`
+ALTER TABLE `dc_mcc_shifts`
   ADD CONSTRAINT `fk_pldc_shift_station` FOREIGN KEY (`station_id`) REFERENCES `mcc_stations` (`station_id`) ON DELETE CASCADE;
 
 --

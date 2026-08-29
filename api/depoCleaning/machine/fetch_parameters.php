@@ -104,11 +104,15 @@ try {
         $machines = [];
         foreach ($machinesList as $mach) {
             $mId = $mach['machine_id'];
+            $nomArea = $targetsMap[$mId] ?? null;
+            $isNominated = (!empty($nomArea) && strtoupper($nomArea) !== 'N' && $nomArea !== '-') ? 'Y' : 'N';
+
             $machines[] = [
                 "machine_id" => intval($mId),
                 "machine_no" => $mach['machine_no'],
                 "machine_name" => $mach['machine_name'],
-                "nominated" => $targetsMap[$mId] ?? 'N',
+                "nominated" => $isNominated,
+                "nominated_area" => $nomArea,
                 "operated" => $reportsMap[$mId] ?? null
             ];
         }
@@ -142,7 +146,10 @@ try {
             $machines[] = [
                 "machine_id" => intval($mach['machine_id']),
                 "machine_no" => $mach['machine_no'],
-                "machine_name" => $mach['machine_name']
+                "machine_name" => $mach['machine_name'],
+                "nominated" => "N",
+                "nominated_area" => null,
+                "operated" => null
             ];
         }
     }

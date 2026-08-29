@@ -435,15 +435,13 @@ include 'sidebar.php';
                                             <?php else: ?>
                                                 <?php foreach ($shiftsList as $shift): 
                                                     $sId = $shift['shift_id'];
-                                                    $nomVal = $existingTargets[$mId][$sId]['nominated_area'] ?? '';
-                                                    if ($nomVal === 'N') {
-                                                        $nomVal = '';
-                                                    }
+                                                    $nomVal = $existingTargets[$mId][$sId]['nominated_area'] ?? 'Y'; // default to Y
                                                 ?>
                                                     <td>
-                                                        <input type="text" name="nomination[<?= $mId ?>][<?= $sId ?>]" 
-                                                            value="<?= htmlspecialchars($nomVal) ?>" 
-                                                            class="nomination-text-input" placeholder="e.g. Pit Line 1">
+                                                        <select name="nomination[<?= $mId ?>][<?= $sId ?>]" class="nomination-select">
+                                                            <option value="Y" <?= $nomVal === 'Y' ? 'selected' : '' ?>>Y</option>
+                                                            <option value="N" <?= $nomVal === 'N' ? 'selected' : '' ?>>N</option>
+                                                        </select>
                                                     </td>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>

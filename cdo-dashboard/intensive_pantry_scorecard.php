@@ -378,10 +378,11 @@ $extraStyles = "
 }
 
 .pantry-table thead th {
-    background: #1987C6;
-    color: #ffffff;
+    background: linear-gradient(180deg, #07203a 0%, #07182c 100%) !important;
+    color: #ffffff !important;
     font-weight: 700;
     font-size: 11.5px;
+    border-color: #0b476a !important;
 }
 
 .col-sn {
@@ -421,10 +422,11 @@ $extraStyles = "
 }
 
 .th-coach-title {
-    background: #1573a6 !important;
+    background: linear-gradient(180deg, #0b3457 0%, #07203a 100%) !important;
     color: #ffffff !important;
     font-size: 11px;
     font-weight: 800;
+    border-color: #0b476a !important;
 }
 
 .th-coach-no-label {
@@ -593,70 +595,114 @@ $extraStyles = "
 }
 
 .btn-filter-go {
-    background: #1987C6;
-    color: #ffffff;
+    background: linear-gradient(135deg, #13c9ff 0%, #0284c7 100%) !important;
+    color: #ffffff !important;
     border: none;
-    padding: 6px 18px;
+    padding: 7px 18px;
     border-radius: 6px;
     font-weight: 700;
     font-size: 13px;
     cursor: pointer;
-    transition: background 0.2s;
+    box-shadow: 0 2px 8px rgba(19, 201, 255, 0.3) !important;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
 }
 
 .btn-filter-go:hover {
-    background: #1573a6;
-    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(19, 201, 255, 0.4) !important;
 }
 
-.btn-filter-print {
-    background: #0f172a;
-    color: #ffffff;
-    border: none;
-    padding: 6px 18px;
+.btn-filter-summary {
+    background: linear-gradient(135deg, #0d5f99 0%, #072e4a 100%) !important;
+    color: #ffffff !important;
+    border: 1px solid #167db3 !important;
+    padding: 7px 18px;
     border-radius: 6px;
     font-weight: 700;
     font-size: 13px;
     cursor: pointer;
-    margin-left: auto;
+    text-decoration: none;
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    transition: all 0.2s;
+}
+
+.btn-filter-summary:hover {
+    color: #ffffff !important;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+.btn-filter-print {
+    background: linear-gradient(135deg, #07385f 0%, #042540 100%) !important;
+    color: #ffffff !important;
+    border: 1px solid #0b476a !important;
+    padding: 7px 18px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
 }
 
 .btn-filter-print:hover {
-    background: #1e293b;
-    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3) !important;
 }
 
 /* Print Optimization */
 @media print {
-    .no-print, .main-header, .app-sidebar, .app-footer, .filter-bar {
+    .no-print, .main-header, .app-header, .app-sidebar, .app-footer, .filter-bar, .report-filter {
         display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        width: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
     }
     
-    body, .app-main, .app-content, .pantry-wrap {
+    html, body, .app-wrapper, .app-main, .app-content, .container-fluid, .pantry-wrap {
         background: #ffffff !important;
         padding: 0 !important;
         margin: 0 !important;
-    }
-    
-    .pantry-frame {
-        border: 1px solid #000000 !important;
-        box-shadow: none !important;
-        margin: 0 !important;
-        padding: 8px 12px !important;
-        page-break-after: always !important;
-        break-after: page !important;
         width: 100% !important;
         max-width: 100% !important;
     }
+
+    .app-main {
+        margin-left: 0 !important;
+        padding-top: 0 !important;
+    }
+    
+    .pantry-frame {
+        border: none !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        page-break-after: always !important;
+        break-after: page !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .pantry-frame:last-child {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+    }
     
     .pantry-table thead th {
-        background: #1987C6 !important;
+        background: #07203a !important;
         color: #ffffff !important;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
     }
 
     .meta-card {
@@ -722,7 +768,7 @@ include 'sidebar.php';
                 </form>
 
                 <div class="d-flex align-items-center gap-2 ms-auto">
-                    <a href="intensive_pantry_summary.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn btn-outline-primary btn-sm fw-bold">
+                    <a href="intensive_pantry_summary.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-filter-summary">
                         <i class="bi bi-file-earmark-bar-graph-fill me-1"></i> Summary Page
                     </a>
                     <button type="button" class="btn-filter-print" onclick="window.print()">

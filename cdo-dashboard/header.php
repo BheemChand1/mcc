@@ -124,9 +124,9 @@ if (isset($page_report_mapping[$currentPage])) {
   <meta name="theme-color" content="#007bff" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#1a1a1a" media="(prefers-color-scheme: dark)" />
 
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/source-sans-3@5.0.12/index.css"
-    integrity="sha256-tXJfXfp6Ewt1ilPzLDtQnJV4hclT9XuaZUKyUvmyr+Q=" crossorigin="anonymous" />
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.10.1/styles/overlayscrollbars.min.css"
     integrity="sha256-tZHrRjVqNSRyWg2wbppGnT833E/Ys0DHWGwT04GiqQg=" crossorigin="anonymous" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
@@ -147,23 +147,64 @@ if (isset($page_report_mapping[$currentPage])) {
     </style>
   <?php endif; ?>
   <style>
+    :root {
+      --lte-sidebar-width: 235px !important;
+    }
+
+    html,
+    body,
+    .app-wrapper,
+    .app-header,
+    .app-header *,
+    .app-sidebar,
+    .app-sidebar *,
+    .nav-sidebar,
+    .nav-sidebar *,
+    .sidebar-wrapper,
+    .sidebar-wrapper * {
+      font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif !important;
+      -webkit-font-smoothing: antialiased !important;
+      -moz-osx-font-smoothing: grayscale !important;
+      text-rendering: optimizeLegibility !important;
+    }
+
     body {
-      font-family: 'Source Sans 3', sans-serif;
-      font-size: 16px;
+      font-size: 13px;
       font-weight: 400;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      text-rendering: optimizeLegibility;
+    }
+
+    .app-header.navbar {
+      background: linear-gradient(180deg, #061a2c 0%, #03101e 100%) !important;
+      border-bottom: 1px solid #0b476a !important;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4) !important;
+      font-family: 'Inter', "Segoe UI", Arial, sans-serif !important;
+      height: 48px;
     }
 
     .app-header .nav-link {
-      color: #ffffff !important;
+      color: #f4f8fc !important;
+      font-weight: 500 !important;
+      font-size: 12.5px !important;
+      letter-spacing: 0.2px !important;
+      font-family: 'Inter', "Segoe UI", Arial, sans-serif !important;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
 
-    table thead th {
-      background: linear-gradient(180deg, #1987C6 0%, #146ea3 100%) !important;
-      color: white !important;
-      font-weight: 500 !important;
+    .app-header .nav-link:hover {
+      color: #13c9ff !important;
+    }
+
+    table thead th,
+    .report-table thead th,
+    .scorecard-table thead th,
+    .table thead th {
+      background: linear-gradient(180deg, #07203a 0%, #07182c 100%) !important;
+      color: #ffffff !important;
+      font-weight: 600 !important;
+      border-color: #0b476a !important;
     }
 
     table input,
@@ -260,21 +301,34 @@ if (isset($page_report_mapping[$currentPage])) {
     }
 
     .report-filter .btn-go,
-    .report-filter .btn-summary {
-      background: linear-gradient(135deg, #1987C6 0%, #146ea3 100%) !important;
-      color: white !important;
+    .btn-go {
+      background: linear-gradient(135deg, #13c9ff 0%, #0284c7 100%) !important;
+      color: #ffffff !important;
+      box-shadow: 0 2px 8px rgba(19, 201, 255, 0.3) !important;
     }
 
-    .report-filter .btn-print {
-      background: linear-gradient(135deg, #4a7ba7 0%, #3a6b97 100%) !important;
-      color: white !important;
+    .report-filter .btn-summary,
+    .btn-summary {
+      background: linear-gradient(135deg, #0d5f99 0%, #072e4a 100%) !important;
+      color: #ffffff !important;
+      border: 1px solid #167db3 !important;
+    }
+
+    .report-filter .btn-print,
+    .btn-print {
+      background: linear-gradient(135deg, #07385f 0%, #042540 100%) !important;
+      color: #ffffff !important;
+      border: 1px solid #0b476a !important;
     }
 
     .report-filter .btn-go:hover,
     .report-filter .btn-summary:hover,
-    .report-filter .btn-print:hover {
+    .report-filter .btn-print:hover,
+    .btn-go:hover,
+    .btn-summary:hover,
+    .btn-print:hover {
       transform: translateY(-2px) !important;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+      box-shadow: 0 8px 16px -2px rgba(0, 0, 0, 0.3) !important;
       opacity: 0.95 !important;
     }
 
@@ -297,13 +351,95 @@ if (isset($page_report_mapping[$currentPage])) {
     }
 
     /* Target specific components that often have inner scrollbars */
-    .report-frame,
-    .card-body,
-    .table-responsive,
-    .check-list {
-      max-height: none !important;
-      overflow-y: visible !important;
-      height: auto !important;
+    /* Universal Print Stylesheet to guarantee only report sheets print */
+    @media print {
+      @page {
+        size: auto;
+        margin: 5mm 8mm 5mm 8mm !important;
+      }
+
+      .app-header,
+      .app-sidebar,
+      .app-footer,
+      .sidebar,
+      .sidebar-wrapper,
+      .sidebar-brand,
+      .sidebar-footer,
+      .report-filter,
+      form.report-filter,
+      div.no-print,
+      .no-print,
+      .sidebar-overlay,
+      .sidebar-backdrop,
+      #sidebar-overlay {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        width: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+
+      html,
+      body,
+      .bg-body-tertiary,
+      .app-wrapper,
+      .app-main,
+      .app-content,
+      .container-fluid,
+      .report-wrap,
+      .report-shell {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 100% !important;
+        background: #fff !important;
+        background-color: #fff !important;
+        box-shadow: none !important;
+        position: static !important;
+        overflow: visible !important;
+      }
+
+      .app-main {
+        padding-top: 0 !important;
+        margin-left: 0 !important;
+      }
+
+      .report-frame,
+      .scorecard-sheet,
+      .chemical-sheet,
+      .machine-sheet,
+      .summary-sheet-frame {
+        border: none !important;
+        box-shadow: none !important;
+        background: #fff !important;
+        margin-bottom: 0 !important;
+        page-break-after: always !important;
+        break-after: page !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+
+      .report-frame:last-child,
+      .scorecard-sheet:last-child,
+      .chemical-sheet:last-child,
+      .machine-sheet:last-child,
+      .summary-sheet-frame:last-child {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+      }
+
+      .report-table thead th,
+      .scorecard-table thead th,
+      table thead th {
+        background-color: #07203a !important;
+        background: #07203a !important;
+        color: #fff !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
     }
   </style>
 </head>
@@ -311,7 +447,7 @@ if (isset($page_report_mapping[$currentPage])) {
 <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
   <div class="app-wrapper">
 
-    <nav class="app-header navbar navbar-expand" style="background-color: #1987C6 !important;" data-bs-theme="dark">
+    <nav class="app-header navbar navbar-expand" data-bs-theme="dark">
       <!--begin::Container-->
       <div class="container-fluid">
         <!--begin::Start Navbar Links-->

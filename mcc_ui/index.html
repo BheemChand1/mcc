@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MCC Command Center</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <img src="assets/railway-logo.png" alt="Indian Railways" class="brand-logo" />
+        <div class="brand-name">MCC</div>
+      </div>
+
+      <nav class="nav">
+        <a class="nav-item active" href="#"><span class="nav-ico">◉</span><span>Dashboard</span></a>
+        <div class="nav-group-label">OPERATIONS</div>
+        <a class="nav-item" href="#"><span class="nav-ico">◒</span><span>Normal Cleaning</span><span class="chev">›</span></a>
+        <a class="nav-item" href="#"><span class="nav-ico">✦</span><span>Intensive Cleaning</span><span class="chev">›</span></a>
+        <a class="nav-item" href="#"><span class="nav-ico">♢</span><span>PLDC Cleaning</span><span class="chev">›</span></a>
+        <a class="nav-item" href="#"><span class="nav-ico">⟳</span><span>PRT Cleaning</span><span class="chev">›</span></a>
+        <div class="nav-group-label">REPORTS &amp; STAFF</div>
+        <a class="nav-item" href="#"><span class="nav-ico">▣</span><span>Attendance</span><span class="chev">›</span></a>
+        <a class="nav-item" href="#"><span class="nav-ico">▦</span><span>Train Management</span><span class="chev">›</span></a>
+        <a class="nav-item" href="#"><span class="nav-ico">♧</span><span>Emp. Management</span><span class="chev">›</span></a>
+        <a class="nav-item" href="#"><span class="nav-ico">▤</span><span>Billing Invoice</span></a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="top-left">
+          <button class="icon-btn" id="sidebarToggle" aria-label="Toggle sidebar">☰</button>
+          <a href="#">Home</a>
+          <a href="#">Contact</a>
+        </div>
+        <div class="top-actions">
+          <button class="icon-btn" title="Search">⌕</button>
+          <button class="icon-btn" id="themeToggle" title="Toggle light/dark theme">☼</button>
+          <button class="icon-btn" id="fullscreenBtn" title="Fullscreen">⛶</button>
+          <button class="logout-btn">⇥ Logout</button>
+        </div>
+      </header>
+
+      <section class="dashboard-grid">
+        <section class="kpi-row">
+          <article class="kpi card cyan"><div class="kpi-icon">▣</div><div><small>COACHES CLEANED TODAY</small><div class="kpi-value">647 <span>/ 699</span></div><div class="kpi-sub positive">▲ 92.56% <em>vs yesterday</em></div></div></article>
+          <article class="kpi card purple"><div class="kpi-icon">▣</div><div><small>RAKES PROCESSED</small><div class="kpi-value">07 <span>/ 12</span></div><div class="kpi-sub">Active Rakes</div></div></article>
+          <article class="kpi card green"><div class="kpi-icon">★</div><div><small>AVERAGE CLEANING SCORE</small><div class="kpi-value">94.2%</div><div class="kpi-sub positive">▲ 3.6% <em>vs yesterday</em></div></div></article>
+          <article class="kpi card cyan"><div class="kpi-icon">♟</div><div><small>MANPOWER PRESENT</small><div class="kpi-value">309 <span>/ 326</span></div><div class="kpi-sub positive">▲ 94.79%</div></div></article>
+          <article class="kpi card amber"><div class="kpi-icon">♨</div><div><small>MACHINERY AVAILABLE</small><div class="kpi-value">47 <span>/ 56</span></div><div class="kpi-sub positive">▲ 83.93% <em>vs yesterday</em></div></div></article>
+          <article class="kpi card red"><div class="kpi-icon">!</div><div><small>OPEN DEFICIENCIES</small><div class="kpi-value">12</div><div class="kpi-sub">High Priority</div></div></article>
+        </section>
+
+        <section class="command card">
+          <div class="panel-head">
+            <h2>LIVE CLEANING OPERATIONS COMMAND BOARD</h2>
+            <div class="legend"><span><i class="dot green-dot"></i>On Track</span><span><i class="dot amber-dot"></i>At Risk</span><span><i class="dot red-dot"></i>Delayed</span></div>
+          </div>
+          <div class="ops-table-wrap">
+            <table class="ops-table">
+              <thead><tr><th>TRAIN / RAKE</th><th>OPERATION TYPE</th><th>LOCATION</th><th>COACHES</th><th>START TIME</th><th>MANPOWER</th><th>PROGRESS</th><th>INSPECTION SCORE</th><th>STATUS</th></tr></thead>
+              <tbody id="operationsBody"></tbody>
+            </table>
+          </div>
+          <button class="panel-link">VIEW ALL OPERATIONS <span>→</span></button>
+        </section>
+
+        <aside class="ai card">
+          <div class="panel-head"><h2>AI OPERATIONS INSIGHTS</h2><span class="ai-pill">AI</span></div>
+          <div class="ai-content">
+            <div class="ai-brain" aria-hidden="true"><div class="brain-core"></div></div>
+            <div class="insight-list" id="insightList"></div>
+          </div>
+          <button class="panel-link">VIEW ALL INSIGHTS <span>→</span></button>
+        </aside>
+
+        <section class="summary card">
+          <div class="panel-head"><h2>TODAY'S WORK SUMMARY</h2></div>
+          <div class="summary-list" id="summaryList"></div>
+          <button class="panel-link">VIEW SUMMARY REPORT <span>→</span></button>
+        </section>
+
+        <section class="trend card">
+          <div class="panel-head"><h2>CLEANING SCORE TREND</h2><select><option>7 Days</option></select></div>
+          <div class="line-chart">
+            <div class="ylabels"><span>100%</span><span>90%</span><span>80%</span><span>70%</span></div>
+            <svg viewBox="0 0 520 160" preserveAspectRatio="none" aria-label="Cleaning score trend">
+              <defs><linearGradient id="areaG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#10caff" stop-opacity=".28"/><stop offset="1" stop-color="#10caff" stop-opacity="0"/></linearGradient></defs>
+              <g class="gridlines"><path d="M0 25 H520 M0 65 H520 M0 105 H520 M0 145 H520"/></g>
+              <path class="area" d="M10,110 L75,88 L140,103 L205,72 L270,98 L335,80 L400,67 L465,86 L515,76 L515,150 L10,150 Z"/>
+              <polyline class="line" points="10,110 75,88 140,103 205,72 270,98 335,80 400,67 465,86 515,76"/>
+              <g class="points"><circle cx="10" cy="110" r="4"/><circle cx="75" cy="88" r="4"/><circle cx="140" cy="103" r="4"/><circle cx="205" cy="72" r="4"/><circle cx="270" cy="98" r="4"/><circle cx="335" cy="80" r="4"/><circle cx="400" cy="67" r="4"/><circle cx="465" cy="86" r="4"/><circle cx="515" cy="76" r="4"/></g>
+            </svg>
+            <div class="xlabels"><span>04 Aug</span><span>05 Aug</span><span>06 Aug</span><span>07 Aug</span><span>08 Aug</span><span>09 Aug</span><span>10 Aug</span></div>
+            <div class="chart-legend">◆ Average Score (%)</div>
+          </div>
+        </section>
+
+        <section class="manpower card">
+          <div class="panel-head"><h2>MANPOWER DEPLOYMENT</h2><select><option>Today</option></select></div>
+          <div class="donut-wrap">
+            <div class="donut manpower-donut"><div class="donut-center"><span>Total</span><strong>326</strong></div></div>
+            <div class="donut-legend" id="manpowerLegend"></div>
+          </div>
+        </section>
+
+        <section class="machinery card">
+          <div class="panel-head"><h2>MACHINERY STATUS</h2><select><option>Today</option></select></div>
+          <div class="donut-wrap">
+            <div class="donut machine-donut"><div class="donut-center"><span>Total</span><strong>56</strong></div></div>
+            <div class="donut-legend" id="machineLegend"></div>
+          </div>
+        </section>
+
+        <section class="trains card">
+          <div class="panel-head"><h2>TOP PERFORMING TRAINS <small>(By Avg Score)</small></h2></div>
+          <table class="mini-table"><thead><tr><th>Train No.</th><th>Train Name</th><th>Operation Type</th><th>Avg Score</th></tr></thead><tbody>
+            <tr><td>16231</td><td>YPR DEMU</td><td>MCC Normal Cleaning</td><td class="score">96.4%</td></tr>
+            <tr><td>16535</td><td>KSR Bengaluru Exp</td><td>MCC Normal Cleaning</td><td class="score">95.2%</td></tr>
+            <tr><td>22833</td><td>Vande Bharat Exp</td><td>14 Min Cleaning</td><td class="score">94.8%</td></tr>
+            <tr><td>16578</td><td>Mysuru Express</td><td>PFTR Cleaning</td><td class="score">93.6%</td></tr>
+            <tr><td>16218</td><td>Mysuru - Chennai Exp</td><td>MCC Normal Cleaning</td><td class="score">92.1%</td></tr>
+          </tbody></table>
+          <button class="panel-link">VIEW ALL <span>→</span></button>
+        </section>
+
+        <section class="deficiency card">
+          <div class="panel-head"><h2>DEFICIENCY OVERVIEW</h2></div>
+          <div class="bar-list">
+            <div><span>Toilet Area</span><b><i style="width:100%;background:#e33535"></i></b><em>4 (33%)</em></div>
+            <div><span>Floor / PVC</span><b><i style="width:82%;background:#dc4f22"></i></b><em>3 (25%)</em></div>
+            <div><span>Doors / Vestibule</span><b><i style="width:55%;background:#e08a00"></i></b><em>2 (17%)</em></div>
+            <div><span>Berths / Seats</span><b><i style="width:55%;background:#8ea700"></i></b><em>2 (17%)</em></div>
+            <div><span>Others</span><b><i style="width:30%;background:#2488e8"></i></b><em>1 (8%)</em></div>
+          </div>
+          <button class="panel-link">VIEW ALL DEFICIENCIES <span>→</span></button>
+        </section>
+
+        <section class="alerts card">
+          <div class="panel-head"><h2>ALERTS &amp; NOTIFICATIONS</h2><a href="#">View All</a></div>
+          <div class="alert-list">
+            <div><span class="alert-dot red-bg">!</span><p>ACWP No. 02 – Hydraulic Issue</p><time>10:22 AM</time></div>
+            <div><span class="alert-dot amber-bg">!</span><p>PFTR Bay 2 – High Water Usage</p><time>10:18 AM</time></div>
+            <div><span class="alert-dot amber-bg">!</span><p>Chemical Stock – Floor Cleaner Low</p><time>10:15 AM</time></div>
+            <div><span class="alert-dot green-bg">✓</span><p>Train 16231 rake cleaned with 96.4% score</p><time>10:10 AM</time></div>
+            <div><span class="alert-dot blue-bg">i</span><p>Daily Work Diary Pending Approval</p><time>10:05 AM</time></div>
+          </div>
+        </section>
+
+        <footer class="statusbar">
+          <span>System Status: <strong class="positive">● &nbsp;All Systems Operational</strong></span>
+          <span>MCC performance improved by 4.6% compared to yesterday</span>
+          <span>Vande Bharat 22833 completed 14 Min Cleaning with 100% compliance</span>
+          <span>Safety First: Always wear PPE during cleaning operations</span>
+          <span>◔ Last Data Sync: <b id="syncTime">10:24:56 AM</b></span>
+        </footer>
+      </section>
+    </main>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>

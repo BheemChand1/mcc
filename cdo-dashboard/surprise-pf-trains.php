@@ -81,9 +81,10 @@ $extraStyles = "
     margin-bottom: 0 !important;
 }
 .report-table th {
-    background: linear-gradient(180deg, #1987C6 0%, #146ea3 100%) !important;
+    background: linear-gradient(180deg, #07203a 0%, #07182c 100%) !important;
     color: white !important;
     font-weight: 600 !important;
+    border-color: #0b476a !important;
     text-align: center;
     vertical-align: middle;
 }

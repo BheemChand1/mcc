@@ -148,9 +148,10 @@ $extraStyles = "
     margin-top: 15px !important;
 }
 
-.report-table th {
-    background: linear-gradient(180deg, #1987C6 0%, #146ea3 100%) !important;
+.report-table thead th {
+    background: linear-gradient(180deg, #07203a 0%, #07182c 100%) !important;
     color: white !important;
+    border: 1px solid #0b476a !important;
     font-weight: 700 !important;
     text-align: center !important;
     padding: 8px 10px !important;

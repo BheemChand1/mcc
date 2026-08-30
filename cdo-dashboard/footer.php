@@ -1,21 +1,23 @@
-<footer class="app-footer text-center py-4 mt-auto">
+<?php if (basename($_SERVER['PHP_SELF']) !== 'index.php'): ?>
+<footer class="app-footer text-center py-4 mt-auto" style="background: linear-gradient(180deg, #07182c 0%, #03101e 100%); border-top: 1px solid #0b476a; color: #8aa3b9;">
   <div class="container-fluid">
     <div class="row align-items-center">
       <div class="col-md-6 text-md-start">
-        <p class="mb-0 text-muted small">
-          &copy; <?php echo date('Y'); ?> <strong>MCC Dashboard</strong>. All rights reserved.
+        <p class="mb-0 small" style="color: #8aa3b9;">
+          &copy; <?php echo date('Y'); ?> <strong style="color: #f4f8fc;">MCC Dashboard</strong>. All rights reserved.
         </p>
       </div>
       <div class="col-md-6 text-md-end">
         <div class="footer-links">
-          <a href="#" class="text-muted text-decoration-none small mx-2">Support</a>
-          <a href="#" class="text-muted text-decoration-none small mx-2">Privacy Policy</a>
-          <a href="#" class="text-muted text-decoration-none small mx-2">Terms of Service</a>
+          <a href="#" class="text-decoration-none small mx-2" style="color: #8aa3b9;">Support</a>
+          <a href="#" class="text-decoration-none small mx-2" style="color: #8aa3b9;">Privacy Policy</a>
+          <a href="#" class="text-decoration-none small mx-2" style="color: #8aa3b9;">Terms of Service</a>
         </div>
       </div>
     </div>
   </div>
 </footer>
+<?php endif; ?>
 
     </div> <!-- Closing app-wrapper -->
 

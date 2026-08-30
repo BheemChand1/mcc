@@ -1,16 +1,29 @@
 <style>
+  .app-sidebar,
+  .app-sidebar *,
+  .sidebar-wrapper,
+  .sidebar-wrapper *,
+  .nav-sidebar,
+  .nav-sidebar * {
+    font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif !important;
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
+    text-rendering: optimizeLegibility !important;
+  }
+
   .app-sidebar {
-    background: #1e293b !important;
-    border-right: none !important;
+    background: linear-gradient(180deg, #07203a 0%, #07182c 45%, #071525 100%) !important;
+    border-right: 1px solid #0b476a !important;
+    width: 235px !important;
   }
 
   .sidebar-brand {
-    height: 180px;
-    background: rgba(255, 255, 255, 0.03);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    height: 145px;
+    background: rgba(3, 16, 30, 0.4) !important;
+    border-bottom: 1px solid #0b476a !important;
     display: flex;
     align-items: center;
-    padding: 0 20px;
+    padding: 0 15px;
   }
 
   .brand-link {
@@ -19,52 +32,128 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 6px;
     width: 100%;
   }
 
+  .brand-link img {
+    width: 62px !important;
+    height: 62px !important;
+    object-fit: contain;
+    filter: saturate(1.2);
+  }
+
   .brand-text {
-    color: white !important;
+    color: #f4f8fc !important;
     font-weight: 700 !important;
-    letter-spacing: 1px;
-    font-size: 0.9rem;
+    letter-spacing: 0.6px;
+    font-size: 14.5px !important;
   }
 
   .sidebar-wrapper {
-    padding: 15px 12px;
+    padding: 10px 8px;
+  }
+
+  .nav-header {
+    color: #5183a4 !important;
+    font-size: 9.5px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.6px !important;
+    text-transform: uppercase !important;
+    padding: 14px 10px 4px !important;
   }
 
   .nav-sidebar .nav-item {
-    margin-bottom: 5px;
+    margin-bottom: 2px;
   }
 
   .nav-sidebar .nav-link {
-    border-radius: 10px;
-    padding: 10px 15px;
-    color: #94a3b8 !important;
-    transition: all 0.3s ease;
-    font-weight: 500;
+    border-radius: 5px;
+    padding: 7px 10px;
+    color: #b7c9d8 !important;
+    transition: all 0.2s ease;
+    font-weight: 500 !important;
+    font-size: 12px !important;
+    letter-spacing: 0.1px;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .nav-sidebar .nav-link p {
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    justify-content: space-between !important;
+    white-space: nowrap !important;
   }
 
   .nav-sidebar .nav-link:hover {
-    background: rgba(255, 255, 255, 0.05) !important;
-    color: white !important;
+    background: rgba(34, 121, 177, 0.16) !important;
+    color: #ffffff !important;
   }
 
   .nav-sidebar .nav-link.active {
-    background: #3b82f6 !important;
-    color: white !important;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    background: linear-gradient(90deg, #17476f, #164064) !important;
+    border: 1px solid #238bd2 !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    box-shadow: 0 0 10px rgba(35, 139, 210, 0.3) !important;
+  }
+
+  .nav-sidebar .nav-link.active p {
+    font-weight: 600 !important;
+    color: #ffffff !important;
+  }
+
+  .nav-sidebar .nav-treeview .nav-link {
+    padding: 5px 10px;
+    font-size: 11px !important;
+    color: #8fa0b5 !important;
+    font-weight: 500 !important;
+  }
+
+  .nav-sidebar .nav-treeview .nav-link p {
+    font-size: 11px !important;
+    font-weight: 500 !important;
+  }
+
+  .nav-sidebar .nav-treeview .nav-link:hover {
+    color: #13c9ff !important;
+    background: rgba(19, 201, 255, 0.08) !important;
+  }
+
+  .nav-sidebar .nav-treeview .nav-link.active {
+    background: rgba(19, 201, 255, 0.15) !important;
+    border: 1px solid rgba(19, 201, 255, 0.3) !important;
+    color: #13c9ff !important;
+    font-weight: 600 !important;
+  }
+
+  .nav-sidebar .nav-treeview .nav-link.active p {
+    font-weight: 600 !important;
+    color: #13c9ff !important;
   }
 
   .nav-icon {
-    font-size: 1.1rem;
-    margin-right: 10px;
+    font-size: 0.95rem;
+    margin-right: 8px;
+    color: #8fa0b5;
+    flex-shrink: 0;
+  }
+  .nav-link:hover .nav-icon,
+  .nav-link.active .nav-icon {
+    color: #13c9ff !important;
   }
 
   .nav-arrow {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     opacity: 0.6;
+    color: #8fa0b5;
+    margin-left: auto;
+    flex-shrink: 0;
   }
 
   .sidebar-footer {
@@ -72,29 +161,33 @@
     bottom: 0;
     left: 0;
     right: 0;
-    padding: 10px;
-    background: rgba(255, 255, 255, 0.03);
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 8px 10px;
+    background: rgba(3, 16, 30, 0.5);
+    border-top: 1px solid #0b476a;
   }
 
   .logout-btn {
     width: 100%;
-    padding: 10px;
-    border-radius: 8px;
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444 !important;
+    padding: 7px 10px;
+    border-radius: 5px;
+    background: rgba(255, 56, 74, 0.1);
+    border: 1px solid rgba(255, 56, 74, 0.25);
+    color: #ff384a !important;
     text-align: center;
-    font-weight: 600;
+    font-weight: 600 !important;
+    font-size: 11.5px !important;
+    letter-spacing: 0.3px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
     transition: all 0.2s ease;
   }
 
   .logout-btn:hover {
-    background: #ef4444;
+    background: #ff384a !important;
     color: white !important;
+    box-shadow: 0 0 8px rgba(255, 56, 74, 0.4);
   }
 
   /* Custom Scrollbar for Sidebar */
@@ -107,7 +200,7 @@
   }
 
   .sidebar-wrapper::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(11, 71, 106, 0.4);
     border-radius: 10px;
   }
 </style>
@@ -289,7 +382,7 @@ $has_photo_report = in_array(10, $active_report_ids) && in_array('photo-report.p
         <!-- Intensive Cleaning Dropdown -->
         <?php if ($has_int_any): ?>
         <?php 
-        $intensivePages = ['intensive-report.php', 'intensive_scorecard_2.php', 'instensive_scorecard_2.php', 'machine-report-intensive.php', 'machine-target-intensive.php', 'machine-summary-intensive.php', 'intensive-chemical-report.php', 'intensive-chemical-summary.php'];
+        $intensivePages = ['intensive-report.php', 'intensive_scorecard_2.php', 'instensive_scorecard_2.php', 'intensive_scorecard_2_summary.php', 'machine-report-intensive.php', 'machine-target-intensive.php', 'machine-summary-intensive.php', 'intensive-chemical-report.php', 'intensive-chemical-summary.php'];
         $isIntensiveActive = in_array($currentPage, $intensivePages);
         ?>
         <li class="nav-item <?= $isIntensiveActive ? 'menu-open' : '' ?>">
@@ -310,7 +403,7 @@ $has_photo_report = in_array(10, $active_report_ids) && in_array('photo-report.p
             <?php endif; ?>
             <?php if ($has_int_scorecard_2): ?>
             <li class="nav-item">
-              <a href="intensive_scorecard_2.php" class="nav-link <?= in_array($currentPage, ['intensive_scorecard_2.php', 'instensive_scorecard_2.php']) ? 'active' : '' ?>">
+              <a href="intensive_scorecard_2.php" class="nav-link <?= in_array($currentPage, ['intensive_scorecard_2.php', 'instensive_scorecard_2.php', 'intensive_scorecard_2_summary.php']) ? 'active' : '' ?>">
                 <p><?= htmlspecialchars($subreport_names[12]) ?></p>
               </a>
             </li>

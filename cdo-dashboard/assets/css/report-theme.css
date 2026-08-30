@@ -8,19 +8,19 @@
  */
 
 :root {
-  --color-primary: #3c8dbc;
-  --color-primary-dark: #2c6a89;
-  --color-primary-light: #5a9fcf;
-  --color-header: #343a40;
-  --color-header-light: #454d55;
-  --color-border: #ddd;
-  --color-border-dark: #999;
+  --color-primary: #07203a;
+  --color-primary-dark: #03101e;
+  --color-primary-light: #0b476a;
+  --color-header: #07182c;
+  --color-header-light: #0d2847;
+  --color-border: #0b476a;
+  --color-border-dark: #071f33;
   --color-bg-light: #f8f9fa;
   --color-bg-alt: #f0f0f0;
   --color-text-primary: #000;
   --color-text-secondary: #333;
   --color-text-light: #666;
-  --color-table-header: #e8e8e8;
+  --color-table-header: #07203a;
   --color-table-row-odd: #f9f9f9;
   --color-table-row-even: #fff;
   --color-table-hover: #f0f8ff;
@@ -339,10 +339,14 @@ table th {
   user-select: none;
 }
 
-.report-table thead th {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  color: var(--color-white);
-  font-weight: 700;
+.report-table thead th,
+.machine-count-table thead th,
+.data-table thead th,
+.scorecard-table thead th {
+  background: linear-gradient(180deg, #07203a 0%, #07182c 100%) !important;
+  color: var(--color-white) !important;
+  font-weight: 700 !important;
+  border-color: #0b476a !important;
 }
 
 .report-table td,

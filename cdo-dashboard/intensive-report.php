@@ -252,9 +252,10 @@ $extraStyles = "
 }
 
 .report-table th{
-    background:#1987C6;
-    color:#fff;
-    font-weight:700;
+    background: linear-gradient(180deg, #07203a 0%, #07182c 100%) !important;
+    color: #fff !important;
+    font-weight: 700;
+    border-color: #0b476a !important;
 }
 
 .sub-category{
@@ -327,22 +328,41 @@ $extraStyles = "
 }
 
 @media print{
+    .app-header,
+    .app-sidebar,
+    .app-footer,
+    .report-filter,
     .no-print{
         display:none !important;
+        visibility:hidden !important;
+        height:0 !important;
+        width:0 !important;
+        margin:0 !important;
+        padding:0 !important;
     }
 
-    .report-wrap{
-        padding:0;
-        background:#fff;
+    html, body, .app-wrapper, .app-main, .app-content, .container-fluid, .report-wrap{
+        padding:0 !important;
+        margin:0 !important;
+        background:#fff !important;
+        width:100% !important;
+        max-width:100% !important;
+    }
+
+    .app-main {
+        margin-left: 0 !important;
+        padding-top: 0 !important;
     }
 
     .report-frame{
-        border:none;
-        background:#fff;
-        padding:0;
+        border:none !important;
+        background:#fff !important;
+        padding:0 !important;
         margin-bottom: 0 !important;
         page-break-after: always !important;
         break-after: page !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
         box-shadow: none !important;
         border-radius: 0 !important;
     }
@@ -353,9 +373,10 @@ $extraStyles = "
     }
 
     .report-table th{
-        background:#1987C6 !important;
+        background:#07203a !important;
         color:#fff !important;
-        -webkit-print-color-adjust:exact;
+        -webkit-print-color-adjust:exact !important;
+        print-color-adjust:exact !important;
     }
 }
 ";

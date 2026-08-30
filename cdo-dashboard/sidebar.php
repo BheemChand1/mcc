@@ -697,6 +697,14 @@ $has_billing      = in_array(11, $active_report_ids) && in_array('Billing.php', 
           </ul>
         </li>
 
+        <!-- Auditor Management -->
+        <li class="nav-item">
+          <a href="auditors.php" class="nav-link <?= ($currentPage == 'auditors.php') ? 'active' : '' ?>">
+            <i class="nav-icon bi bi-person-badge"></i>
+            <p>Manage Auditors</p>
+          </a>
+        </li>
+
         <?php if ($has_billing): ?>
         <li class="nav-item">
           <a href="Billing.php" class="nav-link <?= ($currentPage == 'Billing.php') ? 'active' : '' ?>">

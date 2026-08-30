@@ -81,8 +81,8 @@ try {
         $filledRows = intval($statusRow['filled_rows'] ?? 0);
         $emptyRows  = intval($statusRow['empty_rows'] ?? 0);
 
-        // Train status is 1 if the report exists and has filled values, otherwise 0
-        $trainStatus = ($totalRows > 0 && $filledRows > 0) ? 1 : 0;
+        // Train status is 1 ONLY when all parameters are completely filled (empty_rows === 0), otherwise 0
+        $trainStatus = ($totalRows > 0 && $emptyRows === 0) ? 1 : 0;
 
         if (!empty($pantryRows)) {
             $auditorName = $pantryRows[0]['auditor_name'] ?? 'prabhunath';

@@ -27,10 +27,10 @@ if ($stationId === null || $stationId <= 0) {
 }
 
 try {
-    // 1. Fetch distinct tokens and trains for the station and date in Pantry Car Scorecard
+    // 1. Fetch distinct tokens and trains for the station and date from mcc_intensive_scorecard_2_report
     $stmt = $pdo->prepare("
         SELECT DISTINCT token_id, train_no, report_date 
-        FROM mcc_intensive_pantry_report 
+        FROM mcc_intensive_scorecard_2_report 
         WHERE station_id = :station_id AND report_date = :report_date
         ORDER BY token_id DESC
     ");
@@ -46,7 +46,7 @@ try {
         // Prepare statement to fetch distinct coaches for a token
         $coachesStmt = $pdo->prepare("
             SELECT DISTINCT coach_no 
-            FROM mcc_intensive_pantry_report 
+            FROM mcc_intensive_scorecard_2_report 
             WHERE token_id = :token_id
             ORDER BY coach_no ASC
         ");
@@ -55,7 +55,7 @@ try {
             SELECT 
                 COUNT(*) AS total_rows,
                 SUM(CASE WHEN score_value IS NULL OR score_value = '' THEN 1 ELSE 0 END) AS empty_rows
-            FROM mcc_intensive_pantry_report
+            FROM mcc_intensive_scorecard_2_report
             WHERE token_id = :token_id
         ");
 

@@ -18,7 +18,7 @@ $trainNo     = isset($data['train_no']) ? trim($data['train_no']) : (isset($data
 $stationId   = isset($data['station_id']) && intval($data['station_id']) > 0 ? intval($data['station_id']) : 1;
 $reportDate  = isset($data['date']) ? trim($data['date']) : (isset($data['report_date']) ? trim($data['report_date']) : date('Y-m-d'));
 $auditorName = isset($data['auditor_name']) ? trim($data['auditor_name']) : (isset($data['submitted_by']) ? trim($data['submitted_by']) : 'prabhunath');
-$shiftId     = isset($data['shift_id']) && intval($data['shift_id']) > 0 ? intval($data['shift_id']) : 1;
+$shiftId     = 0; // Default placeholder for DB schema
 
 // Support coach_no (single, array, or comma-separated) or coach_nos
 $coachInput = $data['coach_no'] ?? ($data['coach_nos'] ?? null);

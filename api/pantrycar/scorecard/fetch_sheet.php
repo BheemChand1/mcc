@@ -40,12 +40,21 @@ try {
     ]);
     $trainsList = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 2. Query to check existence, auditor_name, token_id, and coaches in mcc_intensive_pantry_report
+    // 2. Query to check existence, auditor_name, token_id, coaches, and filled score values in mcc_intensive_pantry_report
     $pantryStmt = $pdo->prepare("
         SELECT DISTINCT token_id, auditor_name, coach_no
         FROM mcc_intensive_pantry_report
         WHERE station_id = :station_id AND train_no = :train_no AND report_date = :report_date
         ORDER BY coach_no ASC
+    ");
+
+    $statusStmt = $pdo->prepare("
+        SELECT 
+            COUNT(*) AS total_rows,
+            SUM(CASE WHEN score_value IS NOT NULL AND score_value != '' THEN 1 ELSE 0 END) AS filled_rows,
+            SUM(CASE WHEN score_value IS NULL OR score_value = '' THEN 1 ELSE 0 END) AS empty_rows
+        FROM mcc_intensive_pantry_report
+        WHERE station_id = :station_id AND train_no = :train_no AND report_date = :report_date
     ");
 
     $sheets = [];
@@ -61,8 +70,21 @@ try {
         ]);
         $pantryRows = $pantryStmt->fetchAll(PDO::FETCH_ASSOC);
 
+        $statusStmt->execute([
+            'station_id'  => $stationId,
+            'train_no'    => $trainNo,
+            'report_date' => $pDate
+        ]);
+        $statusRow = $statusStmt->fetch(PDO::FETCH_ASSOC);
+
+        $totalRows  = intval($statusRow['total_rows'] ?? 0);
+        $filledRows = intval($statusRow['filled_rows'] ?? 0);
+        $emptyRows  = intval($statusRow['empty_rows'] ?? 0);
+
+        // Train status is 1 if the report exists and has filled values, otherwise 0
+        $trainStatus = ($totalRows > 0 && $filledRows > 0) ? 1 : 0;
+
         if (!empty($pantryRows)) {
-            $trainStatus = 1;
             $auditorName = $pantryRows[0]['auditor_name'] ?? 'prabhunath';
             $tokenId     = $pantryRows[0]['token_id'] ?? null;
 
@@ -73,7 +95,6 @@ try {
                 }
             }
         } else {
-            $trainStatus = 0;
             $auditorName = null;
             $tokenId     = null;
             $coaches     = [];

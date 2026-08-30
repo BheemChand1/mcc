@@ -115,19 +115,20 @@ try {
 
         foreach ($repRows as $r) {
             $spId = intval($r['sub_parameter_id']);
-            $val = $r['score_value'];
-            $isFilled = ($val !== null && $val !== '' && $val !== 'X' && $val !== '-');
+            $val  = $r['score_value'];
+            // Check if score_value is filled (not NULL and not empty string)
+            $isFilled = ($val !== null && trim((string)$val) !== '' && $val !== 'X' && $val !== '-');
 
             if (!isset($existingReportsMap[$spId])) {
                 $existingReportsMap[$spId] = [
                     'exists'      => true,
                     'filled'      => $isFilled,
-                    'score_value' => $val,
+                    'score_value' => $isFilled ? $val : null,
                     'token_id'    => $r['token_id']
                 ];
             } else {
                 if ($isFilled) {
-                    $existingReportsMap[$spId]['filled'] = true;
+                    $existingReportsMap[$spId]['filled']      = true;
                     $existingReportsMap[$spId]['score_value'] = $val;
                 }
             }
@@ -154,11 +155,12 @@ try {
             $inputType = !empty($sp['input_type']) ? $sp['input_type'] : 'cleaning';
             $spRatings = $ratingGroups[$inputType] ?? ($ratingGroups['cleaning'] ?? $defaultRatings);
 
-            // Determine subparameter status: 1 if available in mcc_intensive_pantry_report for this train and date, else 0
-            $isAvailable = isset($existingReportsMap[$spId]) ? 1 : 0;
-            $savedScore  = isset($existingReportsMap[$spId]) ? $existingReportsMap[$spId]['score_value'] : null;
+            // Sub-parameter status is 1 if score_value is NOT null and NOT empty, otherwise 0
+            $isFilled   = isset($existingReportsMap[$spId]) && $existingReportsMap[$spId]['filled'] === true;
+            $subStatus  = $isFilled ? 1 : 0;
+            $savedScore = $isFilled ? $existingReportsMap[$spId]['score_value'] : null;
 
-            if ($isAvailable === 1) {
+            if ($subStatus === 1) {
                 $parameters[$pId]['status'] = 1;
             }
 
@@ -166,7 +168,7 @@ try {
                 'sub_parameter_id'   => $spId,
                 'sub_parameter_name' => $sp['sub_parameter_name'],
                 'input_type'         => $inputType,
-                'status'             => $isAvailable,
+                'status'             => $subStatus,
                 'ratings'            => $spRatings
             ];
 

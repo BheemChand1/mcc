@@ -7,6 +7,26 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+if (!isset($stationName)) {
+    if (isset($_SESSION['station_name']) && !empty($_SESSION['station_name'])) {
+        $stationName = ucfirst($_SESSION['station_name']);
+    } else if (isset($_SESSION['station_id'])) {
+        if (!isset($pdo)) {
+            require_once __DIR__ . '/../connection.php';
+        }
+        try {
+            $stQuery = $pdo->prepare("SELECT station_name FROM mcc_stations WHERE station_id = ?");
+            $stQuery->execute([$_SESSION['station_id']]);
+            $stRow = $stQuery->fetch(PDO::FETCH_ASSOC);
+            $stationName = ucfirst($stRow['station_name'] ?? 'Lumding');
+        } catch (Exception $e) {
+            $stationName = 'Lumding';
+        }
+    } else {
+        $stationName = 'Lumding';
+    }
+}
+
 // Check report access permissions based on user's station assignment
 $page_report_mapping = [
     'normal-report.php' => 'normal_audit',
@@ -439,6 +459,26 @@ if (isset($page_report_mapping[$currentPage])) {
         color: #fff !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
+      .navbar-station-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.06) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        color: #ffffff;
+        padding: 5px 14px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        backdrop-filter: blur(6px);
+        margin-left: 8px;
+      }
+
+      .navbar-station-badge i {
+        color: #38bdf8;
+        font-size: 0.95rem;
       }
     }
   </style>
@@ -451,7 +491,7 @@ if (isset($page_report_mapping[$currentPage])) {
       <!--begin::Container-->
       <div class="container-fluid">
         <!--begin::Start Navbar Links-->
-        <ul class="navbar-nav">
+        <ul class="navbar-nav align-items-center">
           <li class="nav-item">
             <a class="nav-link" data-lte-toggle="sidebar" href="#" role="button">
               <i class="bi bi-list"></i>
@@ -463,9 +503,12 @@ if (isset($page_report_mapping[$currentPage])) {
           <li class="nav-item d-none d-md-block">
             <a href="#" class="nav-link">Contact</a>
           </li>
-          <!-- <li class="nav-item d-none d-md-block">
-            <marquee> <a href="#" class="nav-link">Lumding Station</a></marquee>
-          </li> -->
+          <li class="nav-item">
+            <span class="navbar-station-badge">
+              <i class="bi bi-geo-alt-fill"></i>
+              <span><?= htmlspecialchars($stationName) ?> Station</span>
+            </span>
+          </li>
         </ul>
         <!--end::Start Navbar Links-->
 

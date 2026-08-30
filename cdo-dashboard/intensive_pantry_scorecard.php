@@ -96,7 +96,7 @@ $sheetsData = [];
 if (!empty($inspectionTokens)) {
     // Populate sheets from mcc_intensive_pantry_report
     $reportStmt = $pdo->prepare("
-        SELECT r.sub_parameter_id, r.coach_no, r.score_value, r.submitted_by 
+        SELECT r.sub_parameter_id, r.coach_no, r.score_value, r.auditor_name 
         FROM mcc_intensive_pantry_report r
         WHERE r.station_id = :station_id AND r.token_id = :token_id
         ORDER BY r.id ASC

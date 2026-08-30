@@ -2,7 +2,7 @@
 require_once 'auth.php';
 
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
-$toDate = $_GET['to_date'] ?? date('Y-m-d');
+$toDate   = $_GET['to_date'] ?? date('Y-m-d');
 
 // Fetch active shifts for this station (ordered by ID)
 $shiftsStmt = $pdo->prepare("
@@ -24,92 +24,126 @@ $machinesStmt = $pdo->prepare("
 $machinesStmt->execute(['station_id' => $stationId]);
 $machinesList = $machinesStmt->fetchAll();
 
-// Fetch targets active on selected date (using SCD range logic)
-$targetsStmt = $pdo->prepare("
+// Fetch distinct tokens in the selected date range
+$tokensStmt = $pdo->prepare("
+    SELECT DISTINCT token_id, report_date 
+    FROM mcc_intensive_pantry_machine_report 
+    WHERE station_id = :station_id AND report_date BETWEEN :from_date AND :to_date
+    ORDER BY report_date DESC, token_id DESC
+");
+$tokensStmt->execute([
+    'station_id' => $stationId,
+    'from_date'  => $fromDate,
+    'to_date'    => $toDate
+]);
+$inspectionTokens = $tokensStmt->fetchAll();
+
+// Target statement for resolving targets active on a specific report date
+$targetStmt = $pdo->prepare("
     SELECT machine_id, shift_id, nominated_area 
     FROM mcc_intensive_pantry_machine_target 
     WHERE station_id = :station_id 
       AND :date_ref_1 >= effective_from
       AND (effective_to IS NULL OR :date_ref_2 <= effective_to)
 ");
-$targetsStmt->execute([
-    'station_id' => $stationId,
-    'date_ref_1' => $fromDate,
-    'date_ref_2' => $fromDate
-]);
-$targetsRows = $targetsStmt->fetchAll();
 
-$targetsMap = [];
-foreach ($targetsRows as $row) {
-    $targetsMap[$row['machine_id']][$row['shift_id']] = $row['nominated_area'];
-}
-
-// Fetch report data for selected date
+// Report statement for a specific token
 $reportStmt = $pdo->prepare("
     SELECT parameter_id AS machine_id, shift_id, used_status, auditor_name 
     FROM mcc_intensive_pantry_machine_report 
-    WHERE station_id = :station_id AND report_date = :report_date
+    WHERE station_id = :station_id AND token_id = :token_id
 ");
-$reportStmt->execute([
-    'station_id' => $stationId,
-    'report_date' => $fromDate
-]);
-$reportRows = $reportStmt->fetchAll();
 
-$reportsMap = [];
-$auditorName = '';
-foreach ($reportRows as $row) {
-    $reportsMap[$row['machine_id']][$row['shift_id']] = $row['used_status'];
-    if (empty($auditorName) && !empty($row['auditor_name'])) {
-        $auditorName = $row['auditor_name'];
-    }
-}
+$sheetsData = [];
 
-$isFallback = empty($reportRows);
+if (!empty($inspectionTokens)) {
+    foreach ($inspectionTokens as $t) {
+        $tokenId    = $t['token_id'];
+        $reportDate = $t['report_date'];
 
-// Machine Area helper
-function getMachineArea($machineNo, $machineName) {
-    $no = strtoupper($machineNo);
-    if (strpos($no, 'PPSD') !== false) {
-        preg_match('/PPSD\s*(\d+)/i', $no, $matches);
-        if (!empty($matches[1])) {
-            $num = intval($matches[1]);
-            if ($num <= 2) return "PL1";
-            if ($num <= 4) return "PL2";
-            if ($num <= 6) return "PL3";
-            if ($num <= 8) return "PL4";
-            return "PL5";
+        // Get targets active on this report date
+        $targetStmt->execute([
+            'station_id' => $stationId,
+            'date_ref_1' => $reportDate,
+            'date_ref_2' => $reportDate
+        ]);
+        $targetsRows = $targetStmt->fetchAll();
+        $targetsMap  = [];
+        foreach ($targetsRows as $row) {
+            $targetsMap[$row['machine_id']][$row['shift_id']] = $row['nominated_area'];
         }
-        return "PL1";
-    }
-    if (strpos($no, 'HHSD') !== false) {
-        return "Coach";
-    }
-    return "PL1"; 
-}
 
-// Calculate score
-$totalNominated = 0;
-$totalOperated = 0;
+        // Fetch report rows for this token
+        $reportStmt->execute([
+            'station_id' => $stationId,
+            'token_id'   => $tokenId
+        ]);
+        $reportRows  = $reportStmt->fetchAll();
+        $reportsMap  = [];
+        $auditorName = '';
 
-foreach ($machinesList as $mach) {
-    $mId = $mach['machine_id'];
-    foreach ($shiftsList as $shift) {
-        $sId = $shift['shift_id'];
-        $isNominated = ($targetsMap[$mId][$sId] ?? 'N') === 'Y';
-        if ($isNominated) {
-            $totalNominated++;
-            $status = $reportsMap[$mId][$sId] ?? '-';
-            if ($status === 'Y') {
-                $totalOperated++;
+        foreach ($reportRows as $row) {
+            $reportsMap[$row['machine_id']][$row['shift_id']] = $row['used_status'];
+            if (empty($auditorName) && !empty($row['auditor_name'])) {
+                $auditorName = $row['auditor_name'];
             }
         }
+
+        // Calculate score
+        $totalNominated = 0;
+        $totalOperated  = 0;
+
+        foreach ($machinesList as $mach) {
+            $mId = $mach['machine_id'];
+            foreach ($shiftsList as $shift) {
+                $sId = $shift['shift_id'];
+                $isNominated = ($targetsMap[$mId][$sId] ?? 'N') === 'Y';
+                if ($isNominated) {
+                    $totalNominated++;
+                    $status = $reportsMap[$mId][$sId] ?? '-';
+                    if ($status === 'Y') {
+                        $totalOperated++;
+                    }
+                }
+            }
+        }
+
+        $totalScore = $totalNominated > 0 ? round(($totalOperated / $totalNominated) * 100, 1) . "%" : "100%";
+
+        $sheetsData[] = [
+            'token_id'     => $tokenId,
+            'report_date'  => $reportDate,
+            'auditor_name' => $auditorName,
+            'targets_map'  => $targetsMap,
+            'reports_map'  => $reportsMap,
+            'total_score'  => $totalScore
+        ];
     }
+} else {
+    // Fallback template when no records are in database
+    $targetStmt->execute([
+        'station_id' => $stationId,
+        'date_ref_1' => $toDate,
+        'date_ref_2' => $toDate
+    ]);
+    $targetsRows = $targetStmt->fetchAll();
+    $targetsMap  = [];
+    foreach ($targetsRows as $row) {
+        $targetsMap[$row['machine_id']][$row['shift_id']] = $row['nominated_area'];
+    }
+
+    $sheetsData[] = [
+        'token_id'     => 'TEMPLATE',
+        'report_date'  => $toDate,
+        'auditor_name' => '',
+        'targets_map'  => $targetsMap,
+        'reports_map'  => [],
+        'total_score'  => '0%',
+        'is_fallback'  => true
+    ];
 }
 
-$totalScore = $isFallback ? "0%" : ($totalNominated > 0 ? round(($totalOperated / $totalNominated) * 100, 1) . "%" : "100%");
-
-$extraStyles = "";
+$isFallback = empty($inspectionTokens);
 
 include 'header.php';
 include 'sidebar.php';
@@ -132,108 +166,110 @@ include 'sidebar.php';
             <div class="report-wrap">
                 <?php if ($isFallback): ?>
                     <div class="alert alert-warning no-print" style="margin: 0 0 20px 0; border-radius: 8px; border: 1px solid #ffeeba; background-color: #fff3cd; color: #856404; padding: 12px 20px;">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i> No daily machine reports found for the selected date. Displaying fallback/template values.
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> No daily pantry machine reports found for the selected date range. Displaying template.
                     </div>
                 <?php endif; ?>
 
-                <div class="report-frame">
-                    <div class="report-header">
-                        <h2>Daily Pantry Car Machine Report</h2>
-                    </div>
-
-                    <div class="report-meta-section">
-                        <div class="meta-row">
-                            <div class="meta-item"><span>Railway:</span> <?= htmlspecialchars($railwayName) ?></div>
-                            <div class="meta-item"><span>Date:</span> <?= htmlspecialchars(date('d-m-Y', strtotime($fromDate))) ?></div>
-                            <div class="meta-item"><span>Division:</span> <?= htmlspecialchars($divisionName) ?></div>
-                            <div class="meta-item"><span>Station:</span> <?= htmlspecialchars($stationName) ?></div>
+                <?php foreach ($sheetsData as $sheetIndex => $sheet): ?>
+                    <div class="report-frame" style="<?= $sheetIndex > 0 ? 'margin-top: 30px; page-break-before: always;' : '' ?>">
+                        <div class="report-header">
+                            <h2>Daily Pantry Car Machine Report</h2>
                         </div>
-                        <div class="meta-row">
-                            <div class="meta-item"><span>Contractor:</span> <?= htmlspecialchars($contractorName) ?></div>
-                            <div class="meta-item"><span>Auditor Name:</span> <?= htmlspecialchars($auditorName ?: '-') ?></div>
-                            <div class="meta-item"><span>Total Score:</span> <?= htmlspecialchars($totalScore) ?></div>
-                        </div>
-                    </div>
 
-                    <div class="table-responsive">
-                        <table class="report-table">
-                            <thead>
-                                <tr>
-                                    <th rowspan="3" style="width: 50px;">S.No</th>
-                                    <th rowspan="3" style="width: 130px;">Machine ID</th>
-                                    <th rowspan="3" style="width: 300px; text-align: left; padding-left: 15px;">Name of Machines</th>
-                                    <th colspan="<?= max(1, count($shiftsList)) ?>">Nominated Work Area</th>
-                                    <th colspan="<?= max(1, count($shiftsList)) ?>">Shift Status (Work Done Y/N)</th>
-                                </tr>
-                                <tr>
-                                    <?php if (empty($shiftsList)): ?>
-                                        <th>Shifts</th>
-                                        <th>Shifts</th>
+                        <div class="report-meta-section">
+                            <div class="meta-row">
+                                <div class="meta-item"><span>Railway:</span> <?= htmlspecialchars($railwayName) ?></div>
+                                <div class="meta-item"><span>Date:</span> <?= htmlspecialchars(date('d-m-Y', strtotime($sheet['report_date']))) ?></div>
+                                <div class="meta-item"><span>Division:</span> <?= htmlspecialchars($divisionName) ?></div>
+                                <div class="meta-item"><span>Station:</span> <?= htmlspecialchars($stationName) ?></div>
+                            </div>
+                            <div class="meta-row">
+                                <div class="meta-item"><span>Contractor:</span> <?= htmlspecialchars($contractorName) ?></div>
+                                <div class="meta-item"><span>Auditor Name:</span> <?= htmlspecialchars($sheet['auditor_name'] ?: '-') ?></div>
+                                <div class="meta-item"><span>Total Score:</span> <?= htmlspecialchars($sheet['total_score']) ?></div>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="report-table">
+                                <thead>
+                                    <tr>
+                                        <th rowspan="2" style="width: 50px;">S.No</th>
+                                        <th rowspan="2" style="width: 130px;">Machine ID</th>
+                                        <th rowspan="2" style="width: 300px; text-align: left; padding-left: 15px;">Name of Machines</th>
+                                        <th colspan="<?= max(1, count($shiftsList)) ?>">Nominated Work Area</th>
+                                        <th colspan="<?= max(1, count($shiftsList)) ?>">Shift Status (Work Done Y/N)</th>
+                                    </tr>
+                                    <tr>
+                                        <?php if (empty($shiftsList)): ?>
+                                            <th>Shifts</th>
+                                            <th>Shifts</th>
+                                        <?php else: ?>
+                                            <?php foreach ($shiftsList as $shift): ?>
+                                                <th><?= htmlspecialchars($shift['shift_name']) ?></th>
+                                            <?php endforeach; ?>
+                                            <?php foreach ($shiftsList as $shift): ?>
+                                                <th><?= htmlspecialchars($shift['shift_name']) ?></th>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($machinesList)): ?>
+                                        <tr>
+                                            <td colspan="<?= 3 + 2 * max(1, count($shiftsList)) ?>" style="text-align: center;">No machines found.</td>
+                                        </tr>
                                     <?php else: ?>
-                                        <?php foreach ($shiftsList as $shift): ?>
-                                            <th><?= htmlspecialchars($shift['shift_name']) ?></th>
-                                        <?php endforeach; ?>
-                                        <?php foreach ($shiftsList as $shift): ?>
-                                            <th><?= htmlspecialchars($shift['shift_name']) ?></th>
+                                        <?php 
+                                        $serial = 1;
+                                        foreach ($machinesList as $mach): 
+                                            $mId = $mach['machine_id'];
+                                        ?>
+                                            <tr>
+                                                <td><?= $serial++ ?></td>
+                                                <td><strong><?= htmlspecialchars($mach['machine_no']) ?></strong></td>
+                                                <td class="text-left"><?= htmlspecialchars($mach['machine_name']) ?></td>
+                                                
+                                                <!-- Nominated Work Area -->
+                                                <?php if (empty($shiftsList)): ?>
+                                                    <td>-</td>
+                                                <?php else: ?>
+                                                    <?php foreach ($shiftsList as $shift): 
+                                                        $sId = $shift['shift_id'];
+                                                        $nom = $sheet['targets_map'][$mId][$sId] ?? 'N';
+                                                    ?>
+                                                        <td><?= htmlspecialchars($nom) ?></td>
+                                                    <?php endforeach; ?>
+                                                <?php endif; ?>
+                                                
+                                                <!-- Shift Status (Work Done Y/N) -->
+                                                <?php if (empty($shiftsList)): ?>
+                                                    <td>-</td>
+                                                <?php else: ?>
+                                                    <?php foreach ($shiftsList as $shift): 
+                                                        $sId = $shift['shift_id'];
+                                                        $status = $sheet['reports_map'][$mId][$sId] ?? '-';
+                                                    ?>
+                                                        <td><strong><?= htmlspecialchars($status) ?></strong></td>
+                                                    <?php endforeach; ?>
+                                                <?php endif; ?>
+                                            </tr>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (empty($machinesList)): ?>
-                                    <tr>
-                                        <td colspan="<?= 3 + 2 * max(1, count($shiftsList)) ?>" style="text-align: center;">No machines found.</td>
-                                    </tr>
-                                <?php else: ?>
-                                    <?php 
-                                    $serial = 1;
-                                    foreach ($machinesList as $mach): 
-                                        $mId = $mach['machine_id'];
-                                    ?>
-                                        <tr>
-                                            <td><?= $serial++ ?></td>
-                                            <td><strong><?= htmlspecialchars($mach['machine_no']) ?></strong></td>
-                                            <td class="text-left"><?= htmlspecialchars($mach['machine_name']) ?></td>
-                                            
-                                            <!-- Nominated Work Area -->
-                                            <?php if (empty($shiftsList)): ?>
-                                                <td>-</td>
-                                            <?php else: ?>
-                                                <?php foreach ($shiftsList as $shift): 
-                                                    $sId = $shift['shift_id'];
-                                                    $nom = $targetsMap[$mId][$sId] ?? 'N';
-                                                ?>
-                                                    <td><?= htmlspecialchars($nom) ?></td>
-                                                <?php endforeach; ?>
-                                            <?php endif; ?>
-                                            
-                                            <!-- Shift Status (Work Done Y/N) -->
-                                            <?php if (empty($shiftsList)): ?>
-                                                <td>-</td>
-                                            <?php else: ?>
-                                                <?php foreach ($shiftsList as $shift): 
-                                                    $sId = $shift['shift_id'];
-                                                    $status = $reportsMap[$mId][$sId] ?? '-';
-                                                ?>
-                                                    <td><strong><?= htmlspecialchars($status) ?></strong></td>
-                                                <?php endforeach; ?>
-                                            <?php endif; ?>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
+                                </tbody>
+                            </table>
+                        </div>
 
-                    <div class="signature-row">
-                        <div class="signature-box">
-                            <div class="signature-line">Contractor's Representative</div>
-                        </div>
-                        <div class="signature-box">
-                            <div class="signature-line">Authorized Railway Officer</div>
+                        <div class="signature-row">
+                            <div class="signature-box">
+                                <div class="signature-line">Contractor's Representative</div>
+                            </div>
+                            <div class="signature-box">
+                                <div class="signature-line">Authorized Railway Officer</div>
+                            </div>
                         </div>
                     </div>
-                </div>
+                <?php endforeach; ?>
             </div>
         </div>
     </div>

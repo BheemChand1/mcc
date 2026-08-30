@@ -27,57 +27,18 @@ if ($stationId === null || $stationId <= 0) {
 }
 
 try {
-    // 1. Fetch distinct tokens and trains for the station and date from mcc_intensive_scorecard_2_report
+    // Fetch distinct train_no and report_date for the station and date from mcc_intensive_scorecard_2_report
     $stmt = $pdo->prepare("
-        SELECT DISTINCT token_id, train_no, report_date 
+        SELECT DISTINCT train_no, report_date 
         FROM mcc_intensive_scorecard_2_report 
         WHERE station_id = :station_id AND report_date = :report_date
-        ORDER BY token_id DESC
+        ORDER BY train_no ASC
     ");
     $stmt->execute([
         'station_id' => $stationId,
         'report_date' => $reportDate
     ]);
-    $tokensList = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    $sheets = [];
-
-    if (!empty($tokensList)) {
-        // Prepare statement to fetch distinct coaches for a token
-        $coachesStmt = $pdo->prepare("
-            SELECT DISTINCT coach_no 
-            FROM mcc_intensive_scorecard_2_report 
-            WHERE token_id = :token_id
-            ORDER BY coach_no ASC
-        ");
-
-        $statusStmt = $pdo->prepare("
-            SELECT 
-                COUNT(*) AS total_rows,
-                SUM(CASE WHEN score_value IS NULL OR score_value = '' THEN 1 ELSE 0 END) AS empty_rows
-            FROM mcc_intensive_scorecard_2_report
-            WHERE token_id = :token_id
-        ");
-
-        foreach ($tokensList as $tokenItem) {
-            $coachesStmt->execute(['token_id' => $tokenItem['token_id']]);
-            $coaches = $coachesStmt->fetchAll(PDO::FETCH_COLUMN);
-
-            $statusStmt->execute(['token_id' => $tokenItem['token_id']]);
-            $statusRow = $statusStmt->fetch(PDO::FETCH_ASSOC);
-            $totalRows = intval($statusRow['total_rows'] ?? 0);
-            $emptyRows = intval($statusRow['empty_rows'] ?? 0);
-            $trainStatus = ($totalRows > 0 && $emptyRows === 0) ? 1 : 0;
-
-            $sheets[] = [
-                "token_id" => $tokenItem['token_id'],
-                "train_no" => $tokenItem['train_no'],
-                "report_date" => $tokenItem['report_date'],
-                "train_status" => $trainStatus,
-                "coaches" => $coaches
-            ];
-        }
-    }
+    $sheets = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     http_response_code(200);
     echo json_encode([

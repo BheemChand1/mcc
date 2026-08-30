@@ -142,7 +142,8 @@ if (isset($_GET['edit_station'])) {
                 7 => ['name' => 'Vande Bharat Modules', 'key' => 'vande_bharat_modules'],
                 8 => ['name' => 'Attendance & Manpower', 'key' => 'attendance_manpower'],
                 9 => ['name' => 'Cleanliness Modules', 'key' => 'cleanliness_modules'],
-                10 => ['name' => 'Photo Reports', 'key' => 'photo_reports']
+                10 => ['name' => 'Photo Reports', 'key' => 'photo_reports'],
+                11 => ['name' => 'Billing Management', 'key' => 'billing_management']
             ];
             
             $insStmt = $pdo->prepare("INSERT INTO mcc_reports (report_id, report_name, app_key, station_id, status) VALUES (?, ?, ?, ?, 'Inactive')");

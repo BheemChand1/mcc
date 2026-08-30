@@ -255,6 +255,7 @@ $report_names[7] = $report_names[7] ?? 'Vande Bharat Modules';
 $report_names[8] = $report_names[8] ?? 'Attendance & Manpower';
 $report_names[9] = $report_names[9] ?? 'Cleanliness Modules';
 $report_names[10] = $report_names[10] ?? 'Photo Reports';
+$report_names[11] = $report_names[11] ?? 'Billing Management';
 
 $subreport_names[1] = $subreport_names[1] ?? 'Normal Report';
 $subreport_names[2] = $subreport_names[2] ?? 'Chemical Report';
@@ -277,6 +278,7 @@ $subreport_names[18] = $subreport_names[18] ?? 'Vande Bharat Machine Report';
 $subreport_names[19] = $subreport_names[19] ?? 'Man Power Log';
 $subreport_names[20] = $subreport_names[20] ?? 'Cleanliness Scorecard';
 $subreport_names[21] = $subreport_names[21] ?? 'Photo Report (Before/After)';
+$subreport_names[25] = $subreport_names[25] ?? 'Billing Invoice';
 
 // Access mapping helper variables
 $has_normal_audit = in_array('normal-report.php', $active_subreport_urls);
@@ -316,6 +318,7 @@ $has_vb_any       = in_array(7, $active_report_ids) && ($has_vb_audit || $has_vb
 $has_manpower     = in_array(8, $active_report_ids) && in_array('man-power-log.php', $active_subreport_urls);
 $has_cleanliness  = in_array(9, $active_report_ids) && in_array('cleanliness.php', $active_subreport_urls);
 $has_photo_report = in_array(10, $active_report_ids) && in_array('photo-report.php', $active_subreport_urls);
+$has_billing      = in_array(11, $active_report_ids) && in_array('Billing.php', $active_subreport_urls);
 ?>
 <aside class="app-sidebar shadow-lg" data-bs-theme="dark">
   <div class="sidebar-brand">
@@ -694,12 +697,14 @@ $has_photo_report = in_array(10, $active_report_ids) && in_array('photo-report.p
           </ul>
         </li>
 
+        <?php if ($has_billing): ?>
         <li class="nav-item">
           <a href="Billing.php" class="nav-link <?= ($currentPage == 'Billing.php') ? 'active' : '' ?>">
             <i class="nav-icon bi bi-receipt-cutoff"></i>
-            <p>Billing Invoice</p>
+            <p><?= htmlspecialchars($subreport_names[25] ?? 'Billing Invoice') ?></p>
           </a>
         </li>
+        <?php endif; ?>
 
       </ul>
     </nav>

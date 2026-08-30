@@ -14,7 +14,10 @@ if (empty($data)) {
     $data = array_merge($_POST, $_GET);
 }
 
-$stationId = isset($data['station_id']) ? intval($data['station_id']) : null;
+$stationId  = isset($data['station_id']) ? intval($data['station_id']) : null;
+$trainNo    = isset($data['train_no']) ? trim($data['train_no']) : (isset($data['train_number']) ? trim($data['train_number']) : null);
+$reportDate = isset($data['date']) ? trim($data['date']) : (isset($data['report_date']) ? trim($data['report_date']) : date('Y-m-d'));
+$coachNo    = isset($data['coach_no']) ? trim($data['coach_no']) : null;
 
 if ($stationId === null || $stationId <= 0) {
     http_response_code(400);
@@ -85,39 +88,114 @@ try {
         ['label' => 'Not attended', 'value' => '0']
     ];
 
-    // Map subparameters under parameters
+    // 4. Query mcc_intensive_pantry_report for existing parameters/scores if train_no is provided
+    $existingReportsMap = [];
+    if (!empty($trainNo)) {
+        $reportQuery = "
+            SELECT sub_parameter_id, score_value, coach_no, token_id
+            FROM mcc_intensive_pantry_report
+            WHERE station_id = :station_id 
+              AND train_no = :train_no 
+              AND report_date = :report_date
+        ";
+        $reportParams = [
+            'station_id'  => $stationId,
+            'train_no'    => $trainNo,
+            'report_date' => $reportDate
+        ];
+
+        if (!empty($coachNo)) {
+            $reportQuery .= " AND coach_no = :coach_no";
+            $reportParams['coach_no'] = $coachNo;
+        }
+
+        $repStmt = $pdo->prepare($reportQuery);
+        $repStmt->execute($reportParams);
+        $repRows = $repStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($repRows as $r) {
+            $spId = intval($r['sub_parameter_id']);
+            $val = $r['score_value'];
+            $isFilled = ($val !== null && $val !== '' && $val !== 'X' && $val !== '-');
+
+            if (!isset($existingReportsMap[$spId])) {
+                $existingReportsMap[$spId] = [
+                    'exists'      => true,
+                    'filled'      => $isFilled,
+                    'score_value' => $val,
+                    'token_id'    => $r['token_id']
+                ];
+            } else {
+                if ($isFilled) {
+                    $existingReportsMap[$spId]['filled'] = true;
+                    $existingReportsMap[$spId]['score_value'] = $val;
+                }
+            }
+        }
+    }
+
+    // 5. Structure parameters and assign status (0 or 1)
     $parameters = [];
     foreach ($paramRows as $p) {
         $pId = intval($p['parameter_id']);
         $parameters[$pId] = [
             'parameter_id'   => $pId,
             'parameter_name' => $p['parameter_name'],
+            'status'         => 0,
             'sub_parameters' => []
         ];
     }
 
     foreach ($subParamRows as $sp) {
         $pId = intval($sp['parameter_id']);
+        $spId = intval($sp['sub_parameter_id']);
+
         if (isset($parameters[$pId])) {
             $inputType = !empty($sp['input_type']) ? $sp['input_type'] : 'cleaning';
             $spRatings = $ratingGroups[$inputType] ?? ($ratingGroups['cleaning'] ?? $defaultRatings);
 
-            $parameters[$pId]['sub_parameters'][] = [
-                'sub_parameter_id'   => intval($sp['sub_parameter_id']),
+            // Determine subparameter status: 1 if available in mcc_intensive_pantry_report for this train and date, else 0
+            $isAvailable = isset($existingReportsMap[$spId]) ? 1 : 0;
+            $savedScore = isset($existingReportsMap[$spId]) ? $existingReportsMap[$spId]['score_value'] : null;
+
+            if ($isAvailable === 1) {
+                $parameters[$pId]['status'] = 1;
+            }
+
+            $subObj = [
+                'sub_parameter_id'   => $spId,
                 'sub_parameter_name' => $sp['sub_parameter_name'],
                 'input_type'         => $inputType,
+                'status'             => $isAvailable,
                 'ratings'            => $spRatings
             ];
+
+            if ($savedScore !== null) {
+                $subObj['score_value'] = $savedScore;
+            }
+
+            $parameters[$pId]['sub_parameters'][] = $subObj;
         }
     }
 
     http_response_code(200);
-    echo json_encode([
+    $response = [
         "status"     => "success",
         "station_id" => $stationId,
-        "parameters" => array_values($parameters),
-        "ratings"    => $allRatings
-    ]);
+        "date"       => $reportDate
+    ];
+
+    if (!empty($trainNo)) {
+        $response["train_no"] = $trainNo;
+    }
+    if (!empty($coachNo)) {
+        $response["coach_no"] = $coachNo;
+    }
+
+    $response["parameters"] = array_values($parameters);
+    $response["ratings"]    = $allRatings;
+
+    echo json_encode($response);
 
 } catch (Exception $e) {
     http_response_code(500);

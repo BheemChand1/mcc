@@ -236,42 +236,46 @@ $pageTitle = $isEdit ? 'MCC | Edit Employee' : 'MCC | Add Employee';
 
 $extraStyles = '
   :root {
-    --primary-purple: #6f42c1;
-    --dark-purple: #5a32a3;
+    --primary-color: #07203a;
+    --primary-dark: #07182c;
+    --primary-blue: #0c3b6d;
+    --accent-blue: #1987C6;
     --success-green: #198754;
     --cancel-gray: #6c757d;
     --section-bg: #ffffff;
-    --input-border: #dee2e6;
-    --label-color: #495057;
+    --input-border: #d1d5db;
+    --label-color: #4b5563;
   }
 
-  .app-main {
-    background-color: #f0f2f5;
+  body, .app-main {
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    background-color: #f4f6f9;
     min-height: 100vh;
   }
 
   .header-card {
-    background: var(--primary-purple);
+    background: linear-gradient(135deg, #07203a 0%, #0c3b6d 100%);
     color: white;
-    padding: 12px 25px;
+    padding: 14px 25px;
     border-radius: 8px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 25px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+    box-shadow: 0 4px 14px rgba(7, 32, 58, 0.18);
   }
 
   .header-left {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 18px;
   }
 
   .header-title {
-    font-size: 1.5rem;
+    font-size: 1.35rem;
     font-weight: 700;
     margin: 0;
+    letter-spacing: -0.2px;
   }
 
   .header-right {
@@ -280,28 +284,30 @@ $extraStyles = '
   }
 
   .btn-back {
-    background: #fff;
-    color: #333;
-    border: none;
-    padding: 5px 15px;
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: 6px 14px;
     border-radius: 6px;
     font-size: 0.85rem;
     font-weight: 600;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     text-decoration: none;
-    transition: all 0.2s;
+    transition: all 0.2s ease-in-out;
   }
 
   .btn-back:hover {
-    background: #f8f9fa;
+    background: #ffffff;
+    color: #07203a;
     transform: translateX(-2px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
   }
 
   .form-container {
     width: 100%;
-    padding: 10px;
+    padding: 10px 15px;
     margin: 0;
   }
 
@@ -321,34 +327,34 @@ $extraStyles = '
   .form-section {
     background: var(--section-bg);
     border-radius: 8px;
-    padding: 2px 18px;
-    margin-bottom: 6px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    border: 1px solid #eef0f2;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    border: 1px solid #e5e7eb;
     width: 100%;
   }
 
   .section-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid #f1f1f1;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f0f2f5;
   }
 
   .section-icon {
-    font-size: 1.1rem;
-    color: var(--primary-purple);
+    font-size: 1.15rem;
+    color: #0c3b6d;
   }
 
   .section-title {
-    font-size: 0.95rem;
+    font-size: 0.92rem;
     font-weight: 700;
-    color: #333;
+    color: #07203a;
     margin: 0;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.4px;
   }
 
   .field-grid-4 {
@@ -370,15 +376,15 @@ $extraStyles = '
   .form-column {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 4px;
   }
 
   .flex-section {
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding-top: 25px !important;
-    padding-bottom: 25px !important;
+    padding-top: 18px !important;
+    padding-bottom: 18px !important;
   }
 
   .flex-section .field-grid-3 {
@@ -388,11 +394,12 @@ $extraStyles = '
 
   .form-label {
     display: block;
-    font-size: 0.78rem;
+    font-size: 0.76rem;
     font-weight: 600;
-    color: #666;
+    color: #4b5563;
     margin-bottom: 4px;
     text-transform: uppercase;
+    letter-spacing: 0.2px;
   }
 
   .form-label .required {
@@ -402,64 +409,64 @@ $extraStyles = '
 
   .form-control, .form-select {
     width: 100%;
-    padding: 6px 10px;
-    border: 1px solid #d1d5db;
+    padding: 7px 11px;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-size: 0.85rem;
-    color: #333;
+    color: #1f2937;
     background-color: #fff;
-    transition: all 0.2s;
+    transition: all 0.2s ease-in-out;
   }
 
   .form-control:focus, .form-select:focus {
-    border-color: var(--primary-purple);
-    box-shadow: 0 0 0 3px rgba(111, 66, 193, 0.1);
+    border-color: #0c3b6d;
+    box-shadow: 0 0 0 3px rgba(12, 59, 109, 0.12);
     outline: none;
   }
 
   .form-control::placeholder {
-    color: #adb5bd;
+    color: #9ca3af;
   }
 
   .photo-upload-container {
-    border: 1.5px dashed #dee2e6;
+    border: 1.5px dashed #cbd5e1;
     border-radius: 6px;
-    padding: 8px;
-    background-color: #fafafa;
+    padding: 10px;
+    background-color: #f8fafc;
     transition: all 0.2s;
   }
 
   .photo-upload-container:hover {
-    border-color: var(--primary-purple);
-    background-color: #fdfcff;
+    border-color: #0c3b6d;
+    background-color: #f0f4f8;
   }
 
   .photo-hint {
     font-size: 0.8rem;
-    color: #6c757d;
+    color: #64748b;
     margin-top: 8px;
   }
 
   .footer-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 15px;
-    margin-top: 10px;
+    gap: 12px;
+    margin-top: 15px;
     padding-bottom: 40px;
   }
 
   .btn-action {
-    padding: 8px 20px;
+    padding: 8px 22px;
     border-radius: 6px;
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     display: flex;
     align-items: center;
     gap: 8px;
     border: none;
     cursor: pointer;
-    transition: all 0.2s;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: all 0.2s ease-in-out;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
   }
 
   .btn-cancel {
@@ -468,20 +475,20 @@ $extraStyles = '
   }
 
   .btn-cancel:hover {
-    background-color: #5a6268;
+    background-color: #495057;
     transform: translateY(-1px);
-    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.12);
   }
 
   .btn-create {
-    background-color: var(--success-green);
+    background: linear-gradient(135deg, #07203a 0%, #0c3b6d 100%);
     color: white;
   }
 
   .btn-create:hover {
-    background-color: #157347;
+    background: linear-gradient(135deg, #07182c 0%, #07203a 100%);
     transform: translateY(-1px);
-    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 10px rgba(7, 32, 58, 0.25);
   }
 
   @media (max-width: 1200px) {

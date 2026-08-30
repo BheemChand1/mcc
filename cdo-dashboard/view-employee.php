@@ -157,14 +157,14 @@ $extraStyles = "
     }
 
     .employee-table th {
-        background: #343a40;
+        background: linear-gradient(180deg, #07203a 0%, #07182c 100%) !important;
         padding: 10px 15px;
         text-align: center;
         font-size: 0.75rem;
         font-weight: 600;
         text-transform: uppercase;
         color: #fff;
-        border: 1px solid #454d55;
+        border: 1px solid #133357;
     }
     
     .employee-table td {

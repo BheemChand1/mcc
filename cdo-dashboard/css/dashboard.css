@@ -41,7 +41,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
   background: radial-gradient(circle at 75% 15%, rgba(0, 135, 215, 0.08), transparent 30%), var(--mcc-bg) !important;
   color: var(--mcc-text) !important;
   font-family: Inter, "Segoe UI", Arial, sans-serif !important;
-  font-size: 12px !important;
+  font-size: 15px !important;
   padding: 10px !important;
   box-sizing: border-box !important;
 }
@@ -96,7 +96,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
 }
 
 .mcc-kpi {
-  height: 67px !important;
+  height: 76px !important;
   display: flex !important;
   align-items: center !important;
   padding: 8px 10px !important;
@@ -110,14 +110,14 @@ body:has(.mcc-dashboard-shell) .app-footer,
   border-radius: 50% !important;
   display: grid !important;
   place-items: center !important;
-  font-size: 20px !important;
+  font-size: 23px !important;
   border: 2px solid currentColor !important;
   box-shadow: 0 0 0 5px rgba(11, 194, 255, 0.06) !important;
   flex: 0 0 auto !important;
 }
 
 .mcc-kpi small {
-  font-size: 8px !important;
+  font-size: 11.5px !important;
   color: var(--mcc-text) !important;
   opacity: 0.84 !important;
   white-space: nowrap !important;
@@ -126,7 +126,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
 }
 
 .mcc-kpi-value {
-  font-size: 21px !important;
+  font-size: 26px !important;
   font-weight: 700 !important;
   line-height: 1.1 !important;
   margin-top: 3px !important;
@@ -136,11 +136,11 @@ body:has(.mcc-dashboard-shell) .app-footer,
 .mcc-kpi-value span {
   font-weight: 400 !important;
   color: #b3c0cc !important;
-  font-size: 14px !important;
+  font-size: 16px !important;
 }
 
 .mcc-kpi-sub {
-  font-size: 8px !important;
+  font-size: 11px !important;
   margin-top: 4px !important;
   color: var(--mcc-muted) !important;
 }
@@ -183,7 +183,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
    Panel Header & Controls
    -------------------------------------------------------------------------- */
 .mcc-panel-head {
-  height: 24px !important;
+  height: 30px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
@@ -193,7 +193,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
 }
 
 .mcc-panel-head h2 {
-  font-size: 11px !important;
+  font-size: 14px !important;
   margin: 0 !important;
   color: var(--mcc-cyan) !important;
   font-weight: 700 !important;
@@ -206,7 +206,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
 }
 
 .mcc-panel-head select {
-  font-size: 8px !important;
+  font-size: 11.5px !important;
   background: var(--mcc-panel) !important;
   color: var(--mcc-text) !important;
   border: 1px solid var(--mcc-line-soft) !important;
@@ -220,7 +220,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
 .mcc-legend {
   display: flex !important;
   gap: 15px !important;
-  font-size: 8px !important;
+  font-size: 11px !important;
 }
 
 .mcc-legend span {
@@ -242,11 +242,11 @@ body:has(.mcc-dashboard-shell) .app-footer,
 
 .mcc-panel-link {
   width: 100% !important;
-  height: 19px !important;
+  height: 25px !important;
   border: 1px solid #0b6191 !important;
   background: rgba(5, 78, 118, 0.18) !important;
   color: var(--mcc-cyan) !important;
-  font-size: 8px !important;
+  font-size: 11px !important;
   border-radius: 4px !important;
   cursor: pointer !important;
   margin-top: auto !important;
@@ -268,7 +268,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
 .mcc-panel-link span {
   position: absolute !important;
   right: 12px !important;
-  font-size: 10px !important;
+  font-size: 12px !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -283,7 +283,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
   width: 100% !important;
   border-collapse: separate !important;
   border-spacing: 0 3px !important;
-  font-size: 8px !important;
+  font-size: 13px !important;
   background: transparent !important;
   background-color: transparent !important;
   margin: 0 !important;
@@ -302,14 +302,14 @@ body:has(.mcc-dashboard-shell) .app-footer,
 .mcc-dashboard-shell table.mcc-ops-table th {
   font-weight: 500 !important;
   color: #bfd0de !important;
-  padding: 3px 7px !important;
+  padding: 4px 7px !important;
   text-align: left !important;
   border: none !important;
   border-bottom: 1px solid rgba(65, 119, 150, 0.25) !important;
   white-space: nowrap !important;
   background: transparent !important;
   background-color: transparent !important;
-  font-size: 8px !important;
+  font-size: 12px !important;
   letter-spacing: normal !important;
   text-transform: uppercase !important;
 }
@@ -323,7 +323,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
   border-bottom: 1px solid rgba(24, 92, 130, 0.42) !important;
   vertical-align: middle !important;
   color: var(--mcc-text) !important;
-  font-size: 8px !important;
+  font-size: 13px !important;
   line-height: normal !important;
 }
 
@@ -351,14 +351,14 @@ body:has(.mcc-dashboard-shell) .app-footer,
 }
 
 .mcc-train-badge {
-  width: 18px !important;
-  height: 18px !important;
+  width: 22px !important;
+  height: 22px !important;
   border-radius: 50% !important;
   display: grid !important;
   place-items: center !important;
   color: #00151e !important;
   font-weight: 900 !important;
-  font-size: 8px !important;
+  font-size: 11.5px !important;
 }
 
 .mcc-progress-cell {
@@ -397,7 +397,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
 }
 
 .mcc-timer small {
-  font-size: 7px !important;
+  font-size: 8.5px !important;
   display: block !important;
   font-weight: 400 !important;
   color: var(--mcc-muted) !important;
@@ -411,7 +411,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
   border-radius: 4px !important;
   padding: 2px 9px !important;
   color: var(--mcc-cyan) !important;
-  font-size: 8px !important;
+  font-size: 11.5px !important;
   font-weight: 700 !important;
 }
 
@@ -488,18 +488,18 @@ body:has(.mcc-dashboard-shell) .app-footer,
 }
 
 .mcc-insight strong {
-  font-size: 8px !important;
+  font-size: 12.5px !important;
   display: block !important;
 }
 
 .mcc-insight p {
-  font-size: 7px !important;
+  font-size: 11.5px !important;
   margin: 2px 0 0 !important;
   color: #b9c9d7 !important;
 }
 
 .mcc-insight a {
-  font-size: 7px !important;
+  font-size: 11.5px !important;
   color: var(--mcc-cyan) !important;
   text-align: right !important;
   font-weight: 600 !important;
@@ -525,9 +525,9 @@ body:has(.mcc-dashboard-shell) .app-footer,
   grid-template-columns: 1fr auto auto !important;
   gap: 8px !important;
   align-items: center !important;
-  height: 20px !important;
+  height: 24px !important;
   border-bottom: 1px solid rgba(65, 112, 140, 0.24) !important;
-  font-size: 8px !important;
+  font-size: 12.5px !important;
 }
 
 .mcc-summary-line:last-child {
@@ -542,12 +542,12 @@ body:has(.mcc-dashboard-shell) .app-footer,
 }
 
 .mcc-summary-icon {
-  width: 13px !important;
-  height: 13px !important;
+  width: 17px !important;
+  height: 17px !important;
   border-radius: 3px !important;
   display: grid !important;
   place-items: center !important;
-  font-size: 8px !important;
+  font-size: 11.5px !important;
   font-style: normal !important;
 }
 
@@ -605,14 +605,14 @@ body:has(.mcc-dashboard-shell) .app-footer,
   display: flex !important;
   flex-direction: column !important;
   justify-content: space-between !important;
-  font-size: 7px !important;
+  font-size: 11px !important;
   color: #afc0ce !important;
 }
 
 .mcc-xlabels {
   display: flex !important;
   justify-content: space-between !important;
-  font-size: 7px !important;
+  font-size: 11px !important;
   color: #9fb2c0 !important;
   margin-top: -2px !important;
 }
@@ -620,7 +620,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
 .mcc-chart-legend {
   text-align: center !important;
   color: #a8bac8 !important;
-  font-size: 7px !important;
+  font-size: 11px !important;
   margin-top: 5px !important;
 }
 
@@ -669,18 +669,18 @@ body:has(.mcc-dashboard-shell) .app-footer,
 }
 
 .mcc-donut-center span {
-  font-size: 8px !important;
+  font-size: 11.5px !important;
   color: var(--mcc-muted) !important;
 }
 
 .mcc-donut-center strong {
-  font-size: 22px !important;
+  font-size: 28px !important;
   line-height: 1 !important;
   color: #ffffff !important;
 }
 
 .mcc-donut-legend {
-  font-size: 7.5px !important;
+  font-size: 11.5px !important;
 }
 
 .mcc-legend-row {
@@ -688,7 +688,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
   grid-template-columns: 8px 1fr auto !important;
   gap: 5px !important;
   align-items: center !important;
-  height: 17px !important;
+  height: 19px !important;
 }
 
 .mcc-legend-row i {
@@ -714,7 +714,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
 .mcc-dashboard-shell table.mcc-mini-table {
   width: 100% !important;
   border-collapse: collapse !important;
-  font-size: 7.5px !important;
+  font-size: 11.5px !important;
   background: transparent !important;
   background-color: transparent !important;
   margin: 0 !important;
@@ -737,7 +737,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
   border-bottom: 1px solid rgba(65, 110, 140, 0.25) !important;
   background: transparent !important;
   background-color: transparent !important;
-  font-size: 7.5px !important;
+  font-size: 11.5px !important;
   color: var(--mcc-text) !important;
   line-height: normal !important;
 }
@@ -765,12 +765,12 @@ body:has(.mcc-dashboard-shell) .app-footer,
 }
 
 .mcc-bar-list > div {
-  height: 20px !important;
+  height: 23px !important;
   display: grid !important;
-  grid-template-columns: 85px 1fr 52px !important;
+  grid-template-columns: 115px 1fr 55px !important;
   gap: 8px !important;
   align-items: center !important;
-  font-size: 8px !important;
+  font-size: 12.5px !important;
 }
 
 .mcc-bar-list b {
@@ -805,12 +805,12 @@ body:has(.mcc-dashboard-shell) .app-footer,
 }
 
 .mcc-alert-list > div {
-  height: 21px !important;
+  height: 23px !important;
   display: grid !important;
   grid-template-columns: 18px 1fr 58px !important;
   align-items: center !important;
   border-bottom: 1px solid rgba(65, 110, 140, 0.22) !important;
-  font-size: 8px !important;
+  font-size: 12.5px !important;
 }
 
 .mcc-alert-list > div:last-child {
@@ -836,7 +836,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
   border-radius: 50% !important;
   display: grid !important;
   place-items: center !important;
-  font-size: 8px !important;
+  font-size: 11px !important;
   color: #fff !important;
   font-weight: 700 !important;
 }
@@ -850,7 +850,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
    Status Bar (Footer Ticker)
    -------------------------------------------------------------------------- */
 .mcc-statusbar {
-  height: 25px !important;
+  height: 30px !important;
   border: 1px solid var(--mcc-line-soft) !important;
   border-radius: 6px !important;
   background: linear-gradient(180deg, var(--mcc-panel2), var(--mcc-panel)) !important;
@@ -858,7 +858,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
   align-items: center !important;
   justify-content: space-between !important;
   padding: 0 12px !important;
-  font-size: 7px !important;
+  font-size: 12px !important;
   color: #9db1c0 !important;
   gap: 15px !important;
   overflow: hidden !important;
@@ -880,7 +880,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
     height: 40px !important;
   }
   .mcc-kpi-value {
-    font-size: 18px !important;
+    font-size: 22px !important;
   }
   .mcc-ai-content {
     grid-template-columns: 70px 1fr !important;

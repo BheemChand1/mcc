@@ -67,7 +67,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
    -------------------------------------------------------------------------- */
 .mcc-dashboard-grid {
   display: grid !important;
-  grid-template-columns: 1.2fr 0.82fr 0.72fr 1.02fr !important;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 0.82fr) minmax(0, 1.08fr) !important;
   gap: 8px !important;
   grid-template-areas:
     "kpi kpi kpi kpi"
@@ -75,6 +75,18 @@ body:has(.mcc-dashboard-shell) .app-footer,
     "summary trend manpower machinery"
     "trains deficiency alerts alerts"
     "status status status status" !important;
+}
+
+/* A grid item otherwise uses its content width as its minimum size.  On wide
+   displays (where the type is also enlarged below) that made neighbouring
+   panels push into one another instead of staying inside their columns. */
+.mcc-dashboard-grid > *,
+.mcc-kpi-row > *,
+.mcc-kpi > div,
+.mcc-panel-head > *,
+.mcc-ai-content > *,
+.mcc-donut-wrap > * {
+  min-width: 0 !important;
 }
 
 .mcc-card {
@@ -198,6 +210,10 @@ body:has(.mcc-dashboard-shell) .app-footer,
   color: var(--mcc-cyan) !important;
   font-weight: 700 !important;
   letter-spacing: 0.5px !important;
+  line-height: 1.2 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .mcc-panel-head h2 small {
@@ -215,6 +231,13 @@ body:has(.mcc-dashboard-shell) .app-footer,
   outline: none !important;
   cursor: pointer !important;
   height: auto !important;
+}
+
+.mcc-trend-range {
+  color: var(--mcc-muted) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
 }
 
 .mcc-legend {
@@ -419,8 +442,10 @@ body:has(.mcc-dashboard-shell) .app-footer,
   display: grid !important;
   grid-template-columns: 93px 1fr !important;
   gap: 8px !important;
-  height: 207px !important;
+  min-height: 200px !important;
+  height: auto !important;
   align-items: center !important;
+  flex: 1 !important;
 }
 
 .mcc-ai-brain {
@@ -460,18 +485,21 @@ body:has(.mcc-dashboard-shell) .app-footer,
 .mcc-insight-list {
   display: flex !important;
   flex-direction: column !important;
-  height: 100% !important;
+  min-height: 190px !important;
+  height: auto !important;
+  gap: 6px !important;
   justify-content: space-between !important;
 }
 
 .mcc-insight {
   flex: 1 !important;
   display: grid !important;
-  grid-template-columns: 24px 1fr 56px !important;
-  gap: 6px !important;
+  grid-template-columns: 24px 1fr auto !important;
+  gap: 8px !important;
   align-items: center !important;
   border-bottom: 1px solid rgba(52, 99, 129, 0.3) !important;
-  padding: 2px 0 !important;
+  padding: 4px 0 !important;
+  min-height: 40px !important;
 }
 
 .mcc-insight:last-child {
@@ -488,21 +516,28 @@ body:has(.mcc-dashboard-shell) .app-footer,
 }
 
 .mcc-insight strong {
-  font-size: 12.5px !important;
+  font-size: 12px !important;
   display: block !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 
 .mcc-insight p {
-  font-size: 11.5px !important;
-  margin: 2px 0 0 !important;
+  font-size: 11px !important;
+  margin: 1px 0 0 !important;
   color: #b9c9d7 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 
 .mcc-insight a {
-  font-size: 11.5px !important;
+  font-size: 11px !important;
   color: var(--mcc-cyan) !important;
   text-align: right !important;
   font-weight: 600 !important;
+  white-space: nowrap !important;
 }
 
 .mcc-tone-red { color: #ff4659 !important; background: rgba(255, 56, 74, 0.13) !important; }
@@ -514,10 +549,13 @@ body:has(.mcc-dashboard-shell) .app-footer,
    Work Summary Section
    -------------------------------------------------------------------------- */
 .mcc-summary-list {
-  height: 124px !important;
+  min-height: 120px !important;
+  height: auto !important;
   display: flex !important;
   flex-direction: column !important;
   justify-content: space-between !important;
+  gap: 6px !important;
+  flex: 1 !important;
 }
 
 .mcc-summary-line {
@@ -525,9 +563,10 @@ body:has(.mcc-dashboard-shell) .app-footer,
   grid-template-columns: 1fr auto auto !important;
   gap: 8px !important;
   align-items: center !important;
-  height: 24px !important;
+  min-height: 24px !important;
+  height: auto !important;
   border-bottom: 1px solid rgba(65, 112, 140, 0.24) !important;
-  font-size: 12.5px !important;
+  font-size: 12px !important;
 }
 
 .mcc-summary-line:last-child {
@@ -539,25 +578,31 @@ body:has(.mcc-dashboard-shell) .app-footer,
   align-items: center !important;
   gap: 6px !important;
   font-weight: 500 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 
 .mcc-summary-icon {
-  width: 17px !important;
-  height: 17px !important;
+  width: 16px !important;
+  height: 16px !important;
   border-radius: 3px !important;
   display: grid !important;
   place-items: center !important;
-  font-size: 11.5px !important;
+  font-size: 11px !important;
   font-style: normal !important;
+  flex-shrink: 0 !important;
 }
 
 .mcc-summary-val {
   color: #b9c8d6 !important;
+  white-space: nowrap !important;
 }
 
 .mcc-summary-score {
   color: var(--mcc-green) !important;
   font-weight: 800 !important;
+  white-space: nowrap !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -565,13 +610,15 @@ body:has(.mcc-dashboard-shell) .app-footer,
    -------------------------------------------------------------------------- */
 .mcc-line-chart {
   position: relative !important;
-  height: 145px !important;
+  min-height: 135px !important;
+  height: auto !important;
   padding-left: 26px !important;
+  flex: 1 !important;
 }
 
 .mcc-line-chart svg {
   width: 100% !important;
-  height: 100px !important;
+  height: 95px !important;
   overflow: visible !important;
 }
 
@@ -601,18 +648,18 @@ body:has(.mcc-dashboard-shell) .app-footer,
   position: absolute !important;
   left: 0 !important;
   top: 6px !important;
-  height: 93px !important;
+  height: 88px !important;
   display: flex !important;
   flex-direction: column !important;
   justify-content: space-between !important;
-  font-size: 11px !important;
+  font-size: 10px !important;
   color: #afc0ce !important;
 }
 
 .mcc-xlabels {
   display: flex !important;
   justify-content: space-between !important;
-  font-size: 11px !important;
+  font-size: 10px !important;
   color: #9fb2c0 !important;
   margin-top: -2px !important;
 }
@@ -620,7 +667,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
 .mcc-chart-legend {
   text-align: center !important;
   color: #a8bac8 !important;
-  font-size: 11px !important;
+  font-size: 10px !important;
   margin-top: 5px !important;
 }
 
@@ -628,16 +675,18 @@ body:has(.mcc-dashboard-shell) .app-footer,
    Donut Charts (Manpower & Machinery)
    -------------------------------------------------------------------------- */
 .mcc-donut-wrap {
-  height: 145px !important;
+  min-height: 135px !important;
+  height: auto !important;
   display: grid !important;
-  grid-template-columns: 105px 1fr !important;
+  grid-template-columns: 95px 1fr !important;
   align-items: center !important;
   gap: 8px !important;
+  flex: 1 !important;
 }
 
 .mcc-donut {
-  width: 86px !important;
-  height: 86px !important;
+  width: 82px !important;
+  height: 82px !important;
   border-radius: 50% !important;
   position: relative !important;
   margin: auto !important;
@@ -654,7 +703,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
 .mcc-donut::after {
   content: "" !important;
   position: absolute !important;
-  inset: 15px !important;
+  inset: 14px !important;
   background: var(--mcc-panel) !important;
   border-radius: 50% !important;
 }
@@ -669,18 +718,18 @@ body:has(.mcc-dashboard-shell) .app-footer,
 }
 
 .mcc-donut-center span {
-  font-size: 11.5px !important;
+  font-size: 10.5px !important;
   color: var(--mcc-muted) !important;
 }
 
 .mcc-donut-center strong {
-  font-size: 28px !important;
+  font-size: 24px !important;
   line-height: 1 !important;
   color: #ffffff !important;
 }
 
 .mcc-donut-legend {
-  font-size: 11.5px !important;
+  font-size: 11px !important;
 }
 
 .mcc-legend-row {
@@ -688,7 +737,8 @@ body:has(.mcc-dashboard-shell) .app-footer,
   grid-template-columns: 8px 1fr auto !important;
   gap: 5px !important;
   align-items: center !important;
-  height: 19px !important;
+  min-height: 19px !important;
+  height: auto !important;
 }
 
 .mcc-legend-row i {
@@ -700,12 +750,14 @@ body:has(.mcc-dashboard-shell) .app-footer,
 
 .mcc-legend-row span {
   color: #b9c9d7 !important;
+  white-space: nowrap !important;
 }
 
 .mcc-legend-row em {
   font-style: normal !important;
   font-weight: 700 !important;
   color: #ffffff !important;
+  white-space: nowrap !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -714,7 +766,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
 .mcc-dashboard-shell table.mcc-mini-table {
   width: 100% !important;
   border-collapse: collapse !important;
-  font-size: 11.5px !important;
+  font-size: 11px !important;
   background: transparent !important;
   background-color: transparent !important;
   margin: 0 !important;
@@ -737,9 +789,10 @@ body:has(.mcc-dashboard-shell) .app-footer,
   border-bottom: 1px solid rgba(65, 110, 140, 0.25) !important;
   background: transparent !important;
   background-color: transparent !important;
-  font-size: 11.5px !important;
+  font-size: 11px !important;
   color: var(--mcc-text) !important;
   line-height: normal !important;
+  white-space: nowrap !important;
 }
 
 .mcc-dashboard-shell table.mcc-mini-table th {
@@ -754,23 +807,61 @@ body:has(.mcc-dashboard-shell) .app-footer,
 }
 
 /* --------------------------------------------------------------------------
-   Deficiency Bar List
+   Deficiency Bar List (Quality Parameter Distribution)
    -------------------------------------------------------------------------- */
 .mcc-bar-list {
-  height: 103px !important;
-  padding-top: 3px !important;
+  min-height: 115px !important;
+  height: 150px !important;
+  max-height: 150px !important;
+  padding: 3px 5px 3px 0 !important;
   display: flex !important;
   flex-direction: column !important;
-  justify-content: space-between !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+  flex: 0 0 auto !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--mcc-line) rgba(3, 16, 30, 0.45) !important;
+  overscroll-behavior: contain !important;
+}
+
+.mcc-bar-list::-webkit-scrollbar {
+  width: 5px !important;
+}
+
+.mcc-bar-list::-webkit-scrollbar-track {
+  background: rgba(3, 16, 30, 0.45) !important;
+  border-radius: 10px !important;
+}
+
+.mcc-bar-list::-webkit-scrollbar-thumb {
+  background: var(--mcc-line) !important;
+  border-radius: 10px !important;
 }
 
 .mcc-bar-list > div {
-  height: 23px !important;
+  min-height: 28px !important;
+  height: 28px !important;
+  flex: 0 0 28px !important;
   display: grid !important;
-  grid-template-columns: 115px 1fr 55px !important;
-  gap: 8px !important;
+  grid-template-columns: minmax(0, 155px) minmax(55px, 1fr) 36px !important;
+  column-gap: 7px !important;
   align-items: center !important;
-  font-size: 12.5px !important;
+  font-size: 10.5px !important;
+  line-height: 1 !important;
+  overflow: hidden !important;
+}
+
+.mcc-bar-list > div > span {
+  display: block !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  font-weight: 600 !important;
+  line-height: 28px !important;
 }
 
 .mcc-bar-list b {
@@ -792,25 +883,36 @@ body:has(.mcc-dashboard-shell) .app-footer,
   color: #bac8d4 !important;
   text-align: right !important;
   font-weight: 700 !important;
+  white-space: nowrap !important;
+}
+
+.mcc-deficiency .mcc-panel-head h2 {
+  font-size: clamp(10.5px, 0.72vw, 13px) !important;
+  letter-spacing: 0.25px !important;
 }
 
 /* --------------------------------------------------------------------------
    Alerts List
    -------------------------------------------------------------------------- */
 .mcc-alert-list {
-  height: 103px !important;
+  min-height: 115px !important;
+  height: auto !important;
   display: flex !important;
   flex-direction: column !important;
   justify-content: space-between !important;
+  gap: 6px !important;
+  flex: 1 !important;
 }
 
 .mcc-alert-list > div {
-  height: 23px !important;
+  min-height: 22px !important;
+  height: auto !important;
   display: grid !important;
-  grid-template-columns: 18px 1fr 58px !important;
+  grid-template-columns: 18px 1fr 65px !important;
   align-items: center !important;
   border-bottom: 1px solid rgba(65, 110, 140, 0.22) !important;
-  font-size: 12.5px !important;
+  font-size: 11.5px !important;
+  padding: 2px 0 !important;
 }
 
 .mcc-alert-list > div:last-child {
@@ -828,6 +930,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
 .mcc-alert-list time {
   text-align: right !important;
   color: #a8b9c5 !important;
+  white-space: nowrap !important;
 }
 
 .mcc-alert-dot {
@@ -836,7 +939,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
   border-radius: 50% !important;
   display: grid !important;
   place-items: center !important;
-  font-size: 11px !important;
+  font-size: 10px !important;
   color: #fff !important;
   font-weight: 700 !important;
 }
@@ -858,7 +961,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
   align-items: center !important;
   justify-content: space-between !important;
   padding: 0 12px !important;
-  font-size: 12px !important;
+  font-size: 11.5px !important;
   color: #9db1c0 !important;
   gap: 15px !important;
   overflow: hidden !important;
@@ -866,33 +969,188 @@ body:has(.mcc-dashboard-shell) .app-footer,
 }
 
 /* --------------------------------------------------------------------------
-   Responsive Breakpoints
+   RESPONSIVE MEDIA QUERIES (Small Screens to 22"+ Monitors & 4K)
    -------------------------------------------------------------------------- */
+
+/* Standard Desktop & 22-inch Monitors (1600px - 1920px) */
+@media (min-width: 1600px) {
+  .mcc-dashboard-shell {
+    font-size: 14px !important;
+    padding: 12px !important;
+  }
+  .mcc-kpi {
+    min-height: 78px !important;
+    height: auto !important;
+  }
+  .mcc-kpi-value {
+    font-size: 23px !important;
+  }
+  .mcc-kpi small {
+    font-size: 11px !important;
+  }
+  .mcc-panel-head h2 {
+    font-size: 13.5px !important;
+  }
+  .mcc-dashboard-shell table.mcc-ops-table {
+    font-size: 12px !important;
+  }
+  .mcc-dashboard-shell table.mcc-ops-table thead th,
+  .mcc-dashboard-shell table.mcc-ops-table th {
+    font-size: 11.5px !important;
+  }
+  .mcc-dashboard-shell table.mcc-ops-table td {
+    font-size: 12px !important;
+  }
+  .mcc-insight strong {
+    font-size: 12px !important;
+  }
+  .mcc-insight p, .mcc-insight a {
+    font-size: 11px !important;
+  }
+  .mcc-bar-list > div {
+    grid-template-columns: minmax(0, 165px) minmax(70px, 1fr) 40px !important;
+    font-size: 11px !important;
+    min-height: 29px !important;
+    height: 29px !important;
+    flex-basis: 29px !important;
+  }
+  .mcc-statusbar {
+    font-size: 12px !important;
+  }
+}
+
+/* Ultra-Wide & 4K Large Monitors (> 1920px) */
+@media (min-width: 1921px) {
+  .mcc-dashboard-shell {
+    font-size: 16px !important;
+    padding: 16px !important;
+  }
+  .mcc-kpi {
+    min-height: 88px !important;
+    height: auto !important;
+  }
+  .mcc-kpi-value {
+    font-size: 26px !important;
+  }
+  .mcc-kpi small {
+    font-size: 12.5px !important;
+  }
+  .mcc-panel-head h2 {
+    font-size: 15px !important;
+  }
+  .mcc-dashboard-shell table.mcc-ops-table {
+    font-size: 13.5px !important;
+  }
+  .mcc-dashboard-shell table.mcc-ops-table thead th,
+  .mcc-dashboard-shell table.mcc-ops-table th {
+    font-size: 13px !important;
+  }
+  .mcc-dashboard-shell table.mcc-ops-table td {
+    font-size: 13.5px !important;
+  }
+  .mcc-insight strong {
+    font-size: 13.5px !important;
+  }
+  .mcc-insight p, .mcc-insight a {
+    font-size: 12.5px !important;
+  }
+  .mcc-bar-list > div {
+    grid-template-columns: minmax(0, 190px) minmax(90px, 1fr) 46px !important;
+    font-size: 12.5px !important;
+    min-height: 32px !important;
+    height: 32px !important;
+    flex-basis: 32px !important;
+  }
+  .mcc-statusbar {
+    font-size: 13px !important;
+    height: 34px !important;
+  }
+}
+
+/* Standard Laptops (1201px - 1599px) */
+@media (max-width: 1599px) and (min-width: 1201px) {
+  .mcc-dashboard-shell {
+    font-size: 13px !important;
+  }
+  .mcc-kpi {
+    height: 68px !important;
+    padding: 6px 8px !important;
+  }
+  .mcc-kpi-value {
+    font-size: 20px !important;
+  }
+  .mcc-kpi small {
+    font-size: 9.5px !important;
+  }
+  .mcc-panel-head h2 {
+    font-size: 12px !important;
+  }
+  .mcc-dashboard-shell table.mcc-ops-table {
+    font-size: 11px !important;
+  }
+  .mcc-dashboard-shell table.mcc-ops-table td {
+    font-size: 11px !important;
+  }
+  .mcc-bar-list > div {
+    grid-template-columns: 145px 1fr 45px !important;
+    font-size: 11px !important;
+  }
+}
+
+/* Mid-size Laptops & Tablets (993px - 1200px) */
 @media (max-width: 1200px) {
   .mcc-dashboard-grid {
     grid-template-columns: 1.2fr 0.82fr 0.72fr 1fr !important;
   }
   .mcc-kpi {
     padding: 6px !important;
+    height: 65px !important;
   }
   .mcc-kpi-icon {
-    width: 40px !important;
-    height: 40px !important;
+    width: 38px !important;
+    height: 38px !important;
+    font-size: 18px !important;
   }
   .mcc-kpi-value {
-    font-size: 22px !important;
+    font-size: 18px !important;
   }
   .mcc-ai-content {
     grid-template-columns: 70px 1fr !important;
   }
   .mcc-ai-brain {
-    transform: scale(0.8) !important;
+    transform: scale(0.75) !important;
+  }
+  .mcc-bar-list > div {
+    grid-template-columns: minmax(0, 145px) minmax(55px, 1fr) 36px !important;
+    font-size: 10.5px !important;
   }
 }
 
+/* Once the content area (after the fixed sidebar) becomes narrow, use two
+   useful columns instead of squeezing four desktop panels together. */
+@media (max-width: 1250px) and (min-width: 993px) {
+  .mcc-dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-areas:
+      "kpi kpi"
+      "cmd cmd"
+      "ai ai"
+      "summary trend"
+      "manpower machinery"
+      "trains deficiency"
+      "alerts alerts"
+      "status status" !important;
+  }
+
+  .mcc-kpi-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Tablet & Mobile Layout (< 992px) */
 @media (max-width: 992px) {
   .mcc-dashboard-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     grid-template-areas:
       "kpi kpi"
       "cmd cmd"
@@ -904,7 +1162,7 @@ body:has(.mcc-dashboard-shell) .app-footer,
       "status status" !important;
   }
   .mcc-kpi-row {
-    grid-template-columns: repeat(3, 1fr) !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
 
@@ -925,7 +1183,12 @@ body:has(.mcc-dashboard-shell) .app-footer,
       "status" !important;
   }
   .mcc-kpi-row {
-    grid-template-columns: repeat(2, 1fr) !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .mcc-kpi {
+    min-height: 76px !important;
+    height: auto !important;
   }
   .mcc-statusbar {
     flex-direction: column !important;

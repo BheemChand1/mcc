@@ -9,7 +9,7 @@ require_once 'auth.php';
 global $pdo;
 
 $stationId = $_SESSION['station_id'] ?? 1;
-$selectedDate = $_GET['date'] ?? date('Y-m-d');
+$selectedDate = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata')))->format('Y-m-d');
 $month = date('m', strtotime($selectedDate));
 $year = date('Y', strtotime($selectedDate));
 
@@ -26,12 +26,12 @@ try {
                AVG(CASE WHEN score_value REGEXP '^[0-9]+$' THEN CAST(score_value AS DECIMAL(5,2)) ELSE NULL END) as avg_score,
                MAX(created_at) as last_updated
         FROM mcc_normal_scorecard_report
-        WHERE station_id = :sid
+        WHERE station_id = :sid AND report_date = :rdate
         GROUP BY token_id, train_no, report_date, auditor_name
         ORDER BY report_date DESC, last_updated DESC
         LIMIT 10
     ");
-    $stmt->execute(['sid' => $stationId]);
+    $stmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
     while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $scorePct = $r['avg_score'] !== null ? round((floatval($r['avg_score']) / 3.0) * 100, 1) : 0;
         $liveOperations[] = [
@@ -60,12 +60,12 @@ try {
                AVG(CASE WHEN score_value REGEXP '^[0-9]+$' THEN CAST(score_value AS DECIMAL(5,2)) ELSE NULL END) as avg_score,
                MAX(created_at) as last_updated
         FROM mcc_intensive_scorecard_2_report
-        WHERE station_id = :sid
+        WHERE station_id = :sid AND report_date = :rdate
         GROUP BY token_id, train_no, report_date, auditor_name
         ORDER BY report_date DESC, last_updated DESC
         LIMIT 10
     ");
-    $stmt->execute(['sid' => $stationId]);
+    $stmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
     while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $scorePct = $r['avg_score'] !== null ? round((floatval($r['avg_score']) / 1.0) * 100, 1) : 0;
         $liveOperations[] = [
@@ -94,12 +94,12 @@ try {
                AVG(CASE WHEN score_value REGEXP '^[0-9]+$' THEN CAST(score_value AS DECIMAL(5,2)) ELSE NULL END) as avg_score,
                MAX(created_at) as last_updated
         FROM mcc_intensive_pantry_report
-        WHERE station_id = :sid
+        WHERE station_id = :sid AND report_date = :rdate
         GROUP BY token_id, train_no, report_date, auditor_name
         ORDER BY report_date DESC, last_updated DESC
         LIMIT 10
     ");
-    $stmt->execute(['sid' => $stationId]);
+    $stmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
     while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $scorePct = $r['avg_score'] !== null ? round((floatval($r['avg_score']) / 1.0) * 100, 1) : 0;
         $liveOperations[] = [
@@ -127,12 +127,12 @@ try {
                AVG(CASE WHEN rating REGEXP '^[0-9]+$' THEN CAST(rating AS DECIMAL(5,2)) ELSE NULL END) as avg_rating,
                MAX(created_at) as last_updated
         FROM dc_mcc_report
-        WHERE station_id = :sid
+        WHERE station_id = :sid AND report_date = :rdate
         GROUP BY token_id, train_no, report_date
         ORDER BY report_date DESC, last_updated DESC
         LIMIT 10
     ");
-    $stmt->execute(['sid' => $stationId]);
+    $stmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
     while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $scorePct = $r['avg_rating'] !== null ? round((floatval($r['avg_rating']) / 3.0) * 100, 1) : 0;
         $liveOperations[] = [
@@ -161,12 +161,12 @@ try {
                AVG(CASE WHEN score_value REGEXP '^[0-9]+$' THEN CAST(score_value AS DECIMAL(5,2)) ELSE NULL END) as avg_score,
                MAX(created_at) as last_updated
         FROM mcc_prt_scorecard_report
-        WHERE station_id = :sid
+        WHERE station_id = :sid AND report_date = :rdate
         GROUP BY token_id, train_no, report_date, auditor_name
         ORDER BY report_date DESC, last_updated DESC
         LIMIT 10
     ");
-    $stmt->execute(['sid' => $stationId]);
+    $stmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
     while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $scorePct = $r['avg_score'] !== null ? round((floatval($r['avg_score']) / 3.0) * 100, 1) : 0;
         $liveOperations[] = [
@@ -212,8 +212,7 @@ foreach ($liveOperations as $op) {
         $countScores++;
     }
 }
-$avgCleaningScore = $countScores > 0 ? round($sumScores / $countScores, 1) : 94.2;
-if ($totalCoachesCleaned === 0) $totalCoachesCleaned = 24;
+$avgCleaningScore = $countScores > 0 ? round($sumScores / $countScores, 1) : 0;
 
 // Manpower Stats
 $manpowerPresent = 0;
@@ -232,11 +231,6 @@ try {
     }
 } catch (Exception $e) {}
 
-if ($manpowerTarget === 0) {
-    $manpowerPresent = 48;
-    $manpowerTarget = 52;
-}
-
 // Machine Stats
 $machinesOperational = 0;
 $machinesTotal = 0;
@@ -254,11 +248,6 @@ try {
     }
 } catch (Exception $e) {}
 
-if ($machinesTotal === 0) {
-    $machinesOperational = 14;
-    $machinesTotal = 16;
-}
-
 // Top Performing Trains
 $topTrains = [];
 foreach ($liveOperations as $op) {
@@ -275,6 +264,106 @@ usort($topTrains, function($a, $b) {
     return floatval(rtrim($b['score'], '%')) <=> floatval(rtrim($a['score'], '%'));
 });
 $topTrains = array_slice($topTrains, 0, 5);
+
+// Complete work-summary totals and scores for today (not limited by the
+// eight-row live operations board).
+$summarySources = [
+    'normal'    => ['table' => 'mcc_normal_scorecard_report',      'score' => 'score_value', 'maximum' => 3],
+    'intensive' => ['table' => 'mcc_intensive_scorecard_2_report', 'score' => 'score_value', 'maximum' => 1],
+    'pantry'    => ['table' => 'mcc_intensive_pantry_report',      'score' => 'score_value', 'maximum' => 1],
+    'dc'        => ['table' => 'dc_mcc_report',                    'score' => 'rating',      'maximum' => 3],
+    'vande'     => ['table' => 'mcc_vb_scorecard_report',          'score' => 'score_value', 'maximum' => 3],
+    'prt'       => ['table' => 'mcc_prt_scorecard_report',         'score' => 'score_value', 'maximum' => 3],
+];
+
+$todayWorkSummary = [];
+foreach ($summarySources as $key => $source) {
+    $todayWorkSummary[$key] = ['rakes' => 0, 'score' => 0];
+    try {
+        $summaryStmt = $pdo->prepare("
+            SELECT COUNT(DISTINCT token_id) AS rake_count,
+                   AVG(CASE
+                       WHEN {$source['score']} REGEXP '^[0-9]+(\\.[0-9]+)?$'
+                       THEN CAST({$source['score']} AS DECIMAL(8,2))
+                       ELSE NULL
+                   END) AS average_score
+            FROM {$source['table']}
+            WHERE station_id = :sid AND report_date = :rdate
+        ");
+        $summaryStmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
+        $summaryRow = $summaryStmt->fetch(PDO::FETCH_ASSOC);
+        if ($summaryRow) {
+            $todayWorkSummary[$key]['rakes'] = intval($summaryRow['rake_count'] ?? 0);
+            $todayWorkSummary[$key]['score'] = $summaryRow['average_score'] !== null
+                ? round((floatval($summaryRow['average_score']) / $source['maximum']) * 100, 1)
+                : 0;
+        }
+    } catch (Exception $e) {}
+}
+
+// Seven-day cleaning score trend across every dashboard report type.
+$trendEndDate = new DateTimeImmutable($selectedDate, new DateTimeZone('Asia/Kolkata'));
+$trendStartDate = $trendEndDate->modify('-6 days');
+$trendDailyTotals = [];
+for ($dayOffset = 0; $dayOffset < 7; $dayOffset++) {
+    $dateKey = $trendStartDate->modify("+{$dayOffset} days")->format('Y-m-d');
+    $trendDailyTotals[$dateKey] = ['score_sum' => 0.0, 'score_count' => 0];
+}
+
+foreach ($summarySources as $source) {
+    try {
+        $trendStmt = $pdo->prepare("
+            SELECT report_date,
+                   SUM(CASE
+                       WHEN {$source['score']} REGEXP '^[0-9]+(\\.[0-9]+)?$'
+                       THEN CAST({$source['score']} AS DECIMAL(8,2))
+                       ELSE 0
+                   END) AS raw_score_sum,
+                   COUNT(CASE
+                       WHEN {$source['score']} REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN 1
+                       ELSE NULL
+                   END) AS score_count
+            FROM {$source['table']}
+            WHERE station_id = :sid AND report_date BETWEEN :start_date AND :end_date
+            GROUP BY report_date
+        ");
+        $trendStmt->execute([
+            'sid' => $stationId,
+            'start_date' => $trendStartDate->format('Y-m-d'),
+            'end_date' => $trendEndDate->format('Y-m-d'),
+        ]);
+        foreach ($trendStmt->fetchAll(PDO::FETCH_ASSOC) as $trendRow) {
+            $dateKey = $trendRow['report_date'];
+            if (!isset($trendDailyTotals[$dateKey])) continue;
+            $validScores = intval($trendRow['score_count']);
+            $trendDailyTotals[$dateKey]['score_sum'] +=
+                (floatval($trendRow['raw_score_sum']) / $source['maximum']) * 100;
+            $trendDailyTotals[$dateKey]['score_count'] += $validScores;
+        }
+    } catch (Exception $e) {}
+}
+
+$trendLabels = [];
+$trendScores = [];
+$trendPoints = [];
+$trendPointCount = count($trendDailyTotals);
+$trendIndex = 0;
+foreach ($trendDailyTotals as $dateKey => $totals) {
+    $score = $totals['score_count'] > 0
+        ? round($totals['score_sum'] / $totals['score_count'], 1)
+        : 0;
+    $score = min(100, max(0, $score));
+    $x = 10 + ($trendIndex * (500 / max(1, $trendPointCount - 1)));
+    $y = 145 - ($score * 1.2);
+    $trendLabels[] = (new DateTimeImmutable($dateKey))->format('d M');
+    $trendScores[] = $score;
+    $trendPoints[] = round($x, 1) . ',' . round($y, 1);
+    $trendIndex++;
+}
+$trendPolyline = implode(' ', $trendPoints);
+$trendAreaPath = $trendPoints
+    ? 'M' . implode(' L', $trendPoints) . ' L510,150 L10,150 Z'
+    : '';
 
 $pageTitle = 'MCC Command Center';
 include 'header.php';
@@ -400,7 +489,6 @@ include 'sidebar.php';
             </tbody>
           </table>
         </div>
-        <a href="normal-report.php" class="mcc-panel-link">VIEW ALL AUDIT REPORTS <span>→</span></a>
       </section>
 
       <!-- 3. AI Insights -->
@@ -448,7 +536,6 @@ include 'sidebar.php';
             </div>
           </div>
         </div>
-        <a href="normal-report.php" class="mcc-panel-link">VIEW ALL AUDITS <span>→</span></a>
       </aside>
 
       <!-- 4. Work Summary -->
@@ -459,37 +546,46 @@ include 'sidebar.php';
         <div class="mcc-summary-list" id="summaryList">
           <div class="mcc-summary-line">
             <span class="mcc-summary-name"><i class="mcc-summary-icon" style="background:#02d66f;color:#06202a">▣</i>MCC Normal Cleaning</span>
-            <span class="mcc-summary-val"><?= count(array_filter($liveOperations, fn($o) => strpos($o['type'], 'Normal') !== false)) ?> Active Rakes</span>
-            <span class="mcc-summary-score"><?= $avgCleaningScore ?>%</span>
+            <span class="mcc-summary-val"><?= $todayWorkSummary['normal']['rakes'] ?> Rakes</span>
+            <span class="mcc-summary-score"><?= $todayWorkSummary['normal']['score'] ?>%</span>
           </div>
           <div class="mcc-summary-line">
             <span class="mcc-summary-name"><i class="mcc-summary-icon" style="background:#f05400;color:#06202a">♟</i>MCC Intensive Cleaning</span>
-            <span class="mcc-summary-val"><?= count(array_filter($liveOperations, fn($o) => strpos($o['type'], 'Intensive') !== false)) ?> Active Rakes</span>
-            <span class="mcc-summary-score">88%</span>
+            <span class="mcc-summary-val"><?= $todayWorkSummary['intensive']['rakes'] ?> Rakes</span>
+            <span class="mcc-summary-score"><?= $todayWorkSummary['intensive']['score'] ?>%</span>
           </div>
           <div class="mcc-summary-line">
             <span class="mcc-summary-name"><i class="mcc-summary-icon" style="background:#933ce3;color:#06202a">♨</i>Pantry Car Scorecards</span>
-            <span class="mcc-summary-val"><?= count(array_filter($liveOperations, fn($o) => strpos($o['type'], 'Pantry') !== false)) ?> Processed</span>
-            <span class="mcc-summary-score">92%</span>
+            <span class="mcc-summary-val"><?= $todayWorkSummary['pantry']['rakes'] ?> Rakes</span>
+            <span class="mcc-summary-score"><?= $todayWorkSummary['pantry']['score'] ?>%</span>
           </div>
           <div class="mcc-summary-line">
             <span class="mcc-summary-name"><i class="mcc-summary-icon" style="background:#00a4ff;color:#06202a">▣</i>Depot Yard & DC</span>
-            <span class="mcc-summary-val"><?= count(array_filter($liveOperations, fn($o) => strpos($o['type'], 'DC') !== false)) ?> Operations</span>
-            <span class="mcc-summary-score">96%</span>
+            <span class="mcc-summary-val"><?= $todayWorkSummary['dc']['rakes'] ?> Rakes</span>
+            <span class="mcc-summary-score"><?= $todayWorkSummary['dc']['score'] ?>%</span>
+          </div>
+          <div class="mcc-summary-line">
+            <span class="mcc-summary-name"><i class="mcc-summary-icon" style="background:#13c9ff;color:#06202a">VB</i>Vande Bharat Cleaning</span>
+            <span class="mcc-summary-val"><?= $todayWorkSummary['vande']['rakes'] ?> Rakes</span>
+            <span class="mcc-summary-score"><?= $todayWorkSummary['vande']['score'] ?>%</span>
+          </div>
+          <div class="mcc-summary-line">
+            <span class="mcc-summary-name"><i class="mcc-summary-icon" style="background:#ffb000;color:#06202a">P</i>PRT Cleaning</span>
+            <span class="mcc-summary-val"><?= $todayWorkSummary['prt']['rakes'] ?> Rakes</span>
+            <span class="mcc-summary-score"><?= $todayWorkSummary['prt']['score'] ?>%</span>
           </div>
         </div>
-        <a href="normal-report.php" class="mcc-panel-link">VIEW SUMMARY REPORT <span>→</span></a>
       </section>
 
       <!-- 5. Cleaning Score Trend -->
       <section class="mcc-trend mcc-card">
         <div class="mcc-panel-head">
           <h2>CLEANING SCORE TREND</h2>
-          <select><option>Last 7 Days</option></select>
+          <span class="mcc-trend-range">Last 7 Days</span>
         </div>
         <div class="mcc-line-chart">
           <div class="mcc-ylabels">
-            <span>100%</span><span>90%</span><span>80%</span><span>70%</span>
+            <span>100%</span><span>67%</span><span>33%</span><span>0%</span>
           </div>
           <svg viewBox="0 0 520 160" preserveAspectRatio="none" aria-label="Cleaning score trend">
             <defs>
@@ -501,22 +597,21 @@ include 'sidebar.php';
             <g class="mcc-gridlines">
               <path d="M0 25 H520 M0 65 H520 M0 105 H520 M0 145 H520"/>
             </g>
-            <path class="mcc-chart-area" d="M10,90 L75,70 L140,85 L205,60 L270,75 L335,55 L400,50 L465,65 L515,45 L515,150 L10,150 Z"/>
-            <polyline class="mcc-chart-line" points="10,90 75,70 140,85 205,60 270,75 335,55 400,50 465,65 515,45"/>
+            <path class="mcc-chart-area" d="<?= htmlspecialchars($trendAreaPath) ?>"/>
+            <polyline class="mcc-chart-line" points="<?= htmlspecialchars($trendPolyline) ?>"/>
             <g class="mcc-chart-points">
-              <circle cx="10" cy="90" r="4"/>
-              <circle cx="75" cy="70" r="4"/>
-              <circle cx="140" cy="85" r="4"/>
-              <circle cx="205" cy="60" r="4"/>
-              <circle cx="270" cy="75" r="4"/>
-              <circle cx="335" cy="55" r="4"/>
-              <circle cx="400" cy="50" r="4"/>
-              <circle cx="465" cy="65" r="4"/>
-              <circle cx="515" cy="45" r="4"/>
+              <?php foreach ($trendPoints as $pointIndex => $point): ?>
+                <?php [$pointX, $pointY] = explode(',', $point); ?>
+                <circle cx="<?= $pointX ?>" cy="<?= $pointY ?>" r="4">
+                  <title><?= htmlspecialchars($trendLabels[$pointIndex]) ?>: <?= $trendScores[$pointIndex] ?>%</title>
+                </circle>
+              <?php endforeach; ?>
             </g>
           </svg>
           <div class="mcc-xlabels">
-            <span>24 Aug</span><span>25 Aug</span><span>26 Aug</span><span>27 Aug</span><span>28 Aug</span><span>29 Aug</span><span>30 Aug</span>
+            <?php foreach ($trendLabels as $label): ?>
+              <span><?= htmlspecialchars($label) ?></span>
+            <?php endforeach; ?>
           </div>
           <div class="mcc-chart-legend">◆ Live Quality Compliance Curve (%)</div>
         </div>
@@ -584,7 +679,6 @@ include 'sidebar.php';
             <?php endif; ?>
           </tbody>
         </table>
-        <a href="normal-report.php" class="mcc-panel-link">VIEW ALL <span>→</span></a>
       </section>
 
       <!-- 9. Deficiency Overview -->
@@ -599,7 +693,6 @@ include 'sidebar.php';
           <div><span>Berths, Seats & Rexine</span><b><i style="width:96%;background:#02d66f"></i></b><em>96%</em></div>
           <div><span>Pantry Equipment & Hygiene</span><b><i style="width:90%;background:#933ce3"></i></b><em>90%</em></div>
         </div>
-        <a href="normal-report.php" class="mcc-panel-link">VIEW PARAMETERS <span>→</span></a>
       </section>
 
       <!-- 10. Alerts & Notifications -->

@@ -118,56 +118,55 @@ if ($isFallback) {
 
         // Calculations using dynamically loaded parameters
         $internalSum = 0;
-        $internalCount = 0;
+        $internalSubParamCount = 0;
         if ($internalParamId && isset($dynamicParameters[$internalParamId])) {
+            $internalSubParamCount = count($dynamicParameters[$internalParamId]['sub_parameters']);
             foreach ($coaches as $coach) {
                 if ($coach === '') continue;
                 foreach ($dynamicParameters[$internalParamId]['sub_parameters'] as $sp) {
                     $val = $scoresData[$sp['id']][$coach] ?? null;
                     if ($val !== null && is_numeric($val)) {
                         $internalSum += intval($val);
-                        $internalCount++;
                     }
                 }
             }
         }
-        $internalMax = $internalCount * 3;
+        $internalMax = $attendedCount * $internalSubParamCount * 3;
         $internalPercentage = $internalMax > 0 ? round(($internalSum / $internalMax) * 100, 1) : 0;
 
         $externalSum = 0;
-        $externalCount = 0;
+        $externalSubParamCount = 0;
         if ($externalParamId && isset($dynamicParameters[$externalParamId])) {
+            $externalSubParamCount = count($dynamicParameters[$externalParamId]['sub_parameters']);
             foreach ($coaches as $coach) {
                 if ($coach === '') continue;
                 foreach ($dynamicParameters[$externalParamId]['sub_parameters'] as $sp) {
                     $val = $scoresData[$sp['id']][$coach] ?? null;
                     if ($val !== null && is_numeric($val)) {
                         $externalSum += intval($val);
-                        $externalCount++;
                     }
                 }
             }
         }
-        $externalMax = $externalCount * 3;
+        $externalMax = $attendedCount * $externalSubParamCount * 3;
         $externalPercentage = $externalMax > 0 ? round(($externalSum / $externalMax) * 100, 1) : 0;
 
         $wateringYes = 0;
-        $wateringCount = 0;
+        $wateringSubParamCount = 0;
         if ($wateringParamId && isset($dynamicParameters[$wateringParamId])) {
+            $wateringSubParamCount = count($dynamicParameters[$wateringParamId]['sub_parameters']);
             foreach ($coaches as $coach) {
                 if ($coach === '') continue;
                 foreach ($dynamicParameters[$wateringParamId]['sub_parameters'] as $sp) {
                     $val = $scoresData[$sp['id']][$coach] ?? null;
                     if ($val === 'Y') {
                         $wateringYes++;
-                        $wateringCount++;
-                    } elseif ($val === 'N') {
-                        $wateringCount++;
                     }
                 }
             }
         }
-        $wateringPercentage = $wateringCount > 0 ? round(($wateringYes / $wateringCount) * 100, 1) : 0;
+        $wateringMaxCount = $attendedCount * $wateringSubParamCount;
+        $wateringPercentage = $wateringMaxCount > 0 ? round(($wateringYes / $wateringMaxCount) * 100, 1) : 0;
 
         $sheets[] = [
             'token_id' => $tokenId,

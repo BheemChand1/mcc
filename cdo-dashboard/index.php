@@ -18,12 +18,85 @@ $year = date('Y', strtotime($selectedDate));
 // ----------------------------------------------------
 $liveOperations = [];
 
+// Fetch active sub-parameter counts for each report type for this station
+$normalMaxPerCoach = 0;
+try {
+    $subStmt = $pdo->prepare("
+        SELECT sp.id, p.parameter_name 
+        FROM mcc_normal_scorecard_sub_param sp
+        JOIN mcc_normal_scorecard_param p ON p.id = sp.parameter_id
+        WHERE p.station_id = :sid AND sp.station_id = :sid AND p.status = 'Active' AND sp.status = 'Active'
+    ");
+    $subStmt->execute(['sid' => $stationId]);
+    $subRows = $subStmt->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($subRows as $sr) {
+        if (stripos($sr['parameter_name'], 'watering') !== false) {
+            $normalMaxPerCoach += 1;
+        } else {
+            $normalMaxPerCoach += 3;
+        }
+    }
+    if ($normalMaxPerCoach <= 0) $normalMaxPerCoach = 16;
+} catch (Exception $e) {
+    $normalMaxPerCoach = 16;
+}
+
+$intensiveSubCount = 0;
+try {
+    $subStmt = $pdo->prepare("
+        SELECT COUNT(*) 
+        FROM mcc_intensive_scorecard_2_sub_param sp
+        JOIN mcc_intensive_scorecard_2_param p ON p.id = sp.parameter_id
+        WHERE p.station_id = :sid AND sp.station_id = :sid AND p.status = 'Active' AND sp.status = 'Active'
+    ");
+    $subStmt->execute(['sid' => $stationId]);
+    $intensiveSubCount = intval($subStmt->fetchColumn()) ?: 20;
+} catch (Exception $e) {
+    $intensiveSubCount = 20;
+}
+
+$pantrySubCount = 0;
+try {
+    $subStmt = $pdo->prepare("
+        SELECT COUNT(*) 
+        FROM mcc_intensive_pantry_sub_param sp
+        JOIN mcc_intensive_pantry_param p ON p.id = sp.parameter_id
+        WHERE p.station_id = :sid AND sp.station_id = :sid AND p.status = 'Active' AND sp.status = 'Active'
+    ");
+    $subStmt->execute(['sid' => $stationId]);
+    $pantrySubCount = intval($subStmt->fetchColumn()) ?: 10;
+} catch (Exception $e) {
+    $pantrySubCount = 10;
+}
+
+$prtMaxPerCoach = 0;
+try {
+    $subStmt = $pdo->prepare("
+        SELECT sp.id, p.parameter_name 
+        FROM mcc_prt_scorecard_sub_param sp
+        JOIN mcc_prt_scorecard_param p ON p.id = sp.parameter_id
+        WHERE p.station_id = :sid AND sp.station_id = :sid AND p.status = 'Active' AND sp.status = 'Active'
+    ");
+    $subStmt->execute(['sid' => $stationId]);
+    $subRows = $subStmt->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($subRows as $sr) {
+        if (stripos($sr['parameter_name'], 'watering') !== false) {
+            $prtMaxPerCoach += 1;
+        } else {
+            $prtMaxPerCoach += 3;
+        }
+    }
+    if ($prtMaxPerCoach <= 0) $prtMaxPerCoach = 16;
+} catch (Exception $e) {
+    $prtMaxPerCoach = 16;
+}
+
 // A. Normal Scorecard Reports
 try {
     $stmt = $pdo->prepare("
         SELECT token_id, train_no, report_date, auditor_name,
                COUNT(DISTINCT coach_no) as coaches_count,
-               AVG(CASE WHEN score_value REGEXP '^[0-9]+$' THEN CAST(score_value AS DECIMAL(5,2)) ELSE NULL END) as avg_score,
+               SUM(CASE WHEN score_value REGEXP '^[0-9]+$' THEN CAST(score_value AS DECIMAL(5,2)) WHEN score_value = 'Y' THEN 1 ELSE 0 END) as sum_score,
                MAX(created_at) as last_updated
         FROM mcc_normal_scorecard_report
         WHERE station_id = :sid AND report_date = :rdate
@@ -33,7 +106,9 @@ try {
     ");
     $stmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
     while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $scorePct = $r['avg_score'] !== null ? round((floatval($r['avg_score']) / 3.0) * 100, 1) : 0;
+        $coachesCount = intval($r['coaches_count']) > 0 ? intval($r['coaches_count']) : 1;
+        $maxPossible = $coachesCount * $normalMaxPerCoach;
+        $scorePct = $maxPossible > 0 ? round((floatval($r['sum_score']) / $maxPossible) * 100, 1) : 0;
         $liveOperations[] = [
             'train_no'       => $r['train_no'] ?: 'Normal Train',
             'type'           => 'MCC Normal Cleaning',
@@ -57,7 +132,7 @@ try {
     $stmt = $pdo->prepare("
         SELECT token_id, train_no, report_date, auditor_name,
                COUNT(DISTINCT coach_no) as coaches_count,
-               AVG(CASE WHEN score_value REGEXP '^[0-9]+$' THEN CAST(score_value AS DECIMAL(5,2)) ELSE NULL END) as avg_score,
+               SUM(CASE WHEN score_value REGEXP '^[0-9]+$' THEN CAST(score_value AS DECIMAL(5,2)) ELSE 0 END) as sum_score,
                MAX(created_at) as last_updated
         FROM mcc_intensive_scorecard_2_report
         WHERE station_id = :sid AND report_date = :rdate
@@ -67,7 +142,9 @@ try {
     ");
     $stmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
     while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $scorePct = $r['avg_score'] !== null ? round((floatval($r['avg_score']) / 1.0) * 100, 1) : 0;
+        $coachesCount = intval($r['coaches_count']) > 0 ? intval($r['coaches_count']) : 1;
+        $maxPossible = $coachesCount * $intensiveSubCount * 1;
+        $scorePct = $maxPossible > 0 ? round((floatval($r['sum_score']) / $maxPossible) * 100, 1) : 0;
         $liveOperations[] = [
             'train_no'       => $r['train_no'] ?: 'Intensive Rake',
             'type'           => 'MCC Intensive Cleaning',
@@ -91,7 +168,7 @@ try {
     $stmt = $pdo->prepare("
         SELECT token_id, train_no, report_date, auditor_name,
                COUNT(DISTINCT coach_no) as coaches_count,
-               AVG(CASE WHEN score_value REGEXP '^[0-9]+$' THEN CAST(score_value AS DECIMAL(5,2)) ELSE NULL END) as avg_score,
+               SUM(CASE WHEN score_value REGEXP '^[0-9]+$' THEN CAST(score_value AS DECIMAL(5,2)) ELSE 0 END) as sum_score,
                MAX(created_at) as last_updated
         FROM mcc_intensive_pantry_report
         WHERE station_id = :sid AND report_date = :rdate
@@ -101,7 +178,9 @@ try {
     ");
     $stmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
     while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $scorePct = $r['avg_score'] !== null ? round((floatval($r['avg_score']) / 1.0) * 100, 1) : 0;
+        $coachesCount = intval($r['coaches_count']) > 0 ? intval($r['coaches_count']) : 1;
+        $maxPossible = $coachesCount * $pantrySubCount * 1;
+        $scorePct = $maxPossible > 0 ? round((floatval($r['sum_score']) / $maxPossible) * 100, 1) : 0;
         $liveOperations[] = [
             'train_no'       => $r['train_no'] ?: 'Pantry Car',
             'type'           => 'Pantry Car Audit',
@@ -158,7 +237,7 @@ try {
     $stmt = $pdo->prepare("
         SELECT token_id, train_no, report_date, auditor_name,
                COUNT(DISTINCT coach_no) as coaches_count,
-               AVG(CASE WHEN score_value REGEXP '^[0-9]+$' THEN CAST(score_value AS DECIMAL(5,2)) ELSE NULL END) as avg_score,
+               SUM(CASE WHEN score_value REGEXP '^[0-9]+$' THEN CAST(score_value AS DECIMAL(5,2)) WHEN score_value = 'Y' THEN 1 ELSE 0 END) as sum_score,
                MAX(created_at) as last_updated
         FROM mcc_prt_scorecard_report
         WHERE station_id = :sid AND report_date = :rdate
@@ -168,7 +247,9 @@ try {
     ");
     $stmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
     while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $scorePct = $r['avg_score'] !== null ? round((floatval($r['avg_score']) / 3.0) * 100, 1) : 0;
+        $coachesCount = intval($r['coaches_count']) > 0 ? intval($r['coaches_count']) : 1;
+        $maxPossible = $coachesCount * $prtMaxPerCoach;
+        $scorePct = $maxPossible > 0 ? round((floatval($r['sum_score']) / $maxPossible) * 100, 1) : 0;
         $liveOperations[] = [
             'train_no'       => $r['train_no'] ?: 'PRT Train',
             'type'           => 'Platform Return Cleaning',
@@ -300,6 +381,62 @@ foreach ($summarySources as $key => $source) {
         }
     } catch (Exception $e) {}
 }
+
+// Quality parameter distribution from today's submitted scorecards. Parent
+// parameter names are configured per station in Report Parameters, while the
+// scores are recorded against their child parameters in each report table.
+$qualityParameterSources = [
+    ['report' => 'mcc_normal_scorecard_report',      'sub' => 'mcc_normal_scorecard_sub_param',      'param' => 'mcc_normal_scorecard_param'],
+    ['report' => 'mcc_intensive_scorecard_2_report', 'sub' => 'mcc_intensive_scorecard_2_sub_param', 'param' => 'mcc_intensive_scorecard_2_param'],
+    ['report' => 'mcc_intensive_pantry_report',      'sub' => 'mcc_intensive_pantry_sub_param',      'param' => 'mcc_intensive_pantry_param'],
+    ['report' => 'mcc_prt_scorecard_report',         'sub' => 'mcc_prt_scorecard_sub_param',         'param' => 'mcc_prt_scorecard_param'],
+    ['report' => 'mcc_vb_scorecard_report',          'sub' => 'mcc_vb_scorecard_sub_param',          'param' => 'mcc_vb_scorecard_param'],
+];
+
+$qualityParameterTotals = [];
+foreach ($qualityParameterSources as $source) {
+    try {
+        $qualityStmt = $pdo->prepare("
+            SELECT p.parameter_name,
+                   SUM(CAST(r.score_value AS DECIMAL(8,2))) AS score_sum,
+                   COUNT(*) AS score_count
+            FROM {$source['report']} r
+            JOIN {$source['sub']} sp ON sp.id = r.sub_parameter_id
+            JOIN {$source['param']} p ON p.id = sp.parameter_id
+            WHERE r.station_id = :sid
+              AND r.report_date = :rdate
+              AND r.score_value REGEXP '^[0-3](\\.[0-9]+)?$'
+            GROUP BY p.id, p.parameter_name
+        ");
+        $qualityStmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
+        foreach ($qualityStmt->fetchAll(PDO::FETCH_ASSOC) as $qualityRow) {
+            $parameterName = trim($qualityRow['parameter_name']);
+            if ($parameterName === '') continue;
+            if (!isset($qualityParameterTotals[$parameterName])) {
+                $qualityParameterTotals[$parameterName] = ['score_sum' => 0.0, 'score_count' => 0];
+            }
+            $qualityParameterTotals[$parameterName]['score_sum'] += floatval($qualityRow['score_sum']);
+            $qualityParameterTotals[$parameterName]['score_count'] += intval($qualityRow['score_count']);
+        }
+    } catch (Exception $e) {}
+}
+
+$qualityParameters = [];
+foreach ($qualityParameterTotals as $parameterName => $totals) {
+    if ($totals['score_count'] <= 0) continue;
+    $percentage = round(($totals['score_sum'] / ($totals['score_count'] * 3)) * 100, 1);
+    $percentage = min(100, max(0, $percentage));
+    $qualityParameters[] = [
+        'name' => $parameterName,
+        'percentage' => $percentage,
+        'count' => $totals['score_count'],
+        'color' => $percentage >= 90 ? '#02d66f' : ($percentage >= 75 ? '#00a4ff' : ($percentage >= 60 ? '#f1ae00' : '#f05400')),
+    ];
+}
+usort($qualityParameters, function($a, $b) {
+    return ($b['count'] <=> $a['count']) ?: ($b['percentage'] <=> $a['percentage']);
+});
+$qualityParameters = array_slice($qualityParameters, 0, 5);
 
 // Seven-day cleaning score trend across every dashboard report type.
 $trendEndDate = new DateTimeImmutable($selectedDate, new DateTimeZone('Asia/Kolkata'));
@@ -449,7 +586,6 @@ include 'sidebar.php';
               <tr>
                 <th>TRAIN / RAKE</th>
                 <th>OPERATION TYPE</th>
-                <th>LOCATION</th>
                 <th>COACHES</th>
                 <th>AUDITOR / TIME</th>
                 <th>PROGRESS</th>
@@ -474,7 +610,6 @@ include 'sidebar.php';
                       </div>
                     </td>
                     <td><?= htmlspecialchars($op['type']) ?></td>
-                    <td><?= htmlspecialchars($op['location']) ?></td>
                     <td><?= htmlspecialchars($op['coaches']) ?></td>
                     <td><?= htmlspecialchars($op['auditor']) ?> <small style="color:var(--mcc-muted)">(<?= $op['time'] ?>)</small></td>
                     <td class="mcc-progress-cell">
@@ -687,11 +822,17 @@ include 'sidebar.php';
           <h2>QUALITY PARAMETER DISTRIBUTION</h2>
         </div>
         <div class="mcc-bar-list">
-          <div><span>Toilet Area & Fittings</span><b><i style="width:94%;background:#02d66f"></i></b><em>94%</em></div>
-          <div><span>Floor, PVC & Gangway</span><b><i style="width:92%;background:#00a4ff"></i></b><em>92%</em></div>
-          <div><span>Doors & Window Glass</span><b><i style="width:88%;background:#f1ae00"></i></b><em>88%</em></div>
-          <div><span>Berths, Seats & Rexine</span><b><i style="width:96%;background:#02d66f"></i></b><em>96%</em></div>
-          <div><span>Pantry Equipment & Hygiene</span><b><i style="width:90%;background:#933ce3"></i></b><em>90%</em></div>
+          <?php if (!empty($qualityParameters)): ?>
+            <?php foreach ($qualityParameters as $parameter): ?>
+              <div>
+                <span><?= htmlspecialchars($parameter['name']) ?></span>
+                <b><i style="width:<?= $parameter['percentage'] ?>%;background:<?= $parameter['color'] ?>"></i></b>
+                <em><?= number_format($parameter['percentage'], 1) ?>%</em>
+              </div>
+            <?php endforeach; ?>
+          <?php else: ?>
+            <p class="mcc-empty">No quality parameter scores recorded today.</p>
+          <?php endif; ?>
         </div>
       </section>
 

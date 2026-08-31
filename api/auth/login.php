@@ -58,6 +58,15 @@ try {
         exit();
     }
 
+    if (strtoupper($user['role'] ?? '') !== 'AUDITOR') {
+        http_response_code(403);
+        echo json_encode([
+            "status" => "error",
+            "message" => "Access denied. Only users with AUDITOR role can log in."
+        ]);
+        exit();
+    }
+
     // 2. Verify password (checks bcrypt hash)
     if (!password_verify($password, $user['password_hash'])) {
         http_response_code(401);

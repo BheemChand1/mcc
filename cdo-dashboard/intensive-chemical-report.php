@@ -264,6 +264,7 @@ include 'sidebar.php';
                 
                 <button type="submit" class="btn-go">Go</button>
                 <a href="intensive-chemical-summary.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-summary">Summary</a>
+                <a href="intensive-chemical-target.php" class="btn-summary" style="background: #10b981 !important; margin-left: 8px;">Targets</a>
                 <button type="button" class="btn-print" onclick="window.print()">Print</button>
             </form>
 

@@ -43,6 +43,7 @@ $page_report_mapping = [
     'intensive_pantry_scorecard.php' => 'int_pantry',
     'pantry_scorecard.php' => 'int_pantry',
     'intensive-chemical-report.php' => 'int_chem',
+    'intensive-chemical-target.php' => 'int_chem',
     'intensive-chemical-summary.php' => 'int_chem',
     'machine-report-intensive.php' => 'int_mach',
     'machine-target-intensive.php' => 'int_mach',

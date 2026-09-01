@@ -385,7 +385,7 @@ $has_billing      = in_array(11, $active_report_ids) && in_array('Billing.php', 
         <!-- Intensive Cleaning Dropdown -->
         <?php if ($has_int_any): ?>
         <?php 
-        $intensivePages = ['intensive-report.php', 'intensive_scorecard_2.php', 'instensive_scorecard_2.php', 'intensive_scorecard_2_summary.php', 'machine-report-intensive.php', 'machine-target-intensive.php', 'machine-summary-intensive.php', 'intensive-chemical-report.php', 'intensive-chemical-summary.php'];
+        $intensivePages = ['intensive-report.php', 'intensive_scorecard_2.php', 'instensive_scorecard_2.php', 'intensive_scorecard_2_summary.php', 'machine-report-intensive.php', 'machine-target-intensive.php', 'machine-summary-intensive.php', 'intensive-chemical-report.php', 'intensive-chemical-target.php', 'intensive-chemical-summary.php'];
         $isIntensiveActive = in_array($currentPage, $intensivePages);
         ?>
         <li class="nav-item <?= $isIntensiveActive ? 'menu-open' : '' ?>">
@@ -413,7 +413,7 @@ $has_billing      = in_array(11, $active_report_ids) && in_array('Billing.php', 
             <?php endif; ?>
             <?php if ($has_int_chem): ?>
             <li class="nav-item">
-              <a href="intensive-chemical-report.php" class="nav-link <?= in_array($currentPage, ['intensive-chemical-report.php', 'intensive-chemical-summary.php']) ? 'active' : '' ?>">
+              <a href="intensive-chemical-report.php" class="nav-link <?= in_array($currentPage, ['intensive-chemical-report.php', 'intensive-chemical-target.php', 'intensive-chemical-summary.php']) ? 'active' : '' ?>">
                 <p><?= htmlspecialchars($subreport_names[5]) ?></p>
               </a>
             </li>

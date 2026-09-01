@@ -1,6 +1,29 @@
 <?php
 require_once 'auth.php';
 
+// Ensure effective_from and effective_to columns exist in mcc_manpower_targets table, and drop shift_id constraints & column
+try {
+    $pdo->exec("ALTER TABLE mcc_manpower_targets ADD COLUMN effective_from DATE NULL AFTER target_qty");
+} catch (Exception $e) {}
+try {
+    $pdo->exec("ALTER TABLE mcc_manpower_targets ADD COLUMN effective_to DATE NULL AFTER effective_from");
+} catch (Exception $e) {}
+try {
+    $pdo->exec("ALTER TABLE mcc_manpower_targets DROP FOREIGN KEY fk_target_shift");
+} catch (Exception $e) {}
+try {
+    $pdo->exec("ALTER TABLE mcc_manpower_targets DROP INDEX uq_station_date_shift_type");
+} catch (Exception $e) {}
+try {
+    $pdo->exec("ALTER TABLE mcc_manpower_targets DROP INDEX fk_target_shift");
+} catch (Exception $e) {}
+try {
+    $pdo->exec("ALTER TABLE mcc_manpower_targets DROP COLUMN shift_id");
+} catch (Exception $e) {}
+try {
+    $pdo->exec("ALTER TABLE mcc_manpower_targets ADD UNIQUE KEY uq_station_date_type (station_id, target_date, manpower_type_id)");
+} catch (Exception $e) {}
+
 // Target month & year selection
 $selectedMonth = $_GET['month'] ?? date('m');
 $selectedYear = $_GET['year'] ?? date('Y');
@@ -11,7 +34,7 @@ $selectedYear = intval($selectedYear);
 
 $targetMonthDate = $selectedYear . "-" . $selectedMonth . "-01";
 
-// Fetch active categories, shifts, and mapped roles (sorted by order_no)
+// Fetch active categories and mapped roles (sorted by order_no)
 $categories = [];
 $catStmt = $pdo->prepare("
     SELECT id, category_name 
@@ -22,55 +45,43 @@ $catStmt = $pdo->prepare("
 $catStmt->execute(['station_id' => $stationId]);
 $catList = $catStmt->fetchAll();
 
-// We will also build a lookup map of manpower_type_id => role_name for inserting targets
+// Lookup map of manpower_type_id => role_name
 $roleNamesMap = [];
 
 foreach ($catList as $cat) {
     $categoryId = $cat['id'];
-    $shifts = [];
+    
+    // Fetch mapped unique roles for this category (sorted by role's order_no)
+    $rolesStmt = $pdo->prepare("
+        SELECT DISTINCT map.manpower_type_id, t.role_name, t.order_no
+        FROM mcc_manpower_shift_type_map map
+        JOIN mcc_manpower_shifts sh ON map.shift_id = sh.id
+        JOIN mcc_manpower_types t ON map.manpower_type_id = t.id
+        WHERE sh.category_id = :category_id AND sh.status = 'Active' AND t.status = 'Active'
+        ORDER BY t.order_no ASC, t.id ASC
+    ");
+    $rolesStmt->execute(['category_id' => $categoryId]);
+    $catRoles = $rolesStmt->fetchAll();
+
+    // Fetch active shift IDs for this category to save targets per shift
     $shiftStmt = $pdo->prepare("
-        SELECT id, shift_name 
-        FROM mcc_manpower_shifts 
-        WHERE category_id = :category_id AND status = 'Active' 
-        ORDER BY order_no ASC, id ASC
+        SELECT id FROM mcc_manpower_shifts 
+        WHERE category_id = :category_id AND status = 'Active'
     ");
     $shiftStmt->execute(['category_id' => $categoryId]);
-    $shiftList = $shiftStmt->fetchAll();
+    $catShiftIds = $shiftStmt->fetchAll(PDO::FETCH_COLUMN);
 
-    foreach ($shiftList as $sh) {
-        $shiftId = $sh['id'];
-        
-        // Fetch mapped roles from map table (sorted by role's order_no)
-        $typesStmt = $pdo->prepare("
-            SELECT map.manpower_type_id, t.role_name, t.order_no
-            FROM mcc_manpower_shift_type_map map
-            JOIN mcc_manpower_types t ON map.manpower_type_id = t.id
-            WHERE map.shift_id = :shift_id AND t.status = 'Active'
-            ORDER BY t.order_no ASC, t.id ASC
-        ");
-        $typesStmt->execute(['shift_id' => $shiftId]);
-        $types = $typesStmt->fetchAll();
-
-        if (!empty($types)) {
-            $shifts[] = [
-                'id' => $sh['id'],
-                'shift_name' => $sh['shift_name'],
-                'types' => $types
-            ];
-            
-            // Add roles to our role lookup map
-            foreach ($types as $type) {
-                $roleNamesMap[$type['manpower_type_id']] = $type['role_name'];
-            }
-        }
-    }
-
-    if (!empty($shifts)) {
+    if (!empty($catRoles)) {
         $categories[] = [
             'id' => $cat['id'],
             'category_name' => $cat['category_name'],
-            'shifts' => $shifts
+            'roles' => $catRoles,
+            'shift_ids' => $catShiftIds
         ];
+        
+        foreach ($catRoles as $r) {
+            $roleNamesMap[$r['manpower_type_id']] = $r['role_name'];
+        }
     }
 }
 
@@ -81,10 +92,12 @@ $errorMsg = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
     $selectedMonth = $_POST['month'] ?? '';
     $selectedYear = $_POST['year'] ?? '';
+    $effectiveFromInput = $_POST['effective_from'] ?? $targetMonthDate;
+    $effectiveToInput = !empty($_POST['effective_to']) ? $_POST['effective_to'] : date('Y-m-t', strtotime($targetMonthDate));
     
     if (!empty($selectedMonth) && !empty($selectedYear)) {
         $targetMonthDate = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
-        $submittedTargets = $_POST['target_qty'] ?? []; // [shift_id][manpower_type_id] => qty
+        $submittedRoleTargets = $_POST['target_qty_role'] ?? []; // [manpower_type_id] => qty
         
         $pdo->beginTransaction();
         try {
@@ -98,25 +111,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
                 'target_date' => $targetMonthDate
             ]);
             
-            // Insert updated manpower targets
+            // Insert updated manpower targets (one entry per role/type)
             $insertStmt = $pdo->prepare("
                 INSERT INTO mcc_manpower_targets 
-                (station_id, target_date, shift_id, manpower_type_id, manpower_type, target_qty) 
-                VALUES (:station_id, :target_date, :shift_id, :manpower_type_id, :manpower_type, :target_qty)
+                (station_id, target_date, manpower_type_id, manpower_type, target_qty, effective_from, effective_to) 
+                VALUES (:station_id, :target_date, :manpower_type_id, :manpower_type, :target_qty, :effective_from, :effective_to)
             ");
             
-            foreach ($submittedTargets as $shId => $typeQtys) {
-                foreach ($typeQtys as $tId => $qty) {
-                    $qty = intval($qty);
+            foreach ($categories as $cat) {
+                foreach ($cat['roles'] as $role) {
+                    $tId = $role['manpower_type_id'];
+                    $qty = intval($submittedRoleTargets[$tId] ?? 0);
                     $roleName = $roleNamesMap[$tId] ?? 'Staff';
                     
                     $insertStmt->execute([
                         'station_id' => $stationId,
                         'target_date' => $targetMonthDate,
-                        'shift_id' => $shId,
                         'manpower_type_id' => $tId,
                         'manpower_type' => $roleName,
-                        'target_qty' => $qty
+                        'target_qty' => $qty,
+                        'effective_from' => $effectiveFromInput,
+                        'effective_to' => $effectiveToInput
                     ]);
                 }
             }
@@ -132,8 +147,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
 
 // Fetch existing target norms for the selected month
 $targetsMap = [];
+$effectiveFrom = $targetMonthDate;
+$effectiveTo = date('Y-m-t', strtotime($targetMonthDate));
+
 $targetsStmt = $pdo->prepare("
-    SELECT shift_id, manpower_type_id, target_qty 
+    SELECT manpower_type_id, target_qty, effective_from, effective_to
     FROM mcc_manpower_targets 
     WHERE station_id = :station_id AND target_date = :target_date
 ");
@@ -143,7 +161,9 @@ $targetsStmt->execute([
 ]);
 $targetsRows = $targetsStmt->fetchAll();
 foreach ($targetsRows as $row) {
-    $targetsMap[$row['shift_id']][$row['manpower_type_id']] = $row['target_qty'];
+    $targetsMap[$row['manpower_type_id']] = $row['target_qty'];
+    if (!empty($row['effective_from'])) $effectiveFrom = $row['effective_from'];
+    if (!empty($row['effective_to'])) $effectiveTo = $row['effective_to'];
 }
 
 $pageTitle = 'Set Monthly Manpower Target | MCC';
@@ -312,7 +332,8 @@ include 'sidebar.php';
                     <div class="report-meta-section" style="border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; padding: 10px 0; margin-bottom: 20px; font-weight: 600; text-align: center; font-size: 0.95rem;">
                         <span>Division: <strong style="color: #0f172a;"><?= htmlspecialchars($divisionName) ?></strong></span> &nbsp;&nbsp;|&nbsp;&nbsp;
                         <span>Station: <strong style="color: #0f172a;"><?= htmlspecialchars($stationName) ?></strong></span> &nbsp;&nbsp;|&nbsp;&nbsp;
-                        <span>Month: <strong style="color: #0f172a;"><?= date('F Y', strtotime($targetMonthDate)) ?></strong></span>
+                        <span>Effective From: <strong style="color: #0f172a;"><?= date('d-m-Y', strtotime($effectiveFrom)) ?></strong></span> &nbsp;&nbsp;|&nbsp;&nbsp;
+                        <span>Effective Till: <strong style="color: #0f172a;"><?= date('d-m-Y', strtotime($effectiveTo)) ?></strong></span>
                     </div>
 
                     <?php if (empty($categories)): ?>
@@ -324,48 +345,47 @@ include 'sidebar.php';
                             <input type="hidden" name="month" value="<?= htmlspecialchars($selectedMonth); ?>">
                             <input type="hidden" name="year" value="<?= htmlspecialchars($selectedYear); ?>">
                             
+                            <div style="margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap;" class="no-print">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <label style="font-weight: 700; font-size: 14px; color: #334155; margin: 0;">Effective From:</label>
+                                    <input type="date" name="effective_from" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 12px; font-size: 14px; background-color: #f8fafc; color: #334155; width: 170px; height: 38px; outline: none;" value="<?= htmlspecialchars($effectiveFrom) ?>" required>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <label style="font-weight: 700; font-size: 14px; color: #334155; margin: 0;">Effective Till:</label>
+                                    <input type="date" name="effective_to" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 12px; font-size: 14px; background-color: #f8fafc; color: #334155; width: 170px; height: 38px; outline: none;" value="<?= htmlspecialchars($effectiveTo) ?>" required>
+                                </div>
+                            </div>
+                            
                             <div class="table-responsive">
                                 <table class="report-table">
                                     <thead>
                                         <tr>
-                                            <th style="width: 250px;">Shift</th>
-                                            <th>Description</th>
-                                            <th style="width: 280px;">To be provided as per norms</th>
+                                            <th style="text-align: left !important; padding-left: 25px !important;">Description</th>
+                                            <th style="width: 280px; text-align: center !important;">Target</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <?php foreach ($categories as $cat): ?>
                                             <!-- Category Subheader -->
                                             <tr class="sub-category">
-                                                <td colspan="3" style="text-align:center !important; padding-left:0 !important; text-transform: uppercase;">
+                                                <td colspan="2" style="text-align:center !important; padding-left:0 !important; text-transform: uppercase;">
                                                     <?= htmlspecialchars($cat['category_name']) ?>
                                                 </td>
                                             </tr>
 
-                                            <?php foreach ($cat['shifts'] as $shift): 
-                                                $typeIndex = 0;
-                                                $typesCount = count($shift['types']);
+                                            <?php foreach ($cat['roles'] as $role): 
+                                                $tId = $role['manpower_type_id'];
+                                                $targetVal = $targetsMap[$tId] ?? '';
                                             ?>
-                                                <?php foreach ($shift['types'] as $type): 
-                                                    $shId = $shift['id'];
-                                                    $tId = $type['manpower_type_id'];
-                                                    $targetVal = $targetsMap[$shId][$tId] ?? '';
-                                                ?>
-                                                    <tr>
-                                                        <?php if ($typeIndex === 0): ?>
-                                                            <td rowspan="<?= $typesCount ?>" style="vertical-align: middle; text-align: center; font-weight: 500;"><?= htmlspecialchars($shift['shift_name']) ?></td>
-                                                        <?php endif; ?>
-                                                        <td><?= htmlspecialchars($type['role_name']) ?></td>
-                                                        <td style="text-align: center;">
-                                                            <input type="number" min="0" step="1" 
-                                                                name="target_qty[<?= $shId ?>][<?= $tId ?>]" 
-                                                                value="<?= htmlspecialchars($targetVal) ?>" 
-                                                                class="target-input" required placeholder="0">
-                                                        </td>
-                                                    </tr>
-                                                <?php 
-                                                    $typeIndex++;
-                                                endforeach; ?>
+                                                <tr>
+                                                    <td style="text-align: left !important; padding-left: 25px !important; font-weight: 500; color: #334155;"><?= htmlspecialchars($role['role_name']) ?></td>
+                                                    <td style="text-align: center;">
+                                                        <input type="number" min="0" step="1" 
+                                                            name="target_qty_role[<?= $tId ?>]" 
+                                                            value="<?= htmlspecialchars($targetVal) ?>" 
+                                                            class="target-input" required placeholder="0">
+                                                    </td>
+                                                </tr>
                                             <?php endforeach; ?>
                                         <?php endforeach; ?>
                                     </tbody>
@@ -386,5 +406,6 @@ include 'sidebar.php';
         </div>
     </div>
 </main>
+
 
 <?php include 'footer.php'; ?>

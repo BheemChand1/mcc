@@ -73,7 +73,7 @@ foreach ($catList as $cat) {
 // Fetch target norms for the selected month
 $targetsMap = [];
 $targetsStmt = $pdo->prepare("
-    SELECT shift_id, manpower_type_id, target_qty 
+    SELECT manpower_type_id, target_qty 
     FROM mcc_manpower_targets 
     WHERE station_id = :station_id AND target_date = :target_date
 ");
@@ -83,7 +83,7 @@ $targetsStmt->execute([
 ]);
 $targetsRows = $targetsStmt->fetchAll();
 foreach ($targetsRows as $row) {
-    $targetsMap[$row['shift_id']][$row['manpower_type_id']] = $row['target_qty'];
+    $targetsMap[$row['manpower_type_id']] = $row['target_qty'];
 }
 
 // Fetch all active manpower types (roles) for this station to format the header and lookup penalty rates

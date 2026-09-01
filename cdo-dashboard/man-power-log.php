@@ -73,7 +73,7 @@ $endMonth = date('Y-m-01', strtotime($toDate));
 
 $targetsMap = [];
 $targetsStmt = $pdo->prepare("
-    SELECT target_date, shift_id, manpower_type_id, target_qty 
+    SELECT target_date, manpower_type_id, target_qty 
     FROM mcc_manpower_targets 
     WHERE station_id = :station_id AND target_date BETWEEN :start_month AND :end_month
 ");
@@ -84,7 +84,7 @@ $targetsStmt->execute([
 ]);
 $targetsRows = $targetsStmt->fetchAll();
 foreach ($targetsRows as $row) {
-    $targetsMap[$row['target_date']][$row['shift_id']][$row['manpower_type_id']] = $row['target_qty'];
+    $targetsMap[$row['target_date']][$row['manpower_type_id']] = $row['target_qty'];
 }
 
 // Fetch submitted daily logs in date range
@@ -132,6 +132,9 @@ $extraStyles = "
     padding-left:18px !important;
     text-align:left !important;
     font-weight:700;
+}
+.shift-cell {
+    white-space: nowrap !important;
 }
 .datewise-sheet {
     margin-bottom: 40px !important;
@@ -182,7 +185,7 @@ include 'sidebar.php';
                             foreach ($sh['types'] as $type) {
                                 $shId = $sh['id'];
                                 $tId = $type['manpower_type_id'];
-                                $normVal = $targetsMap[$targetMonthDate][$shId][$tId] ?? 0;
+                                $normVal = $targetsMap[$targetMonthDate][$tId] ?? 0;
                                 $totalNorms += $normVal;
                                 
                                 if (isset($dateLogs[$shId][$tId])) {
@@ -232,17 +235,15 @@ include 'sidebar.php';
                                         <th>Description</th>
                                         <th>To be provided as per norms</th>
                                         <th>Provided by contractor (as per bio-metric attendance sheet)</th>
-                                        <th>Found absent during the shift check</th>
                                         <th>Actual available</th>
                                         <th>Found without dress code & ID cards</th>
                                         <th>Found without protective gears</th>
-                                        <th>Signature of On duty CHI</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($categories)): ?>
                                         <tr>
-                                            <td colspan="9" style="text-align:center;">No manpower categories or shifts configured. Go to <a href="manpower-config.php">Man Power Config</a> to add.</td>
+                                            <td colspan="7" style="text-align:center;">No manpower categories or shifts configured. Go to <a href="manpower-config.php">Man Power Config</a> to add.</td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($categories as $cat): 
@@ -255,7 +256,7 @@ include 'sidebar.php';
                                         ?>
                                             <!-- Category Subheader -->
                                             <tr class="sub-category">
-                                                <td colspan="9" style="text-align:center !important; padding-left:0 !important; text-transform: uppercase;">
+                                                <td colspan="7" style="text-align:center !important; padding-left:0 !important; text-transform: uppercase;">
                                                     <?= htmlspecialchars($cat['category_name']) ?>
                                                 </td>
                                             </tr>
@@ -275,53 +276,45 @@ include 'sidebar.php';
                                                 foreach ($shift['types'] as $type): 
                                                     $shId = $shift['id'];
                                                     $tId = $type['manpower_type_id'];
-                                                    $normVal = $targetsMap[$targetMonthDate][$shId][$tId] ?? 0;
+                                                    $normVal = $targetsMap[$targetMonthDate][$tId] ?? 0;
                                                     $shiftNormsTotal += $normVal;
                                                     $catNormsTotal += $normVal;
 
-                                                    $provided = '';
-                                                    $absent = '';
-                                                    $available = '';
-                                                    $noDress = '';
-                                                    $noPpe = '';
-                                                    $chiSig = '';
+                                                    $provided = 0;
+                                                    $absent = 0;
+                                                    $available = 0;
+                                                    $noDress = 0;
+                                                    $noPpe = 0;
 
                                                     if (isset($dateLogs[$shId][$tId])) {
-                                                        $provided = $dateLogs[$shId][$tId]['provided'];
-                                                        $absent = $dateLogs[$shId][$tId]['absent'];
+                                                        $provided = intval($dateLogs[$shId][$tId]['provided']);
+                                                        $absent = intval($dateLogs[$shId][$tId]['absent']);
                                                         $available = max(0, $provided - $absent);
-                                                        $noDress = $dateLogs[$shId][$tId]['no_dress'];
-                                                        $noPpe = $dateLogs[$shId][$tId]['no_ppe'];
-                                                        $chiSig = $dateLogs[$shId][$tId]['chi'];
+                                                        $noDress = intval($dateLogs[$shId][$tId]['no_dress']);
+                                                        $noPpe = intval($dateLogs[$shId][$tId]['no_ppe']);
 
-                                                        $shiftProvidedTotal += intval($provided);
-                                                        $catProvidedTotal += intval($provided);
-                                                        $shiftAbsentTotal += intval($absent);
-                                                        $catAbsentTotal += intval($absent);
-                                                        $shiftAvailableTotal += intval($available);
-                                                        $catAvailableTotal += intval($available);
-                                                        $shiftNoDressTotal += intval($noDress);
-                                                        $catNoDressTotal += intval($noDress);
-                                                        $shiftNoPpeTotal += intval($noPpe);
-                                                        $catNoPpeTotal += intval($noPpe);
-
-                                                        if (!empty($chiSig)) {
-                                                            $shiftSignatures[] = $chiSig;
-                                                        }
+                                                        $shiftProvidedTotal += $provided;
+                                                        $catProvidedTotal += $provided;
+                                                        $shiftAbsentTotal += $absent;
+                                                        $catAbsentTotal += $absent;
+                                                        $shiftAvailableTotal += $available;
+                                                        $catAvailableTotal += $available;
+                                                        $shiftNoDressTotal += $noDress;
+                                                        $catNoDressTotal += $noDress;
+                                                        $shiftNoPpeTotal += $noPpe;
+                                                        $catNoPpeTotal += $noPpe;
                                                     }
                                                 ?>
                                                     <tr>
                                                         <?php if ($typeIndex === 0): ?>
-                                                            <td rowspan="<?= $typesCount ?>" style="vertical-align: middle; text-align: center; font-weight: 500;"><?= htmlspecialchars($shift['shift_name']) ?></td>
+                                                            <td rowspan="<?= $typesCount ?>" class="shift-cell" style="vertical-align: middle; text-align: center; font-weight: 500; white-space: nowrap;"><?= htmlspecialchars($shift['shift_name']) ?></td>
                                                         <?php endif; ?>
                                                         <td><?= htmlspecialchars($type['role_name']) ?></td>
                                                         <td><?= $normVal ?></td>
-                                                        <td><?= $provided !== '' ? $provided : '' ?></td>
-                                                        <td><?= $absent !== '' ? $absent : '' ?></td>
-                                                        <td><?= $available !== '' ? $available : '' ?></td>
-                                                        <td><?= $noDress !== '' ? $noDress : '' ?></td>
-                                                        <td><?= $noPpe !== '' ? $noPpe : '' ?></td>
-                                                        <td><?= htmlspecialchars($chiSig) ?></td>
+                                                        <td><?= $provided ?></td>
+                                                        <td><?= $available ?></td>
+                                                        <td><?= $noDress ?></td>
+                                                        <td><?= $noPpe ?></td>
                                                     </tr>
                                                 <?php 
                                                     $typeIndex++;
@@ -332,17 +325,10 @@ include 'sidebar.php';
                                                 <tr style="font-weight:700; background:#f9f9f9;">
                                                     <td colspan="2" style="text-align: left !important; padding-left: 15px !important;">Total</td>
                                                     <td><?= $shiftNormsTotal ?></td>
-                                                    <td><?= $hasLogsForDate ? $shiftProvidedTotal : '' ?></td>
-                                                    <td><?= $hasLogsForDate ? $shiftAbsentTotal : '' ?></td>
-                                                    <td><?= $hasLogsForDate ? $shiftAvailableTotal : '' ?></td>
-                                                    <td><?= $hasLogsForDate ? $shiftNoDressTotal : '' ?></td>
-                                                    <td><?= $hasLogsForDate ? $shiftNoPpeTotal : '' ?></td>
-                                                    <td>
-                                                        <?php 
-                                                            $uniqueSigs = array_unique(array_filter($shiftSignatures));
-                                                            echo htmlspecialchars(implode(', ', $uniqueSigs));
-                                                        ?>
-                                                    </td>
+                                                    <td><?= $shiftProvidedTotal ?></td>
+                                                    <td><?= $shiftAvailableTotal ?></td>
+                                                    <td><?= $shiftNoDressTotal ?></td>
+                                                    <td><?= $shiftNoPpeTotal ?></td>
                                                 </tr>
                                             <?php endforeach; ?>
 
@@ -350,12 +336,10 @@ include 'sidebar.php';
                                             <tr style="font-weight:700; background:#f2f2f2;">
                                                 <td colspan="2" style="text-align: left !important; padding-left: 15px !important;">Grand Total</td>
                                                 <td><?= $catNormsTotal ?></td>
-                                                <td><?= $hasLogsForDate ? $catProvidedTotal : '' ?></td>
-                                                <td><?= $hasLogsForDate ? $catAbsentTotal : '' ?></td>
-                                                <td><?= $hasLogsForDate ? $catAvailableTotal : '' ?></td>
-                                                <td><?= $hasLogsForDate ? $catNoDressTotal : '' ?></td>
-                                                <td><?= $hasLogsForDate ? $catNoPpeTotal : '' ?></td>
-                                                <td></td>
+                                                <td><?= $catProvidedTotal ?></td>
+                                                <td><?= $catAvailableTotal ?></td>
+                                                <td><?= $catNoDressTotal ?></td>
+                                                <td><?= $catNoPpeTotal ?></td>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php endif; ?>

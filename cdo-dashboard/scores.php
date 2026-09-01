@@ -89,12 +89,12 @@ function getManpowerSummary($stationId, $year, $month) {
         // Fetch target norms
         $targetsMap = [];
         $targetsStmt = $pdo->prepare("
-            SELECT shift_id, manpower_type_id, target_qty FROM mcc_manpower_targets 
+            SELECT manpower_type_id, target_qty FROM mcc_manpower_targets 
             WHERE station_id = :station_id AND target_date = :target_date
         ");
         $targetsStmt->execute(['station_id' => $stationId, 'target_date' => $targetMonthDate]);
         foreach ($targetsStmt->fetchAll() as $row) {
-            $targetsMap[$row['shift_id']][$row['manpower_type_id']] = intval($row['target_qty']);
+            $targetsMap[$row['manpower_type_id']] = intval($row['target_qty']);
         }
 
         // Fetch effective penalties configs
@@ -158,7 +158,7 @@ function getManpowerSummary($stationId, $year, $month) {
             foreach ($activeShiftTypes as $ast) {
                 $shId = $ast['shift_id'];
                 $tId = $ast['type_id'];
-                $norm = $targetsMap[$shId][$tId] ?? 0;
+                $norm = $targetsMap[$tId] ?? 0;
                 $dayToProvide += $norm;
 
                 if (isset($logsMap[$dateStr][$shId][$tId])) {

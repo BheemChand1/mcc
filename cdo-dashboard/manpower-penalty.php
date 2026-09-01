@@ -26,56 +26,62 @@ $errorMsg = '';
 
 // Handle save post request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_penalty'])) {
-    $selectedMonth = $_POST['month'] ?? '';
-    $selectedYear = $_POST['year'] ?? '';
-    
-    if (!empty($selectedMonth) && !empty($selectedYear)) {
-        $effectiveMonthDate = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
+    if (!empty($isViewer)) {
+        $errorMsg = "Viewers are in read-only mode and cannot save penalty configurations.";
+    } else {
+        $selectedMonth = $_POST['month'] ?? '';
+        $selectedYear = $_POST['year'] ?? '';
         
-        $absentPenalties = $_POST['absent_penalty'] ?? [];
-        $dressPenalties = $_POST['dress_penalty'] ?? [];
-        $gearsPenalties = $_POST['gears_penalty'] ?? [];
-        
-        $pdo->beginTransaction();
-        try {
-            // Delete existing configurations for this station and effective month
-            $deleteStmt = $pdo->prepare("
-                DELETE FROM mcc_manpower_penalties 
-                WHERE station_id = :station_id AND effective_month = :effective_month
-            ");
-            $deleteStmt->execute([
-                'station_id' => $stationId,
-                'effective_month' => $effectiveMonthDate
-            ]);
+        if (!empty($selectedMonth) && !empty($selectedYear)) {
+            $effectiveMonthDate = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
             
-            // Insert updated configurations
-            $insertStmt = $pdo->prepare("
-                INSERT INTO mcc_manpower_penalties 
-                (station_id, effective_month, manpower_type_id, absent_penalty, dress_penalty, gears_penalty) 
-                VALUES (:station_id, :effective_month, :manpower_type_id, :absent_penalty, :dress_penalty, :gears_penalty)
-            ");
+            $absentPenalties = $_POST['absent_penalty'] ?? [];
+            $dressPenalties = $_POST['dress_penalty'] ?? [];
+            $gearsPenalties = $_POST['gears_penalty'] ?? [];
             
-            foreach ($rolesList as $role) {
-                $roleId = $role['id'];
-                $absVal = isset($absentPenalties[$roleId]) ? floatval($absentPenalties[$roleId]) : 0.00;
-                $dressVal = isset($dressPenalties[$roleId]) ? floatval($dressPenalties[$roleId]) : 0.00;
-                $gearsVal = isset($gearsPenalties[$roleId]) ? floatval($gearsPenalties[$roleId]) : 0.00;
-                
-                $insertStmt->execute([
+            $pdo->beginTransaction();
+            try {
+                // Delete existing configurations for this station and effective month
+                $deleteStmt = $pdo->prepare("
+                    DELETE FROM mcc_manpower_penalties 
+                    WHERE station_id = :station_id AND effective_month = :effective_month
+                ");
+                $deleteStmt->execute([
                     'station_id' => $stationId,
-                    'effective_month' => $effectiveMonthDate,
-                    'manpower_type_id' => $roleId,
-                    'absent_penalty' => $absVal,
-                    'dress_penalty' => $dressVal,
-                    'gears_penalty' => $gearsVal
+                    'effective_month' => $effectiveMonthDate
                 ]);
+                
+                // Insert updated penalty rates
+                $insertStmt = $pdo->prepare("
+                    INSERT INTO mcc_manpower_penalties 
+                    (station_id, effective_month, manpower_type_id, absent_penalty, dress_penalty, gears_penalty) 
+                    VALUES (:station_id, :effective_month, :manpower_type_id, :absent_penalty, :dress_penalty, :gears_penalty)
+                ");
+                
+                foreach ($rolesList as $role) {
+                    $tId = $role['id'];
+                    $absentPen = floatval($absentPenalties[$tId] ?? 0);
+                    $dressPen = floatval($dressPenalties[$tId] ?? 0);
+                    $gearsPen = floatval($gearsPenalties[$tId] ?? 0);
+                    
+                    $insertStmt->execute([
+                        'station_id' => $stationId,
+                        'effective_month' => $effectiveMonthDate,
+                        'manpower_type_id' => $tId,
+                        'absent_penalty' => $absentPen,
+                        'dress_penalty' => $dressPen,
+                        'gears_penalty' => $gearsPen
+                    ]);
+                }
+                
+                $pdo->commit();
+                $successMsg = "Manpower penalty rates updated successfully for " . date('F, Y', strtotime($effectiveMonthDate)) . "!";
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                $errorMsg = "Error saving penalty rates: " . $e->getMessage();
             }
-            
-            $pdo->commit();
-            $successMsg = "Manpower penalties for " . date('F, Y', strtotime($effectiveMonthDate)) . " saved successfully!";
-        } catch (Exception $e) {
-            $pdo->rollBack();
-            $errorMsg = "Error saving manpower penalties: " . $e->getMessage();
         }
     }
 }
@@ -325,8 +331,8 @@ include 'sidebar.php';
 
                             <!-- Save Penalty Button -->
                             <div style="text-align: center; margin-top: 25px;" class="no-print">
-                                <button type="submit" name="save_penalty" class="btn btn-success" style="background-color: #1987C6; border: none; font-weight: 700; font-size: 15px; padding: 10px 30px; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.2s ease;">
-                                    Save Penalty
+                                <button type="submit" name="save_penalty" class="btn btn-success" <?= !empty($isViewer) ? 'disabled title="Read-only mode: Viewers cannot save penalty rates"' : '' ?> style="background-color: #1987C6; border: none; font-weight: 700; font-size: 15px; padding: 10px 30px; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: <?= !empty($isViewer) ? 'not-allowed' : 'pointer' ?>; opacity: <?= !empty($isViewer) ? '0.65' : '1' ?>;">
+                                    <?= !empty($isViewer) ? '<i class="bi bi-lock-fill me-1"></i> Targets Locked (Read-Only)' : 'Save Penalty' ?>
                                 </button>
                             </div>
                         </form>

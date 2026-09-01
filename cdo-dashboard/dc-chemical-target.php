@@ -16,71 +16,65 @@ $errorMsg = '';
 
 // Handle save post request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_targets'])) {
-    $selectedMonth = $_POST['month'] ?? '';
-    $selectedYear = $_POST['year'] ?? '';
-    if (!empty($selectedMonth) && !empty($selectedYear)) {
-        $targetMonthDate = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
-        $qtys = $_POST['qty'] ?? [];
-        $penalties = $_POST['penalty'] ?? [];
-        $penalty_qtys = $_POST['penalty_qty'] ?? [];
+    if (!empty($isViewer)) {
+        $errorMsg = "Viewers are in read-only mode and cannot save targets.";
+    } else {
+        $selectedMonth = $_POST['month'] ?? '';
+        $selectedYear = $_POST['year'] ?? '';
+        if (!empty($selectedMonth) && !empty($selectedYear)) {
+            $targetMonthDate = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
+            $qtys = $_POST['qty'] ?? [];
+            $penalties = $_POST['penalty'] ?? [];
+            $penalty_qtys = $_POST['penalty_qty'] ?? [];
 
-        $pdo->beginTransaction();
-        try {
-            // Query active parameters to check update list
-            $pStmt = $pdo->prepare("SELECT id FROM dc_mcc_chemical_param WHERE station_id = :station_id");
-            $pStmt->execute(['station_id' => $stationId]);
-            $paramIds = $pStmt->fetchAll(PDO::FETCH_COLUMN);
+            $pdo->beginTransaction();
+            try {
+                // Query active parameters to check update list
+                $pStmt = $pdo->prepare("SELECT id FROM dc_mcc_chemical_param WHERE station_id = :station_id");
+                $pStmt->execute(['station_id' => $stationId]);
+                $params = $pStmt->fetchAll(PDO::FETCH_COLUMN);
 
-            foreach ($paramIds as $pId) {
-                $qty = isset($qtys[$pId]) ? floatval($qtys[$pId]) : 0.00;
-                $penalty = isset($penalties[$pId]) ? floatval($penalties[$pId]) : 0.00;
-                $penalty_qty = isset($penalty_qtys[$pId]) ? floatval($penalty_qtys[$pId]) : 1.00;
+                foreach ($params as $pId) {
+                    $q = isset($qtys[$pId]) ? floatval($qtys[$pId]) : 0;
+                    $p = isset($penalties[$pId]) ? floatval($penalties[$pId]) : 0;
+                    $pq = isset($penalty_qtys[$pId]) ? floatval($penalty_qtys[$pId]) : 0;
 
-                // Check if target row already exists
-                $checkStmt = $pdo->prepare("
-                    SELECT id FROM dc_mcc_chemical_target 
-                    WHERE parameter_id = :param_id AND target_month = :target_month AND station_id = :station_id
-                ");
-                $checkStmt->execute([
-                    'param_id' => $pId,
-                    'target_month' => $targetMonthDate,
-                    'station_id' => $stationId
-                ]);
-                $existingId = $checkStmt->fetchColumn();
-
-                if ($existingId) {
-                    $updStmt = $pdo->prepare("
-                        UPDATE dc_mcc_chemical_target 
-                        SET `qty(ml)` = :qty, penalty = :penalty, `penalty_qty(ml)` = :penalty_qty 
-                        WHERE id = :id
-                    ");
-                    $updStmt->execute([
-                        'qty' => $qty,
-                        'penalty' => $penalty,
-                        'penalty_qty' => $penalty_qty,
-                        'id' => $existingId
-                    ]);
-                } else {
-                    $insStmt = $pdo->prepare("
-                        INSERT INTO dc_mcc_chemical_target (parameter_id, target_month, `qty(ml)`, penalty, `penalty_qty(ml)`, station_id) 
-                        VALUES (:param_id, :target_month, :qty, :penalty, :penalty_qty, :station_id)
-                    ");
-                    $insStmt->execute([
+                    // Check if entry exists for this month
+                    $chk = $pdo->prepare("SELECT id FROM dc_mcc_chemical_target WHERE station_id = :station_id AND param_id = :param_id AND target_month = :target_month");
+                    $chk->execute([
+                        'station_id' => $stationId,
                         'param_id' => $pId,
-                        'target_month' => $targetMonthDate,
-                        'qty' => $qty,
-                        'penalty' => $penalty,
-                        'penalty_qty' => $penalty_qty,
-                        'station_id' => $stationId
+                        'target_month' => $targetMonthDate
                     ]);
-                }
-            }
+                    $existingId = $chk->fetchColumn();
 
-            $pdo->commit();
-            $successMsg = "DC chemical targets for " . date('F, Y', strtotime($targetMonthDate)) . " saved successfully!";
-        } catch (Exception $e) {
-            $pdo->rollBack();
-            $errorMsg = "Error saving targets: " . $e->getMessage();
+                    if ($existingId) {
+                        $upd = $pdo->prepare("UPDATE dc_mcc_chemical_target SET target_qty = :q, penalty_amount = :p, penalty_qty = :pq WHERE id = :id");
+                        $upd->execute([
+                            'q' => $q,
+                            'p' => $p,
+                            'pq' => $pq,
+                            'id' => $existingId
+                        ]);
+                    } else {
+                        $ins = $pdo->prepare("INSERT INTO dc_mcc_chemical_target (station_id, param_id, target_month, target_qty, penalty_amount, penalty_qty) VALUES (:station_id, :param_id, :target_month, :q, :p, :pq)");
+                        $ins->execute([
+                            'station_id' => $stationId,
+                            'param_id' => $pId,
+                            'target_month' => $targetMonthDate,
+                            'q' => $q,
+                            'p' => $p,
+                            'pq' => $pq
+                        ]);
+                    }
+                }
+
+                $pdo->commit();
+                $successMsg = "DC Chemical targets updated successfully!";
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                $errorMsg = "Error saving DC chemical targets: " . $e->getMessage();
+            }
         }
     }
 }
@@ -349,8 +343,8 @@ include 'sidebar.php';
                         </div>
 
                         <div style="text-align: center; margin-top: 25px;" class="no-print">
-                            <button type="submit" name="save_targets" class="btn btn-primary" style="background-color: #1987C6; border: none; font-weight: 700; font-size: 15px; padding: 10px 40px; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.2s ease;">
-                                Save Targets
+                            <button type="submit" name="save_targets" class="btn btn-primary" <?= !empty($isViewer) ? 'disabled title="Read-only mode: Viewers cannot save targets"' : '' ?> style="background-color: #1987C6; border: none; font-weight: 700; font-size: 15px; padding: 10px 40px; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: <?= !empty($isViewer) ? 'not-allowed' : 'pointer' ?>; opacity: <?= !empty($isViewer) ? '0.65' : '1' ?>;">
+                                <?= !empty($isViewer) ? '<i class="bi bi-lock-fill me-1"></i> Targets Locked (Read-Only)' : 'Save Targets' ?>
                             </button>
                         </div>
                     </form>

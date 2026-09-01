@@ -671,12 +671,10 @@ $has_billing      = in_array(11, $active_report_ids) && in_array('Billing.php', 
     
 
         <!-- Employee Management Dropdown -->
-        <?php 
-        $empPages = ['add-employee.php', 'view-employee.php'];
-        $isEmpActive = in_array($currentPage, $empPages);
-        ?>
-        <li class="nav-item <?= $isEmpActive ? 'menu-open' : '' ?>">
-          <a href="#" class="nav-link <?= $isEmpActive ? 'active' : '' ?>">
+        <?php if (empty($isViewer)): ?>
+        <!-- Employee Management -->
+        <li class="nav-item <?= in_array($currentPage, ['add-employee.php', 'view-employee.php']) ? 'menu-open' : '' ?>">
+          <a href="#" class="nav-link <?= in_array($currentPage, ['add-employee.php', 'view-employee.php']) ? 'active' : '' ?>">
             <i class="nav-icon bi bi-people"></i>
             <p>
               Emp. Management
@@ -697,13 +695,14 @@ $has_billing      = in_array(11, $active_report_ids) && in_array('Billing.php', 
           </ul>
         </li>
 
-        <!-- Auditor Management -->
+        <!-- User Management -->
         <li class="nav-item">
           <a href="auditors.php" class="nav-link <?= ($currentPage == 'auditors.php') ? 'active' : '' ?>">
             <i class="nav-icon bi bi-person-badge"></i>
-            <p>Manage Auditors</p>
+            <p>Manage Users</p>
           </a>
         </li>
+        <?php endif; ?>
 
         <?php if ($has_billing): ?>
         <li class="nav-item">

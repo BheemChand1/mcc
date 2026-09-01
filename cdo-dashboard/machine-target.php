@@ -36,104 +36,108 @@ $errorMsg = '';
 
 // Handle save post request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
-    $selectedMonth = $_POST['month'] ?? '';
-    $selectedYear = $_POST['year'] ?? '';
-    $effectiveFrom = $_POST['effective_from'] ?? '';
-    
-    if (empty($effectiveFrom) || !strtotime($effectiveFrom)) {
-        $effectiveFrom = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
-    }
-
-    if (!empty($selectedMonth) && !empty($selectedYear)) {
-        $targetMonthDate = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
-        $penalties = $_POST['penalty'] ?? []; // machine_id => penalty_amount
-        $nominations = $_POST['nomination'] ?? []; // machine_id => [shift_id => Y/N]
+    if (!empty($isViewer)) {
+        $errorMsg = "Viewers are in read-only mode and cannot save targets.";
+    } else {
+        $selectedMonth = $_POST['month'] ?? '';
+        $selectedYear = $_POST['year'] ?? '';
+        $effectiveFrom = $_POST['effective_from'] ?? '';
         
-        $pdo->beginTransaction();
-        try {
-            // Prepare statements
-            $findActiveStmt = $pdo->prepare("
-                SELECT * FROM mcc_normal_machine_target 
-                WHERE station_id = :station_id 
-                  AND machine_id = :machine_id 
-                  AND shift_id = :shift_id 
-                  AND effective_to IS NULL
-                LIMIT 1
-            ");
+        if (empty($effectiveFrom) || !strtotime($effectiveFrom)) {
+            $effectiveFrom = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
+        }
 
-            $closeActiveStmt = $pdo->prepare("
-                UPDATE mcc_normal_machine_target 
-                SET effective_to = :effective_to 
-                WHERE id = :id
-            ");
+        if (!empty($selectedMonth) && !empty($selectedYear)) {
+            $targetMonthDate = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
+            $penalties = $_POST['penalty'] ?? []; // machine_id => penalty_amount
+            $nominations = $_POST['nomination'] ?? []; // machine_id => [shift_id => Y/N]
 
-            $insertNewStmt = $pdo->prepare("
-                INSERT INTO mcc_normal_machine_target 
-                (station_id, machine_id, shift_id, nominated_area, penalty_amount, effective_from, effective_to) 
-                VALUES (:station_id, :machine_id, :shift_id, :nominated_area, :penalty_amount, :effective_from, NULL)
-            ");
-            
-            foreach ($machinesList as $mach) {
-                $mId = $mach['machine_id'];
-                $penalty = isset($penalties[$mId]) ? floatval($penalties[$mId]) : 0.00;
+            $pdo->beginTransaction();
+            try {
+                // Prepare statements
+                $findActiveStmt = $pdo->prepare("
+                    SELECT * FROM mcc_normal_machine_target 
+                    WHERE station_id = :station_id 
+                      AND machine_id = :machine_id 
+                      AND shift_id = :shift_id 
+                      AND effective_to IS NULL
+                    LIMIT 1
+                ");
+
+                $closeActiveStmt = $pdo->prepare("
+                    UPDATE mcc_normal_machine_target 
+                    SET effective_to = :effective_to 
+                    WHERE id = :id
+                ");
+
+                $insertNewStmt = $pdo->prepare("
+                    INSERT INTO mcc_normal_machine_target 
+                    (station_id, machine_id, shift_id, nominated_area, penalty_amount, effective_from, effective_to) 
+                    VALUES (:station_id, :machine_id, :shift_id, :nominated_area, :penalty_amount, :effective_from, NULL)
+                ");
                 
-                foreach ($shiftsList as $shift) {
-                    $sId = $shift['shift_id'];
-                    $nom = $nominations[$mId][$sId] ?? 'N';
+                foreach ($machinesList as $mach) {
+                    $mId = $mach['machine_id'];
+                    $penalty = isset($penalties[$mId]) ? floatval($penalties[$mId]) : 0.00;
                     
-                    // Find currently active target row for this machine and shift
-                    $findActiveStmt->execute([
-                        'station_id' => $stationId,
-                        'machine_id' => $mId,
-                        'shift_id' => $sId
-                    ]);
-                    $currentActive = $findActiveStmt->fetch(PDO::FETCH_ASSOC);
-                    
-                    $needsUpdate = false;
-                    
-                    if ($currentActive) {
-                        $currNom = $currentActive['nominated_area'];
-                        $currPenalty = floatval($currentActive['penalty_amount']);
+                    foreach ($shiftsList as $shift) {
+                        $sId = $shift['shift_id'];
+                        $nom = $nominations[$mId][$sId] ?? 'N';
                         
-                        if ($currNom !== $nom || $currPenalty !== $penalty) {
-                            $needsUpdate = true;
-                            
-                            // Close active row. Set effective_to to the day before effective_from
-                            $effectiveToDate = date('Y-m-d', strtotime($effectiveFrom . ' - 1 day'));
-                            if (strtotime($effectiveToDate) < strtotime($currentActive['effective_from'])) {
-                                $effectiveToDate = $currentActive['effective_from'];
-                            }
-                            
-                            $closeActiveStmt->execute([
-                                'effective_to' => $effectiveToDate,
-                                'id' => $currentActive['id']
-                            ]);
-                        }
-                    } else {
-                        // No active target row exists, insert one
-                        $needsUpdate = true;
-                    }
-                    
-                    if ($needsUpdate) {
-                        $insertNewStmt->execute([
+                        // Find currently active target row for this machine and shift
+                        $findActiveStmt->execute([
                             'station_id' => $stationId,
                             'machine_id' => $mId,
-                            'shift_id' => $sId,
-                            'nominated_area' => $nom,
-                            'penalty_amount' => $penalty,
-                            'effective_from' => $effectiveFrom
+                            'shift_id' => $sId
                         ]);
+                        $currentActive = $findActiveStmt->fetch(PDO::FETCH_ASSOC);
+                        
+                        $needsUpdate = false;
+                        
+                        if ($currentActive) {
+                            $currNom = $currentActive['nominated_area'];
+                            $currPenalty = floatval($currentActive['penalty_amount']);
+                            
+                            if ($currNom !== $nom || $currPenalty !== $penalty) {
+                                $needsUpdate = true;
+                                
+                                // Close active row. Set effective_to to the day before effective_from
+                                $effectiveToDate = date('Y-m-d', strtotime($effectiveFrom . ' - 1 day'));
+                                if (strtotime($effectiveToDate) < strtotime($currentActive['effective_from'])) {
+                                    $effectiveToDate = $currentActive['effective_from'];
+                                }
+                                
+                                $closeActiveStmt->execute([
+                                    'effective_to' => $effectiveToDate,
+                                    'id' => $currentActive['id']
+                                ]);
+                            }
+                        } else {
+                            // No active target row exists, insert one
+                            $needsUpdate = true;
+                        }
+                        
+                        if ($needsUpdate) {
+                            $insertNewStmt->execute([
+                                'station_id' => $stationId,
+                                'machine_id' => $mId,
+                                'shift_id' => $sId,
+                                'nominated_area' => $nom,
+                                'penalty_amount' => $penalty,
+                                'effective_from' => $effectiveFrom
+                            ]);
+                        }
                     }
                 }
+                
+                $pdo->commit();
+                $successMsg = "Machine targets updated successfully starting from " . date('d-m-Y', strtotime($effectiveFrom)) . "!";
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                $errorMsg = "Error saving machine targets: " . $e->getMessage();
             }
-            
-            $pdo->commit();
-            $successMsg = "Machine targets updated successfully starting from " . date('d-m-Y', strtotime($effectiveFrom)) . "!";
-        } catch (Exception $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            $errorMsg = "Error saving machine targets: " . $e->getMessage();
         }
     }
 }
@@ -443,8 +447,8 @@ include 'sidebar.php';
 
                         <!-- Center Save Target Button -->
                         <div style="text-align: center; margin-top: 25px;" class="no-print">
-                            <button type="submit" name="save_target" class="btn btn-primary" style="background-color: #007bff; border: none; font-weight: 700; font-size: 15px; padding: 10px 30px; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.2s ease;">
-                                Save Target
+                            <button type="submit" name="save_target" class="btn btn-primary" <?= !empty($isViewer) ? 'disabled title="Read-only mode: Viewers cannot save targets"' : '' ?> style="background-color: #007bff; border: none; font-weight: 700; font-size: 15px; padding: 10px 30px; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: <?= !empty($isViewer) ? 'not-allowed' : 'pointer' ?>; opacity: <?= !empty($isViewer) ? '0.65' : '1' ?>;">
+                                <?= !empty($isViewer) ? '<i class="bi bi-lock-fill me-1"></i> Targets Locked (Read-Only)' : 'Save Target' ?>
                             </button>
                         </div>
                     </form>

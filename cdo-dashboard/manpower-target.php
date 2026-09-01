@@ -90,57 +90,61 @@ $errorMsg = '';
 
 // Handle save post request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
-    $selectedMonth = $_POST['month'] ?? '';
-    $selectedYear = $_POST['year'] ?? '';
-    $effectiveFromInput = $_POST['effective_from'] ?? $targetMonthDate;
-    $effectiveToInput = !empty($_POST['effective_to']) ? $_POST['effective_to'] : date('Y-m-t', strtotime($targetMonthDate));
-    
-    if (!empty($selectedMonth) && !empty($selectedYear)) {
-        $targetMonthDate = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
-        $submittedRoleTargets = $_POST['target_qty_role'] ?? []; // [manpower_type_id] => qty
+    if (!empty($isViewer)) {
+        $errorMsg = "Viewers are in read-only mode and cannot save targets.";
+    } else {
+        $selectedMonth = $_POST['month'] ?? '';
+        $selectedYear = $_POST['year'] ?? '';
+        $effectiveFromInput = $_POST['effective_from'] ?? $targetMonthDate;
+        $effectiveToInput = !empty($_POST['effective_to']) ? $_POST['effective_to'] : date('Y-m-t', strtotime($targetMonthDate));
         
-        $pdo->beginTransaction();
-        try {
-            // Delete existing manpower targets for this station and month
-            $deleteStmt = $pdo->prepare("
-                DELETE FROM mcc_manpower_targets 
-                WHERE station_id = :station_id AND target_date = :target_date
-            ");
-            $deleteStmt->execute([
-                'station_id' => $stationId,
-                'target_date' => $targetMonthDate
-            ]);
+        if (!empty($selectedMonth) && !empty($selectedYear)) {
+            $targetMonthDate = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
+            $submittedRoleTargets = $_POST['target_qty_role'] ?? []; // [manpower_type_id] => qty
             
-            // Insert updated manpower targets (one entry per role/type)
-            $insertStmt = $pdo->prepare("
-                INSERT INTO mcc_manpower_targets 
-                (station_id, target_date, manpower_type_id, manpower_type, target_qty, effective_from, effective_to) 
-                VALUES (:station_id, :target_date, :manpower_type_id, :manpower_type, :target_qty, :effective_from, :effective_to)
-            ");
-            
-            foreach ($categories as $cat) {
-                foreach ($cat['roles'] as $role) {
-                    $tId = $role['manpower_type_id'];
-                    $qty = intval($submittedRoleTargets[$tId] ?? 0);
-                    $roleName = $roleNamesMap[$tId] ?? 'Staff';
-                    
-                    $insertStmt->execute([
-                        'station_id' => $stationId,
-                        'target_date' => $targetMonthDate,
-                        'manpower_type_id' => $tId,
-                        'manpower_type' => $roleName,
-                        'target_qty' => $qty,
-                        'effective_from' => $effectiveFromInput,
-                        'effective_to' => $effectiveToInput
-                    ]);
+            $pdo->beginTransaction();
+            try {
+                // Delete existing manpower targets for this station and month
+                $deleteStmt = $pdo->prepare("
+                    DELETE FROM mcc_manpower_targets 
+                    WHERE station_id = :station_id AND target_date = :target_date
+                ");
+                $deleteStmt->execute([
+                    'station_id' => $stationId,
+                    'target_date' => $targetMonthDate
+                ]);
+                
+                // Insert updated manpower targets (one entry per role/type)
+                $insertStmt = $pdo->prepare("
+                    INSERT INTO mcc_manpower_targets 
+                    (station_id, target_date, manpower_type_id, manpower_type, target_qty, effective_from, effective_to) 
+                    VALUES (:station_id, :target_date, :manpower_type_id, :manpower_type, :target_qty, :effective_from, :effective_to)
+                ");
+                
+                foreach ($categories as $cat) {
+                    foreach ($cat['roles'] as $role) {
+                        $tId = $role['manpower_type_id'];
+                        $qty = intval($submittedRoleTargets[$tId] ?? 0);
+                        $roleName = $roleNamesMap[$tId] ?? 'Staff';
+                        
+                        $insertStmt->execute([
+                            'station_id' => $stationId,
+                            'target_date' => $targetMonthDate,
+                            'manpower_type_id' => $tId,
+                            'manpower_type' => $roleName,
+                            'target_qty' => $qty,
+                            'effective_from' => $effectiveFromInput,
+                            'effective_to' => $effectiveToInput
+                        ]);
+                    }
                 }
+                
+                $pdo->commit();
+                $successMsg = "Manpower targets for " . date('F, Y', strtotime($targetMonthDate)) . " saved successfully!";
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                $errorMsg = "Error saving manpower targets: " . $e->getMessage();
             }
-            
-            $pdo->commit();
-            $successMsg = "Manpower targets for " . date('F, Y', strtotime($targetMonthDate)) . " saved successfully!";
-        } catch (Exception $e) {
-            $pdo->rollBack();
-            $errorMsg = "Error saving manpower targets: " . $e->getMessage();
         }
     }
 }
@@ -383,7 +387,7 @@ include 'sidebar.php';
                                                         <input type="number" min="0" step="1" 
                                                             name="target_qty_role[<?= $tId ?>]" 
                                                             value="<?= htmlspecialchars($targetVal) ?>" 
-                                                            class="target-input" required placeholder="0">
+                                                            class="target-input" <?= !empty($isViewer) ? 'readonly' : 'required' ?> placeholder="0">
                                                     </td>
                                                 </tr>
                                             <?php endforeach; ?>
@@ -394,8 +398,8 @@ include 'sidebar.php';
 
                             <!-- Save Manpower Target Button -->
                             <div style="text-align: center; margin-top: 25px;" class="no-print">
-                                <button type="submit" name="save_target" class="btn btn-primary" style="background-color: #1987C6; border: none; font-weight: 700; font-size: 15px; padding: 10px 30px; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.2s ease;">
-                                    Save Manpower Target
+                                <button type="submit" name="save_target" class="btn btn-primary" <?= !empty($isViewer) ? 'disabled title="Read-only mode: Viewers cannot save targets"' : '' ?> style="background-color: #1987C6; border: none; font-weight: 700; font-size: 15px; padding: 10px 30px; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: <?= !empty($isViewer) ? 'not-allowed' : 'pointer' ?>; opacity: <?= !empty($isViewer) ? '0.65' : '1' ?>;">
+                                    <?= !empty($isViewer) ? '<i class="bi bi-lock-fill me-1"></i> Targets Locked (Read-Only)' : 'Save Manpower Target' ?>
                                 </button>
                             </div>
                         </form>

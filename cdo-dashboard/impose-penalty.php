@@ -10,47 +10,55 @@ $errorMsg = '';
 
 // Handle Delete Request
 if (isset($_GET['delete_id'])) {
-    $delId = intval($_GET['delete_id']);
-    try {
-        $stmt = $pdo->prepare("DELETE FROM mcc_imposed_penalties WHERE id = :id AND station_id = :station_id");
-        $stmt->execute(['id' => $delId, 'station_id' => $stationId]);
-        $successMsg = "Imposed penalty deleted successfully.";
-        $monthParam = isset($_GET['month']) ? '&month=' . urlencode($_GET['month']) : '';
-        header("Location: impose-penalty.php?success_msg=" . urlencode($successMsg) . $monthParam);
-        exit();
-    } catch (Exception $e) {
-        $errorMsg = "Database error: " . $e->getMessage();
+    if (!empty($isViewer)) {
+        $errorMsg = "Viewers are in read-only mode and cannot delete penalties.";
+    } else {
+        $delId = intval($_GET['delete_id']);
+        try {
+            $stmt = $pdo->prepare("DELETE FROM mcc_imposed_penalties WHERE id = :id AND station_id = :station_id");
+            $stmt->execute(['id' => $delId, 'station_id' => $stationId]);
+            $successMsg = "Imposed penalty deleted successfully.";
+            $monthParam = isset($_GET['month']) ? '&month=' . urlencode($_GET['month']) : '';
+            header("Location: impose-penalty.php?success_msg=" . urlencode($successMsg) . $monthParam);
+            exit();
+        } catch (Exception $e) {
+            $errorMsg = "Database error: " . $e->getMessage();
+        }
     }
 }
 
 // Handle Add Penalty Form Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_penalty') {
-    $date = $_POST['penalty_date'] ?? '';
-    $reason = trim($_POST['penalty_reason'] ?? '');
-    $desc = trim($_POST['description'] ?? '');
-    $amount = floatval($_POST['penalty_amount'] ?? 0);
-
-    if (empty($date) || empty($reason) || $amount <= 0) {
-        $errorMsg = "Please fill in all required fields and specify a valid positive penalty amount.";
+    if (!empty($isViewer)) {
+        $errorMsg = "Viewers are in read-only mode and cannot impose penalties.";
     } else {
-        try {
-            $stmt = $pdo->prepare("
-                INSERT INTO mcc_imposed_penalties (station_id, penalty_date, penalty_reason, description, penalty_amount)
-                VALUES (:station_id, :penalty_date, :penalty_reason, :description, :penalty_amount)
-            ");
-            $stmt->execute([
-                'station_id' => $stationId,
-                'penalty_date' => $date,
-                'penalty_reason' => $reason,
-                'description' => $desc,
-                'penalty_amount' => $amount
-            ]);
-            $successMsg = "Penalty of ₹" . number_format($amount, 2) . " imposed successfully!";
-            $redirMonth = date('Y-m', strtotime($date));
-            header("Location: impose-penalty.php?success_msg=" . urlencode($successMsg) . "&month=" . urlencode($redirMonth));
-            exit();
-        } catch (Exception $e) {
-            $errorMsg = "Database error: " . $e->getMessage();
+        $date = $_POST['penalty_date'] ?? '';
+        $reason = trim($_POST['penalty_reason'] ?? '');
+        $desc = trim($_POST['description'] ?? '');
+        $amount = floatval($_POST['penalty_amount'] ?? 0);
+
+        if (empty($date) || empty($reason) || $amount <= 0) {
+            $errorMsg = "Please fill in all required fields and specify a valid positive penalty amount.";
+        } else {
+            try {
+                $stmt = $pdo->prepare("
+                    INSERT INTO mcc_imposed_penalties (station_id, penalty_date, penalty_reason, description, penalty_amount)
+                    VALUES (:station_id, :penalty_date, :penalty_reason, :description, :penalty_amount)
+                ");
+                $stmt->execute([
+                    'station_id' => $stationId,
+                    'penalty_date' => $date,
+                    'penalty_reason' => $reason,
+                    'description' => $desc,
+                    'penalty_amount' => $amount
+                ]);
+                $successMsg = "New penalty of ₹" . number_format($amount, 2) . " imposed successfully.";
+                $monthParam = isset($_GET['month']) ? '&month=' . urlencode($_GET['month']) : '';
+                header("Location: impose-penalty.php?success_msg=" . urlencode($successMsg) . $monthParam);
+                exit();
+            } catch (Exception $e) {
+                $errorMsg = "Database error: " . $e->getMessage();
+            }
         }
     }
 }
@@ -217,8 +225,8 @@ include 'sidebar.php';
                                     <textarea name="description" class="form-control" rows="3" placeholder="Enter details about the penalty..."></textarea>
                                 </div>
 
-                                <button type="submit" class="btn btn-primary-custom text-white w-100 py-2 fw-bold shadow-sm">
-                                    <i class="bi bi-save me-1"></i> Save Penalty
+                                <button type="submit" class="btn btn-primary-custom text-white w-100 py-2 fw-bold shadow-sm" <?= !empty($isViewer) ? 'disabled title="Read-only mode: Viewers cannot impose penalties"' : '' ?> style="<?= !empty($isViewer) ? 'cursor: not-allowed; opacity: 0.65;' : '' ?>">
+                                    <i class="bi <?= !empty($isViewer) ? 'bi-lock-fill' : 'bi-save' ?> me-1"></i> <?= !empty($isViewer) ? 'Locked (Read-Only)' : 'Save Penalty' ?>
                                 </button>
                             </form>
                         </div>
@@ -264,9 +272,13 @@ include 'sidebar.php';
                                                     ₹<?= number_format($p['penalty_amount'], 2) ?>
                                                 </td>
                                                 <td class="text-center">
-                                                    <a href="impose-penalty.php?delete_id=<?= $p['id'] ?>&month=<?= urlencode($selectedMonthYear) ?>" class="btn btn-outline-danger btn-sm border-0 rounded-3" onclick="return confirm('Are you sure you want to delete this penalty record?')">
-                                                        <i class="bi bi-trash-fill"></i>
-                                                    </a>
+                                                    <?php if (empty($isViewer)): ?>
+                                                        <a href="impose-penalty.php?delete_id=<?= $p['id'] ?>&month=<?= urlencode($selectedMonthYear) ?>" class="btn btn-outline-danger btn-sm border-0 rounded-3" onclick="return confirm('Are you sure you want to delete this penalty record?')">
+                                                            <i class="bi bi-trash-fill"></i>
+                                                        </a>
+                                                    <?php else: ?>
+                                                        <span class="text-muted" title="Viewers cannot delete penalties"><i class="bi bi-lock-fill"></i></span>
+                                                    <?php endif; ?>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>

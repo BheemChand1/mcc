@@ -1,41 +1,49 @@
 <?php
 require_once 'auth.php';
 
-$pageTitle = 'MCC | Auditor Management';
+// Ensure role column in mcc_users table supports VIEWER
+try {
+    $pdo->exec("ALTER TABLE mcc_users MODIFY COLUMN role VARCHAR(50) NOT NULL DEFAULT 'AUDITOR'");
+} catch (Exception $e) {}
+
+$pageTitle = 'MCC | User Management';
 
 $message = '';
 $messageType = '';
 
-// Handle POST actions (Add Auditor / Toggle Status / Delete)
+// Handle POST actions (Add User / Edit User / Toggle Status / Delete)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
-    if ($action === 'add_auditor' || $action === 'edit_auditor') {
+    if ($action === 'add_auditor' || $action === 'edit_auditor' || $action === 'add_user' || $action === 'edit_user') {
         $userId   = intval($_POST['user_id'] ?? 0);
         $fullName = trim($_POST['full_name'] ?? '');
         $username = trim($_POST['username'] ?? '');
         $email    = trim($_POST['email'] ?? '');
         $password = $_POST['password'] ?? '';
-        $role     = 'AUDITOR';
+        $role     = strtoupper(trim($_POST['role'] ?? 'AUDITOR'));
+        if (!in_array($role, ['AUDITOR', 'VIEWER'])) {
+            $role = 'AUDITOR';
+        }
 
         if (empty($fullName) || empty($username) || empty($email)) {
             $message = 'Full name, username, and email are required.';
             $messageType = 'danger';
-        } elseif ($action === 'add_auditor' && empty($password)) {
-            $message = 'Password is required for creating a new auditor account.';
+        } elseif (($action === 'add_auditor' || $action === 'add_user') && empty($password)) {
+            $message = 'Password is required for creating a new user account.';
             $messageType = 'danger';
         } else {
             try {
                 // Check duplicate username
-                $chkUname = $pdo->prepare("SELECT COUNT(*) FROM mcc_users WHERE username = :username" . ($action === 'edit_auditor' ? " AND user_id != :id" : ""));
+                $chkUname = $pdo->prepare("SELECT COUNT(*) FROM mcc_users WHERE username = :username" . (($action === 'edit_auditor' || $action === 'edit_user') ? " AND user_id != :id" : ""));
                 $unameParams = ['username' => $username];
-                if ($action === 'edit_auditor') $unameParams['id'] = $userId;
+                if ($action === 'edit_auditor' || $action === 'edit_user') $unameParams['id'] = $userId;
                 $chkUname->execute($unameParams);
 
                 // Check duplicate email
-                $chkEmail = $pdo->prepare("SELECT COUNT(*) FROM mcc_users WHERE email = :email" . ($action === 'edit_auditor' ? " AND user_id != :id" : ""));
+                $chkEmail = $pdo->prepare("SELECT COUNT(*) FROM mcc_users WHERE email = :email" . (($action === 'edit_auditor' || $action === 'edit_user') ? " AND user_id != :id" : ""));
                 $emailParams = ['email' => $email];
-                if ($action === 'edit_auditor') $emailParams['id'] = $userId;
+                if ($action === 'edit_auditor' || $action === 'edit_user') $emailParams['id'] = $userId;
                 $chkEmail->execute($emailParams);
 
                 if ($chkUname->fetchColumn() > 0) {
@@ -45,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = "Email address '$email' is already in use.";
                     $messageType = 'danger';
                 } else {
-                    if ($action === 'add_auditor') {
+                    if ($action === 'add_auditor' || $action === 'add_user') {
                         $hash = password_hash($password, PASSWORD_BCRYPT);
                         $ins = $pdo->prepare("
                             INSERT INTO mcc_users (user_name, full_name, username, email, password_hash, role, station_id, status)
@@ -60,21 +68,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'role'           => $role,
                             'station_id'     => $stationId
                         ]);
-                        $message = "Auditor account for '$fullName' created successfully!";
+                        $message = "User account for '$fullName' ($role) created successfully!";
                         $messageType = 'success';
                     } else {
                         if (!empty($password)) {
                             $hash = password_hash($password, PASSWORD_BCRYPT);
                             $upd = $pdo->prepare("
                                 UPDATE mcc_users 
-                                SET user_name = :user_name, full_name = :full_name, username = :username, email = :email, password_hash = :password_hash
-                                WHERE user_id = :id AND station_id = :station_id AND role = 'AUDITOR'
+                                SET user_name = :user_name, full_name = :full_name, username = :username, email = :email, role = :role, password_hash = :password_hash
+                                WHERE user_id = :id AND station_id = :station_id AND role IN ('AUDITOR', 'VIEWER')
                             ");
                             $upd->execute([
                                 'user_name'      => $fullName,
                                 'full_name'      => $fullName,
                                 'username'       => $username,
                                 'email'          => $email,
+                                'role'           => $role,
                                 'password_hash'  => $hash,
                                 'id'             => $userId,
                                 'station_id'     => $stationId
@@ -82,19 +91,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         } else {
                             $upd = $pdo->prepare("
                                 UPDATE mcc_users 
-                                SET user_name = :user_name, full_name = :full_name, username = :username, email = :email
-                                WHERE user_id = :id AND station_id = :station_id AND role = 'AUDITOR'
+                                SET user_name = :user_name, full_name = :full_name, username = :username, email = :email, role = :role
+                                WHERE user_id = :id AND station_id = :station_id AND role IN ('AUDITOR', 'VIEWER')
                             ");
                             $upd->execute([
                                 'user_name'  => $fullName,
                                 'full_name'  => $fullName,
                                 'username'   => $username,
                                 'email'      => $email,
+                                'role'       => $role,
                                 'id'         => $userId,
                                 'station_id' => $stationId
                             ]);
                         }
-                        $message = "Auditor details for '$fullName' updated successfully!";
+                        $message = "User details for '$fullName' updated successfully!";
                         $messageType = 'success';
                     }
                 }
@@ -107,37 +117,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $userId = intval($_POST['user_id'] ?? 0);
         $newStatus = ($_POST['current_status'] ?? 'Active') === 'Active' ? 'Inactive' : 'Active';
         try {
-            $upd = $pdo->prepare("UPDATE mcc_users SET status = :status WHERE user_id = :id AND station_id = :station_id AND role = 'AUDITOR'");
+            $upd = $pdo->prepare("UPDATE mcc_users SET status = :status WHERE user_id = :id AND station_id = :station_id AND role IN ('AUDITOR', 'VIEWER')");
             $upd->execute(['status' => $newStatus, 'id' => $userId, 'station_id' => $stationId]);
-            $message = "Auditor status updated to '$newStatus'.";
+            $message = "User status updated to '$newStatus'.";
             $messageType = 'success';
         } catch (Exception $e) {
             $message = 'Error updating status: ' . $e->getMessage();
             $messageType = 'danger';
         }
-    } elseif ($action === 'delete_auditor') {
+    } elseif ($action === 'delete_auditor' || $action === 'delete_user') {
         $userId = intval($_POST['user_id'] ?? 0);
         try {
-            $del = $pdo->prepare("DELETE FROM mcc_users WHERE user_id = :id AND station_id = :station_id AND role = 'AUDITOR'");
+            $del = $pdo->prepare("DELETE FROM mcc_users WHERE user_id = :id AND station_id = :station_id AND role IN ('AUDITOR', 'VIEWER')");
             $del->execute(['id' => $userId, 'station_id' => $stationId]);
-            $message = "Auditor account removed successfully.";
+            $message = "User account removed successfully.";
             $messageType = 'success';
         } catch (Exception $e) {
-            $message = 'Error deleting auditor: ' . $e->getMessage();
+            $message = 'Error deleting user: ' . $e->getMessage();
             $messageType = 'danger';
         }
     }
 }
 
-// Fetch all auditors assigned to this station
+// Fetch all users (AUDITOR and VIEWER) assigned to this station
 $stmt = $pdo->prepare("
     SELECT user_id, user_name, username, email, role, status, created_at
     FROM mcc_users
-    WHERE station_id = :station_id AND role = 'AUDITOR'
+    WHERE station_id = :station_id AND role IN ('AUDITOR', 'VIEWER')
     ORDER BY user_id DESC
 ");
 $stmt->execute(['station_id' => $stationId]);
-$auditors = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $extraStyles = '
 <style>
@@ -241,11 +251,11 @@ include 'sidebar.php';
             
             <div class="auditor-header-card">
                 <div>
-                    <h3 class="mb-1 font-weight-bold" style="font-size: 1.35rem;"><i class="bi bi-person-badge me-2"></i> Auditor Management</h3>
-                    <p class="mb-0 text-white-50" style="font-size: 0.85rem;">Manage mobile application auditors and login credentials for <?= htmlspecialchars($stationName) ?> Station</p>
+                    <h3 class="mb-1 font-weight-bold" style="font-size: 1.35rem;"><i class="bi bi-people-fill me-2"></i> User Management</h3>
+                    <p class="mb-0 text-white-50" style="font-size: 0.85rem;">Manage application user accounts (Auditors & Viewers) and login credentials for <?= htmlspecialchars($stationName) ?> Station</p>
                 </div>
                 <button type="button" class="btn btn-create-auditor" data-bs-toggle="modal" data-bs-target="#auditorModal" onclick="openAddModal()">
-                    <i class="bi bi-person-plus-fill me-1" style="font-size: 1rem;"></i> <span>Add New Auditor</span>
+                    <i class="bi bi-person-plus-fill me-1" style="font-size: 1rem;"></i> <span>Add User</span>
                 </button>
             </div>
 
@@ -260,7 +270,7 @@ include 'sidebar.php';
             <div class="auditor-card">
                 <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                     <h5 class="mb-0 font-weight-bold text-dark" style="font-size: 1rem;">
-                        <i class="bi bi-people-fill text-primary me-2"></i> Registered Auditors (<?= count($auditors) ?>)
+                        <i class="bi bi-people-fill text-primary me-2"></i> Registered Users (<?= count($users) ?>)
                     </h5>
                 </div>
                 <div class="table-responsive">
@@ -268,24 +278,25 @@ include 'sidebar.php';
                         <thead>
                             <tr>
                                 <th style="width: 60px; text-align: center;">#</th>
-                                <th>Auditor Name</th>
+                                <th>User Name</th>
                                 <th>Username / Login ID</th>
                                 <th>Email Address</th>
+                                <th style="text-align: center;">Role</th>
                                 <th style="text-align: center;">Status</th>
                                 <th style="text-align: center;">Created At</th>
                                 <th style="width: 140px; text-align: center;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (empty($auditors)): ?>
+                            <?php if (empty($users)): ?>
                                 <tr>
-                                    <td colspan="7" class="text-center py-4 text-muted">
+                                    <td colspan="8" class="text-center py-4 text-muted">
                                         <i class="bi bi-person-x fs-3 d-block mb-2 text-secondary"></i>
-                                        No auditor accounts registered for this station yet. Click "Add New Auditor" above to create one.
+                                        No user accounts registered for this station yet. Click "Add User" above to create one.
                                     </td>
                                 </tr>
                             <?php else: ?>
-                                <?php foreach ($auditors as $idx => $a): ?>
+                                <?php foreach ($users as $idx => $a): ?>
                                     <tr>
                                         <td class="text-center font-weight-bold text-muted"><?= $idx + 1 ?></td>
                                         <td>
@@ -295,6 +306,11 @@ include 'sidebar.php';
                                             <code><?= htmlspecialchars($a['username']) ?></code>
                                         </td>
                                         <td><?= htmlspecialchars($a['email']) ?></td>
+                                        <td class="text-center">
+                                            <span class="badge <?= ($a['role'] === 'VIEWER') ? 'bg-info text-dark' : 'bg-primary' ?> px-2 py-1" style="font-size: 0.75rem;">
+                                                <?= htmlspecialchars($a['role']) ?>
+                                            </span>
+                                        </td>
                                         <td class="text-center">
                                             <?php if ($a['status'] === 'Active'): ?>
                                                 <span class="badge-active"><i class="bi bi-check-circle-fill me-1"></i> Active</span>
@@ -311,7 +327,7 @@ include 'sidebar.php';
                                                     <i class="bi bi-pencil-square"></i>
                                                 </button>
 
-                                                <form method="POST" class="d-inline" onsubmit="return confirm('Toggle status for this auditor?');">
+                                                <form method="POST" class="d-inline" onsubmit="return confirm('Toggle status for this user?');">
                                                     <input type="hidden" name="action" value="toggle_status">
                                                     <input type="hidden" name="user_id" value="<?= $a['user_id'] ?>">
                                                     <input type="hidden" name="current_status" value="<?= $a['status'] ?>">
@@ -320,8 +336,8 @@ include 'sidebar.php';
                                                     </button>
                                                 </form>
 
-                                                <form method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to permanently delete this auditor?');">
-                                                    <input type="hidden" name="action" value="delete_auditor">
+                                                <form method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to permanently delete this user?');">
+                                                    <input type="hidden" name="action" value="delete_user">
                                                     <input type="hidden" name="user_id" value="<?= $a['user_id'] ?>">
                                                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
                                                         <i class="bi bi-trash3"></i>
@@ -341,16 +357,16 @@ include 'sidebar.php';
     </div>
 </main>
 
-<!-- Add / Edit Auditor Modal -->
+<!-- Add / Edit User Modal -->
 <div class="modal fade" id="auditorModal" tabindex="-1" aria-labelledby="auditorModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
             <form method="POST" id="auditorForm">
-                <input type="hidden" name="action" id="formAction" value="add_auditor">
+                <input type="hidden" name="action" id="formAction" value="add_user">
                 <input type="hidden" name="user_id" id="userId" value="0">
 
                 <div class="modal-header text-white" style="background: linear-gradient(135deg, #07203a 0%, #0c3b6d 100%); border-radius: 12px 12px 0 0;">
-                    <h5 class="modal-title font-weight-bold" id="auditorModalLabel"><i class="bi bi-person-plus-fill me-2"></i> Add New Auditor</h5>
+                    <h5 class="modal-title font-weight-bold" id="auditorModalLabel"><i class="bi bi-person-plus-fill me-2"></i> Add New User</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body p-4">
@@ -362,12 +378,20 @@ include 'sidebar.php';
                     <div class="mb-3">
                         <label class="form-label font-weight-bold text-secondary small text-uppercase">Username / Login ID <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" name="username" id="username" placeholder="e.g. prabhunath" required>
-                        <small class="text-muted">This username will be used to log in on the mobile app.</small>
+                        <small class="text-muted">This username will be used to log in.</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label font-weight-bold text-secondary small text-uppercase">Role <span class="text-danger">*</span></label>
+                        <select class="form-select" name="role" id="userRoleSelect" required>
+                            <option value="AUDITOR">AUDITOR</option>
+                            <option value="VIEWER">VIEWER</option>
+                        </select>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label font-weight-bold text-secondary small text-uppercase">Email Address <span class="text-danger">*</span></label>
-                        <input type="email" class="form-control" name="email" id="email" placeholder="e.g. auditor@mcc.in" required>
+                        <input type="email" class="form-control" name="email" id="email" placeholder="e.g. user@mcc.in" required>
                     </div>
 
                     <div class="mb-3">
@@ -379,7 +403,7 @@ include 'sidebar.php';
                 <div class="modal-footer bg-light" style="border-radius: 0 0 12px 12px;">
                     <button type="button" class="btn btn-secondary px-3" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn-create-auditor px-4" id="submitBtn">
-                        <i class="bi bi-check-circle me-1"></i> Save Auditor
+                        <i class="bi bi-check-circle me-1"></i> Save User
                     </button>
                 </div>
             </form>
@@ -389,31 +413,33 @@ include 'sidebar.php';
 
 <script>
 function openAddModal() {
-    document.getElementById('formAction').value = 'add_auditor';
+    document.getElementById('formAction').value = 'add_user';
     document.getElementById('userId').value = '0';
-    document.getElementById('auditorModalLabel').innerHTML = '<i class="bi bi-person-plus-fill me-2"></i> Add New Auditor';
+    document.getElementById('auditorModalLabel').innerHTML = '<i class="bi bi-person-plus-fill me-2"></i> Add New User';
     document.getElementById('fullName').value = '';
     document.getElementById('username').value = '';
+    document.getElementById('userRoleSelect').value = 'AUDITOR';
     document.getElementById('email').value = '';
     document.getElementById('password').value = '';
     document.getElementById('password').required = true;
     document.getElementById('pwdLabel').innerHTML = 'Password <span class="text-danger">*</span>';
     document.getElementById('pwdHelp').innerText = 'Must be at least 6 characters.';
-    document.getElementById('submitBtn').innerHTML = '<i class="bi bi-check-circle me-1"></i> Create Auditor';
+    document.getElementById('submitBtn').innerHTML = '<i class="bi bi-check-circle me-1"></i> Create User';
 }
 
-function openEditModal(auditor) {
-    document.getElementById('formAction').value = 'edit_auditor';
-    document.getElementById('userId').value = auditor.user_id;
-    document.getElementById('auditorModalLabel').innerHTML = '<i class="bi bi-pencil-square me-2"></i> Edit Auditor Details';
-    document.getElementById('fullName').value = auditor.user_name;
-    document.getElementById('username').value = auditor.username;
-    document.getElementById('email').value = auditor.email;
+function openEditModal(user) {
+    document.getElementById('formAction').value = 'edit_user';
+    document.getElementById('userId').value = user.user_id;
+    document.getElementById('auditorModalLabel').innerHTML = '<i class="bi bi-pencil-square me-2"></i> Edit User Details';
+    document.getElementById('fullName').value = user.user_name;
+    document.getElementById('username').value = user.username;
+    document.getElementById('userRoleSelect').value = user.role || 'AUDITOR';
+    document.getElementById('email').value = user.email;
     document.getElementById('password').value = '';
     document.getElementById('password').required = false;
     document.getElementById('pwdLabel').innerHTML = 'Password (Leave blank to keep unchanged)';
     document.getElementById('pwdHelp').innerText = 'Leave empty if you do not want to reset password.';
-    document.getElementById('submitBtn').innerHTML = '<i class="bi bi-check-circle me-1"></i> Update Auditor';
+    document.getElementById('submitBtn').innerHTML = '<i class="bi bi-check-circle me-1"></i> Update User';
     
     var modal = new bootstrap.Modal(document.getElementById('auditorModal'));
     modal.show();

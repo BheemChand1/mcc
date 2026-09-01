@@ -16,96 +16,95 @@ $errorMsg = '';
 
 // Handle save post request
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['save_targets'])) {
-    $qtys = $_POST['qty'] ?? [];
-    $penalties = $_POST['penalty'] ?? [];
-    $penalty_qtys = $_POST['penalty_qty'] ?? [];
-    $effectiveFrom = isset($_POST['effective_from']) ? trim($_POST['effective_from']) : date('Y-m-d');
-
-    $pdo->beginTransaction();
-    try {
-        // Query active parameters to check update list
-        $pStmt = $pdo->prepare("SELECT id FROM mcc_vb_chemical_param WHERE station_id = :station_id");
-        $pStmt->execute(['station_id' => $stationId]);
-        $paramIds = $pStmt->fetchAll(PDO::FETCH_COLUMN);
-
-        // Prepare statements
-        $findActiveStmt = $pdo->prepare("
-            SELECT * FROM mcc_vb_chemical_target 
-            WHERE station_id = :station_id AND parameter_id = :parameter_id AND effective_to IS NULL
-            LIMIT 1
-        ");
-
-        $closeActiveStmt = $pdo->prepare("
-            UPDATE mcc_vb_chemical_target 
-            SET effective_to = :effective_to 
-            WHERE id = :id
-        ");
-
-        $insertNewStmt = $pdo->prepare("
-            INSERT INTO mcc_vb_chemical_target 
-            (parameter_id, station_id, `qty(ml)`, penalty, `penalty_qty(ml)`, effective_from, effective_to) 
-            VALUES (:parameter_id, :station_id, :qty, :penalty, :penalty_qty, :effective_from, NULL)
-        ");
-
-        foreach ($paramIds as $pId) {
-            $newQty = isset($qtys[$pId]) ? floatval($qtys[$pId]) : 0.00;
-            $newPenalty = isset($penalties[$pId]) ? floatval($penalties[$pId]) : 0.00;
-            $newPenaltyQty = isset($penalty_qtys[$pId]) ? floatval($penalty_qtys[$pId]) : 1.00;
-
-            // Find current active target
-            $findActiveStmt->execute([
-                'station_id' => $stationId,
-                'parameter_id' => $pId
-            ]);
-            $currentActive = $findActiveStmt->fetch(PDO::FETCH_ASSOC);
-
-            $needsUpdate = false;
-
-            if ($currentActive) {
-                // Compare values
-                $currQty = floatval($currentActive['qty(ml)']);
-                $currPenalty = floatval($currentActive['penalty']);
-                $currPenaltyQty = floatval($currentActive['penalty_qty(ml)']);
-
-                if ($currQty !== $newQty || $currPenalty !== $newPenalty || $currPenaltyQty !== $newPenaltyQty) {
-                    $needsUpdate = true;
-                    
-                    // Close the active target. Set its effective_to to the day before the new effective date
-                    $effectiveToDate = date('Y-m-d', strtotime($effectiveFrom . ' - 1 day'));
-                    
-                    // If the new effective date is today or in the past, ensure we don't end up with invalid ranges
-                    if (strtotime($effectiveToDate) < strtotime($currentActive['effective_from'])) {
-                        $effectiveToDate = $currentActive['effective_from'];
-                    }
-
-                    $closeActiveStmt->execute([
-                        'effective_to' => $effectiveToDate,
-                        'id' => $currentActive['id']
-                    ]);
-                }
-            } else {
-                // No active target exists yet, we definitely need to insert
-                $needsUpdate = true;
-            }
-
-            if ($needsUpdate) {
-                // Insert the new target record
-                $insertNewStmt->execute([
-                    'parameter_id' => $pId,
-                    'station_id' => $stationId,
-                    'qty' => $newQty,
-                    'penalty' => $newPenalty,
-                    'penalty_qty' => $newPenaltyQty,
-                    'effective_from' => $effectiveFrom
-                ]);
-            }
+    if (!empty($isViewer)) {
+        $errorMsg = "Viewers are in read-only mode and cannot save targets.";
+    } else {
+        $qtys = $_POST['qty'] ?? [];
+        $penalties = $_POST['penalty'] ?? [];
+        $penalty_qtys = $_POST['penalty_qty'] ?? [];
+        $effectiveFrom = isset($_POST['effective_from']) ? trim($_POST['effective_from']) : date('Y-m-d');
+        if (empty($effectiveFrom) || !strtotime($effectiveFrom)) {
+            $effectiveFrom = date('Y-m-d');
         }
 
-        $pdo->commit();
-        $successMsg = 'Vande Bharat chemical targets successfully updated!';
-    } catch (PDOException $e) {
-        $pdo->rollBack();
-        $errorMsg = 'Error saving chemical targets: ' . $e->getMessage();
+        $pdo->beginTransaction();
+        try {
+            // Query active parameters to check update list
+            $pStmt = $pdo->prepare("SELECT id FROM mcc_vb_chemical_param WHERE station_id = :station_id");
+            $pStmt->execute(['station_id' => $stationId]);
+            $paramIds = $pStmt->fetchAll(PDO::FETCH_COLUMN);
+
+            $findActiveStmt = $pdo->prepare("
+                SELECT * FROM mcc_vb_chemical_target 
+                WHERE station_id = :station_id AND parameter_id = :parameter_id AND effective_to IS NULL
+                LIMIT 1
+            ");
+
+            $closeActiveStmt = $pdo->prepare("
+                UPDATE mcc_vb_chemical_target 
+                SET effective_to = :effective_to 
+                WHERE id = :id
+            ");
+
+            $insertNewStmt = $pdo->prepare("
+                INSERT INTO mcc_vb_chemical_target 
+                (parameter_id, station_id, `qty(ml)`, penalty, `penalty_qty(ml)`, effective_from, effective_to) 
+                VALUES (:parameter_id, :station_id, :qty, :penalty, :penalty_qty, :effective_from, NULL)
+            ");
+
+            foreach ($paramIds as $pId) {
+                $newQty = isset($qtys[$pId]) ? floatval($qtys[$pId]) : 0.00;
+                $newPenalty = isset($penalties[$pId]) ? floatval($penalties[$pId]) : 0.00;
+                $newPenaltyQty = isset($penalty_qtys[$pId]) ? floatval($penalty_qtys[$pId]) : 1.00;
+
+                $findActiveStmt->execute([
+                    'station_id' => $stationId,
+                    'parameter_id' => $pId
+                ]);
+                $currentActive = $findActiveStmt->fetch(PDO::FETCH_ASSOC);
+
+                $needsUpdate = false;
+                if ($currentActive) {
+                    $currQty = floatval($currentActive['qty(ml)']);
+                    $currPenalty = floatval($currentActive['penalty']);
+                    $currPenaltyQty = floatval($currentActive['penalty_qty(ml)']);
+
+                    if ($currQty !== $newQty || $currPenalty !== $newPenalty || $currPenaltyQty !== $newPenaltyQty) {
+                        $needsUpdate = true;
+                        $effectiveToDate = date('Y-m-d', strtotime($effectiveFrom . ' - 1 day'));
+                        if (strtotime($effectiveToDate) < strtotime($currentActive['effective_from'])) {
+                            $effectiveToDate = $currentActive['effective_from'];
+                        }
+
+                        $closeActiveStmt->execute([
+                            'effective_to' => $effectiveToDate,
+                            'id' => $currentActive['id']
+                        ]);
+                    }
+                } else {
+                    $needsUpdate = true;
+                }
+
+                if ($needsUpdate) {
+                    $insertNewStmt->execute([
+                        'parameter_id' => $pId,
+                        'station_id' => $stationId,
+                        'qty' => $newQty,
+                        'penalty' => $newPenalty,
+                        'penalty_qty' => $newPenaltyQty,
+                        'effective_from' => $effectiveFrom
+                    ]);
+                }
+            }
+
+            $pdo->commit();
+            $successMsg = 'Vande Bharat chemical targets successfully updated!';
+        } catch (PDOException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $errorMsg = 'Error saving chemical targets: ' . $e->getMessage();
+        }
     }
 }
 
@@ -259,8 +258,8 @@ include 'sidebar.php';
             </div>
 
             <div class="text-end mt-4">
-              <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm">
-                <i class="bi bi-save me-1"></i> Save Changes
+              <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm" <?= !empty($isViewer) ? 'disabled title="Read-only mode: Viewers cannot save targets"' : '' ?> style="<?= !empty($isViewer) ? 'cursor: not-allowed; opacity: 0.65;' : '' ?>">
+                <i class="bi <?= !empty($isViewer) ? 'bi-lock-fill' : 'bi-save' ?> me-1"></i> <?= !empty($isViewer) ? 'Targets Locked (Read-Only)' : 'Save Changes' ?>
               </button>
             </div>
           </form>

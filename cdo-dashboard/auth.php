@@ -30,4 +30,7 @@ $railwayName = strtoupper($stationDetails['zone_name'] ?? 'SOUTH CENTRAL RAILWAY
 $divisionName = strtoupper($stationDetails['division_name'] ?? 'LMG');
 $stationName = ucfirst($stationDetails['station_name'] ?? 'Lumding');
 $contractorName = $stationDetails['contractor_name'] ?? 'Kingson Services';
+
+$userRole = strtoupper($_SESSION['role'] ?? 'CDO');
+$isViewer = ($userRole === 'VIEWER');
 ?>

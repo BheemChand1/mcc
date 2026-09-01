@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email    = trim($_POST['email'] ?? '');
         $password = $_POST['password'] ?? '';
         $role     = strtoupper(trim($_POST['role'] ?? 'AUDITOR'));
-        if (!in_array($role, ['AUDITOR', 'VIEWER'])) {
+        if (!in_array($role, ['AUDITOR', 'VIEWER']) || !empty($isViewer)) {
             $role = 'AUDITOR';
         }
 
@@ -385,8 +385,13 @@ include 'sidebar.php';
                         <label class="form-label font-weight-bold text-secondary small text-uppercase">Role <span class="text-danger">*</span></label>
                         <select class="form-select" name="role" id="userRoleSelect" required>
                             <option value="AUDITOR">AUDITOR</option>
+                            <?php if (empty($isViewer)): ?>
                             <option value="VIEWER">VIEWER</option>
+                            <?php endif; ?>
                         </select>
+                        <?php if (!empty($isViewer)): ?>
+                        <small class="text-muted">Note: Viewers can only create and manage Auditor accounts.</small>
+                        <?php endif; ?>
                     </div>
 
                     <div class="mb-3">

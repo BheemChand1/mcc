@@ -73,7 +73,7 @@ $endMonth = date('Y-m-01', strtotime($toDate));
 
 $targetsMap = [];
 $targetsStmt = $pdo->prepare("
-    SELECT target_date, manpower_type_id, target_qty 
+    SELECT target_date, category_id, manpower_type_id, target_qty 
     FROM mcc_manpower_targets 
     WHERE station_id = :station_id AND target_date BETWEEN :start_month AND :end_month
 ");
@@ -84,7 +84,12 @@ $targetsStmt->execute([
 ]);
 $targetsRows = $targetsStmt->fetchAll();
 foreach ($targetsRows as $row) {
-    $targetsMap[$row['target_date']][$row['manpower_type_id']] = $row['target_qty'];
+    $catId = intval($row['category_id']);
+    $tId = intval($row['manpower_type_id']);
+    $targetsMap[$row['target_date']][$catId][$tId] = $row['target_qty'];
+    if ($catId === 0) {
+        $targetsMap[$row['target_date']][0][$tId] = $row['target_qty'];
+    }
 }
 
 // Fetch submitted daily logs in date range
@@ -181,11 +186,12 @@ include 'sidebar.php';
                     $totalAvailable = 0;
                     
                     foreach ($categories as $cat) {
+                        $cId = $cat['id'];
                         foreach ($cat['shifts'] as $sh) {
                             foreach ($sh['types'] as $type) {
                                 $shId = $sh['id'];
                                 $tId = $type['manpower_type_id'];
-                                $normVal = $targetsMap[$targetMonthDate][$tId] ?? 0;
+                                $normVal = floatval($targetsMap[$targetMonthDate][$cId][$tId] ?? $targetsMap[$targetMonthDate][0][$tId] ?? 0);
                                 $totalNorms += $normVal;
                                 
                                 if (isset($dateLogs[$shId][$tId])) {
@@ -211,7 +217,7 @@ include 'sidebar.php';
                         <?php endif; ?>
 
                         <div class="report-header">
-                            <h2>Staff Availability Log (Shift-wise)</h2>
+                            <h2>Manpower Log</h2>
                         </div>
 
                         <div class="report-meta-section">
@@ -234,8 +240,7 @@ include 'sidebar.php';
                                         <th>Shift</th>
                                         <th>Description</th>
                                         <th>To be provided as per norms</th>
-                                        <th>Provided by contractor (as per bio-metric attendance sheet)</th>
-                                        <th>Actual available</th>
+                                        <th>Provided by contractor</th>
                                         <th>Found without dress code & ID cards</th>
                                         <th>Found without protective gears</th>
                                     </tr>
@@ -243,7 +248,7 @@ include 'sidebar.php';
                                 <tbody>
                                     <?php if (empty($categories)): ?>
                                         <tr>
-                                            <td colspan="7" style="text-align:center;">No manpower categories or shifts configured. Go to <a href="manpower-config.php">Man Power Config</a> to add.</td>
+                                            <td colspan="6" style="text-align:center;">No manpower categories or shifts configured. Go to <a href="manpower-config.php">Man Power Config</a> to add.</td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($categories as $cat): 
@@ -256,7 +261,7 @@ include 'sidebar.php';
                                         ?>
                                             <!-- Category Subheader -->
                                             <tr class="sub-category">
-                                                <td colspan="7" style="text-align:center !important; padding-left:0 !important; text-transform: uppercase;">
+                                                <td colspan="6" style="text-align:center !important; padding-left:0 !important; text-transform: uppercase;">
                                                     <?= htmlspecialchars($cat['category_name']) ?>
                                                 </td>
                                             </tr>
@@ -276,9 +281,11 @@ include 'sidebar.php';
                                                 foreach ($shift['types'] as $type): 
                                                     $shId = $shift['id'];
                                                     $tId = $type['manpower_type_id'];
-                                                    $normVal = $targetsMap[$targetMonthDate][$tId] ?? 0;
-                                                    $shiftNormsTotal += $normVal;
-                                                    $catNormsTotal += $normVal;
+                                                    $cId = $cat['id'];
+                                                    $rawNorm = $targetsMap[$targetMonthDate][$cId][$tId] ?? $targetsMap[$targetMonthDate][0][$tId] ?? 0;
+                                                    $normVal = (floatval($rawNorm) == intval($rawNorm)) ? intval($rawNorm) : floatval($rawNorm);
+                                                    $shiftNormsTotal += floatval($rawNorm);
+                                                    $catNormsTotal += floatval($rawNorm);
 
                                                     $provided = 0;
                                                     $absent = 0;
@@ -312,7 +319,6 @@ include 'sidebar.php';
                                                         <td><?= htmlspecialchars($type['role_name']) ?></td>
                                                         <td><?= $normVal ?></td>
                                                         <td><?= $provided ?></td>
-                                                        <td><?= $available ?></td>
                                                         <td><?= $noDress ?></td>
                                                         <td><?= $noPpe ?></td>
                                                     </tr>
@@ -324,9 +330,8 @@ include 'sidebar.php';
                                                 <!-- Shift Total Row -->
                                                 <tr style="font-weight:700; background:#f9f9f9;">
                                                     <td colspan="2" style="text-align: left !important; padding-left: 15px !important;">Total</td>
-                                                    <td><?= $shiftNormsTotal ?></td>
+                                                    <td><?= (floatval($shiftNormsTotal) == intval($shiftNormsTotal)) ? intval($shiftNormsTotal) : round($shiftNormsTotal, 2) ?></td>
                                                     <td><?= $shiftProvidedTotal ?></td>
-                                                    <td><?= $shiftAvailableTotal ?></td>
                                                     <td><?= $shiftNoDressTotal ?></td>
                                                     <td><?= $shiftNoPpeTotal ?></td>
                                                 </tr>
@@ -335,9 +340,8 @@ include 'sidebar.php';
                                             <!-- Category Grand Total Row -->
                                             <tr style="font-weight:700; background:#f2f2f2;">
                                                 <td colspan="2" style="text-align: left !important; padding-left: 15px !important;">Grand Total</td>
-                                                <td><?= $catNormsTotal ?></td>
+                                                <td><?= (floatval($catNormsTotal) == intval($catNormsTotal)) ? intval($catNormsTotal) : round($catNormsTotal, 2) ?></td>
                                                 <td><?= $catProvidedTotal ?></td>
-                                                <td><?= $catAvailableTotal ?></td>
                                                 <td><?= $catNoDressTotal ?></td>
                                                 <td><?= $catNoPpeTotal ?></td>
                                             </tr>

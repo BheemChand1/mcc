@@ -694,6 +694,7 @@ $has_billing      = in_array(11, $active_report_ids) && in_array('Billing.php', 
             </li>
           </ul>
         </li>
+        <?php endif; ?>
 
         <!-- User Management -->
         <li class="nav-item">
@@ -702,7 +703,6 @@ $has_billing      = in_array(11, $active_report_ids) && in_array('Billing.php', 
             <p>Manage Users</p>
           </a>
         </li>
-        <?php endif; ?>
 
         <?php if ($has_billing): ?>
         <li class="nav-item">

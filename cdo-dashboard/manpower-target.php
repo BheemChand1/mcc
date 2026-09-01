@@ -1,27 +1,71 @@
 <?php
 require_once 'auth.php';
 
-// Ensure effective_from and effective_to columns exist in mcc_manpower_targets table, and drop shift_id constraints & column
+// Database Migration: Remove shift_id and its foreign key/indexes, support decimal targets and date ranges
+try {
+    // 1. Find and drop all foreign keys on shift_id
+    $fks = $pdo->query("
+        SELECT CONSTRAINT_NAME 
+        FROM information_schema.KEY_COLUMN_USAGE 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'mcc_manpower_targets' 
+          AND COLUMN_NAME = 'shift_id' 
+          AND REFERENCED_TABLE_NAME IS NOT NULL
+    ")->fetchAll(PDO::FETCH_COLUMN);
+
+    foreach ($fks as $fkName) {
+        $pdo->exec("ALTER TABLE mcc_manpower_targets DROP FOREIGN KEY `$fkName`");
+    }
+} catch (Exception $e) {}
+
+try {
+    // 2. Drop any composite/indexes containing shift_id
+    $indexes = $pdo->query("
+        SELECT DISTINCT INDEX_NAME 
+        FROM information_schema.STATISTICS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'mcc_manpower_targets' 
+          AND COLUMN_NAME = 'shift_id'
+          AND INDEX_NAME != 'PRIMARY'
+    ")->fetchAll(PDO::FETCH_COLUMN);
+
+    foreach ($indexes as $idxName) {
+        $pdo->exec("ALTER TABLE mcc_manpower_targets DROP INDEX `$idxName`");
+    }
+} catch (Exception $e) {}
+
+// 3. Make shift_id NULLable with DEFAULT NULL so inserts never fail with Error 1364
+try {
+    $pdo->exec("ALTER TABLE mcc_manpower_targets MODIFY COLUMN shift_id INT(11) NULL DEFAULT NULL");
+} catch (Exception $e) {}
+
+// 4. Drop shift_id column completely
+try {
+    $pdo->exec("ALTER TABLE mcc_manpower_targets DROP COLUMN shift_id");
+} catch (Exception $e) {}
+
+// 5. Ensure target_qty is DECIMAL(10,2) to support double values like 0.58
+try {
+    $pdo->exec("ALTER TABLE mcc_manpower_targets MODIFY COLUMN target_qty DECIMAL(10,2) NOT NULL DEFAULT 0.00");
+} catch (Exception $e) {}
+
+// 6. Ensure category_id, effective_from & effective_to columns exist
+try {
+    $pdo->exec("ALTER TABLE mcc_manpower_targets ADD COLUMN category_id INT(11) NOT NULL DEFAULT 0 AFTER station_id");
+} catch (Exception $e) {}
 try {
     $pdo->exec("ALTER TABLE mcc_manpower_targets ADD COLUMN effective_from DATE NULL AFTER target_qty");
 } catch (Exception $e) {}
 try {
     $pdo->exec("ALTER TABLE mcc_manpower_targets ADD COLUMN effective_to DATE NULL AFTER effective_from");
 } catch (Exception $e) {}
+
+// 7. Add unique key for station_id + target_date + category_id + manpower_type_id
 try {
-    $pdo->exec("ALTER TABLE mcc_manpower_targets DROP FOREIGN KEY fk_target_shift");
+    $pdo->exec("ALTER TABLE mcc_manpower_targets DROP INDEX uq_station_date_type");
 } catch (Exception $e) {}
 try {
-    $pdo->exec("ALTER TABLE mcc_manpower_targets DROP INDEX uq_station_date_shift_type");
-} catch (Exception $e) {}
-try {
-    $pdo->exec("ALTER TABLE mcc_manpower_targets DROP INDEX fk_target_shift");
-} catch (Exception $e) {}
-try {
-    $pdo->exec("ALTER TABLE mcc_manpower_targets DROP COLUMN shift_id");
-} catch (Exception $e) {}
-try {
-    $pdo->exec("ALTER TABLE mcc_manpower_targets ADD UNIQUE KEY uq_station_date_type (station_id, target_date, manpower_type_id)");
+    $pdo->exec("ALTER TABLE mcc_manpower_targets ADD UNIQUE KEY uq_station_date_cat_type (station_id, target_date, category_id, manpower_type_id)");
 } catch (Exception $e) {}
 
 // Target month & year selection
@@ -100,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
         
         if (!empty($selectedMonth) && !empty($selectedYear)) {
             $targetMonthDate = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
-            $submittedRoleTargets = $_POST['target_qty_role'] ?? []; // [manpower_type_id] => qty
+            $submittedTargets = $_POST['target_qty'] ?? []; // [category_id][manpower_type_id] => qty
             
             $pdo->beginTransaction();
             try {
@@ -114,21 +158,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
                     'target_date' => $targetMonthDate
                 ]);
                 
-                // Insert updated manpower targets (one entry per role/type)
+                // Insert updated manpower targets (one entry per category and role/type)
                 $insertStmt = $pdo->prepare("
                     INSERT INTO mcc_manpower_targets 
-                    (station_id, target_date, manpower_type_id, manpower_type, target_qty, effective_from, effective_to) 
-                    VALUES (:station_id, :target_date, :manpower_type_id, :manpower_type, :target_qty, :effective_from, :effective_to)
+                    (station_id, category_id, target_date, manpower_type_id, manpower_type, target_qty, effective_from, effective_to) 
+                    VALUES (:station_id, :category_id, :target_date, :manpower_type_id, :manpower_type, :target_qty, :effective_from, :effective_to)
                 ");
                 
                 foreach ($categories as $cat) {
+                    $catId = $cat['id'];
                     foreach ($cat['roles'] as $role) {
                         $tId = $role['manpower_type_id'];
-                        $qty = intval($submittedRoleTargets[$tId] ?? 0);
-                        $roleName = $roleNamesMap[$tId] ?? 'Staff';
+                        $qty = floatval($submittedTargets[$catId][$tId] ?? 0);
+                        $roleName = $roleNamesMap[$tId] ?? $role['role_name'] ?? 'Staff';
                         
                         $insertStmt->execute([
                             'station_id' => $stationId,
+                            'category_id' => $catId,
                             'target_date' => $targetMonthDate,
                             'manpower_type_id' => $tId,
                             'manpower_type' => $roleName,
@@ -155,7 +201,7 @@ $effectiveFrom = $targetMonthDate;
 $effectiveTo = date('Y-m-t', strtotime($targetMonthDate));
 
 $targetsStmt = $pdo->prepare("
-    SELECT manpower_type_id, target_qty, effective_from, effective_to
+    SELECT category_id, manpower_type_id, target_qty, effective_from, effective_to
     FROM mcc_manpower_targets 
     WHERE station_id = :station_id AND target_date = :target_date
 ");
@@ -165,7 +211,12 @@ $targetsStmt->execute([
 ]);
 $targetsRows = $targetsStmt->fetchAll();
 foreach ($targetsRows as $row) {
-    $targetsMap[$row['manpower_type_id']] = $row['target_qty'];
+    $catId = intval($row['category_id']);
+    $tId = intval($row['manpower_type_id']);
+    $targetsMap[$catId][$tId] = $row['target_qty'];
+    if ($catId === 0) {
+        $targetsMap[0][$tId] = $row['target_qty'];
+    }
     if (!empty($row['effective_from'])) $effectiveFrom = $row['effective_from'];
     if (!empty($row['effective_to'])) $effectiveTo = $row['effective_to'];
 }
@@ -369,7 +420,9 @@ include 'sidebar.php';
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php foreach ($categories as $cat): ?>
+                                        <?php foreach ($categories as $cat): 
+                                            $catId = $cat['id'];
+                                        ?>
                                             <!-- Category Subheader -->
                                             <tr class="sub-category">
                                                 <td colspan="2" style="text-align:center !important; padding-left:0 !important; text-transform: uppercase;">
@@ -379,13 +432,18 @@ include 'sidebar.php';
 
                                             <?php foreach ($cat['roles'] as $role): 
                                                 $tId = $role['manpower_type_id'];
-                                                $targetVal = $targetsMap[$tId] ?? '';
+                                                $rawTarget = $targetsMap[$catId][$tId] ?? $targetsMap[0][$tId] ?? '';
+                                                if ($rawTarget !== '' && is_numeric($rawTarget)) {
+                                                    $targetVal = (floatval($rawTarget) == intval($rawTarget)) ? intval($rawTarget) : floatval($rawTarget);
+                                                } else {
+                                                    $targetVal = '';
+                                                }
                                             ?>
                                                 <tr>
                                                     <td style="text-align: left !important; padding-left: 25px !important; font-weight: 500; color: #334155;"><?= htmlspecialchars($role['role_name']) ?></td>
                                                     <td style="text-align: center;">
-                                                        <input type="number" min="0" step="1" 
-                                                            name="target_qty_role[<?= $tId ?>]" 
+                                                        <input type="number" min="0" step="0.01" 
+                                                            name="target_qty[<?= $catId ?>][<?= $tId ?>]" 
                                                             value="<?= htmlspecialchars($targetVal) ?>" 
                                                             class="target-input" <?= !empty($isViewer) ? 'readonly' : 'required' ?> placeholder="0">
                                                     </td>

@@ -73,7 +73,7 @@ foreach ($catList as $cat) {
 // Fetch target norms for the selected month
 $targetsMap = [];
 $targetsStmt = $pdo->prepare("
-    SELECT manpower_type_id, target_qty 
+    SELECT category_id, manpower_type_id, target_qty 
     FROM mcc_manpower_targets 
     WHERE station_id = :station_id AND target_date = :target_date
 ");
@@ -83,7 +83,12 @@ $targetsStmt->execute([
 ]);
 $targetsRows = $targetsStmt->fetchAll();
 foreach ($targetsRows as $row) {
-    $targetsMap[$row['manpower_type_id']] = $row['target_qty'];
+    $catId = intval($row['category_id']);
+    $tId = intval($row['manpower_type_id']);
+    $targetsMap[$catId][$tId] = $row['target_qty'];
+    if ($catId === 0) {
+        $targetsMap[0][$tId] = $row['target_qty'];
+    }
 }
 
 // Fetch all active manpower types (roles) for this station to format the header and lookup penalty rates
@@ -189,11 +194,11 @@ for ($d = 1; $d <= $daysInMonth; $d++) {
     
     // Sum target norms for the day (targets are monthwise, so we apply the same norm daily)
     foreach ($categories as $cat) {
+        $cId = $cat['id'];
         foreach ($cat['shifts'] as $sh) {
             foreach ($sh['types'] as $type) {
-                $shId = $sh['id'];
                 $tId = $type['manpower_type_id'];
-                $normVal = $targetsMap[$shId][$tId] ?? 0;
+                $normVal = floatval($targetsMap[$cId][$tId] ?? $targetsMap[0][$tId] ?? 0);
                 $dayToProvide += $normVal;
             }
         }
@@ -203,11 +208,12 @@ for ($d = 1; $d <= $daysInMonth; $d++) {
     if ($hasLogsForDay) {
         $cappedAvailable = 0;
         foreach ($categories as $cat) {
+            $cId = $cat['id'];
             foreach ($cat['shifts'] as $sh) {
                 foreach ($sh['types'] as $type) {
                     $shId = $sh['id'];
                     $tId = $type['manpower_type_id'];
-                    $normVal = $targetsMap[$shId][$tId] ?? 0;
+                    $normVal = floatval($targetsMap[$cId][$tId] ?? $targetsMap[0][$tId] ?? 0);
                     
                     if (isset($logsMap[$dateStr][$shId][$tId])) {
                         $prov = intval($logsMap[$dateStr][$shId][$tId]['provided'] ?? 0);

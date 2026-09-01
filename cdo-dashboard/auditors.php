@@ -26,6 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $role = 'AUDITOR';
         }
 
+        $manageableRolesClause = !empty($isViewer) ? "role = 'AUDITOR'" : "role IN ('AUDITOR', 'VIEWER')";
+
         if (empty($fullName) || empty($username) || empty($email)) {
             $message = 'Full name, username, and email are required.';
             $messageType = 'danger';
@@ -76,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $upd = $pdo->prepare("
                                 UPDATE mcc_users 
                                 SET user_name = :user_name, full_name = :full_name, username = :username, email = :email, role = :role, password_hash = :password_hash
-                                WHERE user_id = :id AND station_id = :station_id AND role IN ('AUDITOR', 'VIEWER')
+                                WHERE user_id = :id AND station_id = :station_id AND $manageableRolesClause
                             ");
                             $upd->execute([
                                 'user_name'      => $fullName,
@@ -92,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $upd = $pdo->prepare("
                                 UPDATE mcc_users 
                                 SET user_name = :user_name, full_name = :full_name, username = :username, email = :email, role = :role
-                                WHERE user_id = :id AND station_id = :station_id AND role IN ('AUDITOR', 'VIEWER')
+                                WHERE user_id = :id AND station_id = :station_id AND $manageableRolesClause
                             ");
                             $upd->execute([
                                 'user_name'  => $fullName,
@@ -116,8 +118,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'toggle_status') {
         $userId = intval($_POST['user_id'] ?? 0);
         $newStatus = ($_POST['current_status'] ?? 'Active') === 'Active' ? 'Inactive' : 'Active';
+        $manageableRolesClause = !empty($isViewer) ? "role = 'AUDITOR'" : "role IN ('AUDITOR', 'VIEWER')";
         try {
-            $upd = $pdo->prepare("UPDATE mcc_users SET status = :status WHERE user_id = :id AND station_id = :station_id AND role IN ('AUDITOR', 'VIEWER')");
+            $upd = $pdo->prepare("UPDATE mcc_users SET status = :status WHERE user_id = :id AND station_id = :station_id AND $manageableRolesClause");
             $upd->execute(['status' => $newStatus, 'id' => $userId, 'station_id' => $stationId]);
             $message = "User status updated to '$newStatus'.";
             $messageType = 'success';
@@ -127,8 +130,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'delete_auditor' || $action === 'delete_user') {
         $userId = intval($_POST['user_id'] ?? 0);
+        $manageableRolesClause = !empty($isViewer) ? "role = 'AUDITOR'" : "role IN ('AUDITOR', 'VIEWER')";
         try {
-            $del = $pdo->prepare("DELETE FROM mcc_users WHERE user_id = :id AND station_id = :station_id AND role IN ('AUDITOR', 'VIEWER')");
+            $del = $pdo->prepare("DELETE FROM mcc_users WHERE user_id = :id AND station_id = :station_id AND $manageableRolesClause");
             $del->execute(['id' => $userId, 'station_id' => $stationId]);
             $message = "User account removed successfully.";
             $messageType = 'success';
@@ -139,11 +143,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch all users (AUDITOR and VIEWER) assigned to this station
+// Fetch users assigned to this station (if logged in as VIEWER, only show AUDITOR accounts)
+$viewableRolesClause = !empty($isViewer) ? "role = 'AUDITOR'" : "role IN ('AUDITOR', 'VIEWER')";
 $stmt = $pdo->prepare("
     SELECT user_id, user_name, username, email, role, status, created_at
     FROM mcc_users
-    WHERE station_id = :station_id AND role IN ('AUDITOR', 'VIEWER')
+    WHERE station_id = :station_id AND $viewableRolesClause
     ORDER BY user_id DESC
 ");
 $stmt->execute(['station_id' => $stationId]);
@@ -252,7 +257,7 @@ include 'sidebar.php';
             <div class="auditor-header-card">
                 <div>
                     <h3 class="mb-1 font-weight-bold" style="font-size: 1.35rem;"><i class="bi bi-people-fill me-2"></i> User Management</h3>
-                    <p class="mb-0 text-white-50" style="font-size: 0.85rem;">Manage application user accounts (Auditors & Viewers) and login credentials for <?= htmlspecialchars($stationName) ?> Station</p>
+                    <p class="mb-0 text-white-50" style="font-size: 0.85rem;">Manage application user accounts (<?= !empty($isViewer) ? 'Auditors' : 'Auditors & Viewers' ?>) and login credentials for <?= htmlspecialchars($stationName) ?> Station</p>
                 </div>
                 <button type="button" class="btn btn-create-auditor" data-bs-toggle="modal" data-bs-target="#auditorModal" onclick="openAddModal()">
                     <i class="bi bi-person-plus-fill me-1" style="font-size: 1rem;"></i> <span>Add User</span>

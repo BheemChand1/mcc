@@ -198,23 +198,35 @@ $extraStyles = '
         font-weight: 600;
     }
     .btn-create-auditor {
-        background: linear-gradient(135deg, #07203a 0%, #0c3b6d 100%);
-        color: white;
-        border: none;
-        padding: 8px 18px;
-        border-radius: 6px;
-        font-weight: 600;
-        font-size: 0.88rem;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        transition: all 0.2s;
+        background: #ffffff !important;
+        color: #07203a !important;
+        border: 1px solid #cbd5e1 !important;
+        padding: 8px 18px !important;
+        border-radius: 6px !important;
+        font-weight: 700 !important;
+        font-size: 0.88rem !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        transition: all 0.2s ease !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15) !important;
+        cursor: pointer !important;
+        text-decoration: none !important;
+    }
+    .btn-create-auditor,
+    .btn-create-auditor span,
+    .btn-create-auditor i {
+        color: #07203a !important;
     }
     .btn-create-auditor:hover {
-        background: linear-gradient(135deg, #07182c 0%, #07203a 100%);
-        color: white;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 10px rgba(7, 32, 58, 0.2);
+        background: #f8fafc !important;
+        color: #0c3b6d !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+    }
+    .btn-create-auditor:hover span,
+    .btn-create-auditor:hover i {
+        color: #0c3b6d !important;
     }
 </style>
 ';
@@ -232,8 +244,8 @@ include 'sidebar.php';
                     <h3 class="mb-1 font-weight-bold" style="font-size: 1.35rem;"><i class="bi bi-person-badge me-2"></i> Auditor Management</h3>
                     <p class="mb-0 text-white-50" style="font-size: 0.85rem;">Manage mobile application auditors and login credentials for <?= htmlspecialchars($stationName) ?> Station</p>
                 </div>
-                <button type="button" class="btn btn-light fw-bold text-dark btn-sm px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#auditorModal" onclick="openAddModal()">
-                    <i class="bi bi-person-plus-fill me-1 text-primary"></i> Add New Auditor
+                <button type="button" class="btn btn-create-auditor" data-bs-toggle="modal" data-bs-target="#auditorModal" onclick="openAddModal()">
+                    <i class="bi bi-person-plus-fill me-1" style="font-size: 1rem;"></i> <span>Add New Auditor</span>
                 </button>
             </div>
 

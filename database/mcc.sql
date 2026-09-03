@@ -1416,15 +1416,15 @@ INSERT INTO `mcc_manpower_categories` (`id`, `station_id`, `category_name`, `ord
 CREATE TABLE `mcc_manpower_log` (
   `id` int(11) NOT NULL,
   `station_id` int(11) NOT NULL,
-  `input_type` varchar(50) DEFAULT 'cleaning',
+  `category_id` int(11) NOT NULL,
   `report_date` date NOT NULL,
+  `shift_id` int(11) NOT NULL,
   `manpower_type_id` int(11) NOT NULL,
   `provided_qty` int(11) DEFAULT NULL,
   `absent_qty` int(11) DEFAULT NULL,
   `no_dress_qty` int(11) DEFAULT NULL,
   `no_ppe_qty` int(11) DEFAULT NULL,
-  `chi_signature` varchar(255) DEFAULT NULL,
-  `submitted_by` int(11) DEFAULT NULL,
+  `auditor_name` varchar(255) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 

@@ -174,7 +174,7 @@ try {
     $existingLogs = [];
     if ($shiftId !== null) {
         $logStmt = $pdo->prepare("
-            SELECT manpower_type_id, provided_qty, absent_qty, no_dress_qty, no_ppe_qty, chi_signature
+            SELECT manpower_type_id, provided_qty, absent_qty, no_dress_qty, no_ppe_qty, auditor_name
             FROM mcc_manpower_log
             WHERE station_id = :station_id AND shift_id = :shift_id AND report_date = :report_date
         ");
@@ -242,7 +242,7 @@ try {
             "found_without_protective_gears"   => isset($logData['no_ppe_qty']) ? intval($logData['no_ppe_qty']) : 0,
             "no_dress_qty"                     => isset($logData['no_dress_qty']) ? intval($logData['no_dress_qty']) : 0,
             "no_ppe_qty"                       => isset($logData['no_ppe_qty']) ? intval($logData['no_ppe_qty']) : 0,
-            "chi_signature"                    => $logData['chi_signature'] ?? null,
+            "auditor_name"                     => $logData['auditor_name'] ?? null,
             "status"                           => $isLogged ? 1 : 0,
             "is_logged"                        => $isLogged
         ];

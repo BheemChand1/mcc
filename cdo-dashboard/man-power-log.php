@@ -95,7 +95,7 @@ $logStmt = $pdo->prepare("
         absent_qty,
         no_dress_qty,
         no_ppe_qty,
-        chi_signature
+        auditor_name
     FROM mcc_manpower_log
     WHERE station_id = :station_id AND report_date BETWEEN :from_date AND :to_date
 ");
@@ -114,7 +114,7 @@ foreach ($logRows as $row) {
         'absent' => $row['absent_qty'],
         'no_dress' => $row['no_dress_qty'],
         'no_ppe' => $row['no_ppe_qty'],
-        'chi' => $row['chi_signature']
+        'auditor' => $row['auditor_name']
     ];
 }
 

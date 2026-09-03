@@ -44,10 +44,9 @@ try {
 
     // 2. Fetch filled category IDs for the given date from mcc_manpower_log
     $filledStmt = $pdo->prepare("
-        SELECT DISTINCT s.category_id 
-        FROM mcc_manpower_log l
-        JOIN mcc_manpower_shifts s ON l.shift_id = s.id
-        WHERE l.station_id = :station_id AND l.report_date = :report_date
+        SELECT DISTINCT category_id 
+        FROM mcc_manpower_log
+        WHERE station_id = :station_id AND report_date = :report_date
     ");
     $filledStmt->execute([
         'station_id' => $stationId,

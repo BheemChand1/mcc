@@ -17,6 +17,80 @@ $firstDayOfMonth = "$selectedYear-$selectedMonth-01";
 $lastDayOfMonth = date('Y-m-t', strtotime($firstDayOfMonth));
 
 // Fetch active categories, shifts, and mapped roles (sorted by order_no)
+// Helper function to identify unskilled manpower roles
+if (!function_exists('isUnskilledRole')) {
+    function isUnskilledRole($roleName) {
+        $r = strtolower(trim($roleName));
+        if (strpos($r, 'supervisor') !== false || strpos($r, 'chi') !== false || strpos($r, 'officer') !== false) {
+            return false;
+        }
+        if (strpos($r, 'unskilled') !== false || strpos($r, 'staff') !== false || strpos($r, 'safaiwala') !== false || strpos($r, 'safai') !== false || strpos($r, 'cleaner') !== false || strpos($r, 'labour') !== false || strpos($r, 'helper') !== false) {
+            return true;
+        }
+        if (strpos($r, 'semi') !== false || (strpos($r, 'skilled') !== false && strpos($r, 'unskilled') === false)) {
+            return false;
+        }
+        return true;
+    }
+}
+
+// Helper function to map category to scorecard table
+if (!function_exists('getScorecardTableForCategory')) {
+    function getScorecardTableForCategory($categoryName) {
+        $c = strtolower(trim($categoryName));
+        if (strpos($c, 'normal') !== false) {
+            return 'mcc_normal_scorecard_report';
+        } elseif (strpos($c, 'intensive') !== false) {
+            return 'mcc_intensive_scorecard_2_report';
+        } elseif (strpos($c, 'prt') !== false || strpos($c, 'platform') !== false) {
+            return 'mcc_prt_scorecard_report';
+        } elseif (strpos($c, 'vande') !== false || strpos($c, 'vb') !== false) {
+            return 'mcc_vb_scorecard_report';
+        }
+        return null;
+    }
+}
+
+// Helper function to get distinct coach count for a railway date (06:00 AM of $date to 07:00 AM of next day)
+if (!function_exists('getRailwayDateCoachCount')) {
+    function getRailwayDateCoachCount($pdo, $tableName, $stationId, $date) {
+        static $coachCache = [];
+        $cacheKey = "{$tableName}_{$stationId}_{$date}";
+        if (isset($coachCache[$cacheKey])) {
+            return $coachCache[$cacheKey];
+        }
+        
+        $startDateTime = $date . ' 06:00:00';
+        $nextDate = date('Y-m-d', strtotime($date . ' +1 day'));
+        $endDateTime = $nextDate . ' 07:00:00';
+        
+        try {
+            $stmt = $pdo->prepare("
+                SELECT COUNT(DISTINCT token_id, coach_no) AS total_coaches
+                FROM {$tableName}
+                WHERE station_id = :station_id
+                  AND (
+                      (created_at IS NOT NULL AND created_at >= :start_dt AND created_at <= :end_dt)
+                      OR (created_at IS NULL AND report_date = :rep_date)
+                  )
+            ");
+            $stmt->execute([
+                'station_id' => $stationId,
+                'start_dt' => $startDateTime,
+                'end_dt' => $endDateTime,
+                'rep_date' => $date
+            ]);
+            $count = intval($stmt->fetchColumn() ?: 0);
+        } catch (Exception $e) {
+            $count = 0;
+        }
+        
+        $coachCache[$cacheKey] = $count;
+        return $count;
+    }
+}
+
+// Fetch active categories, shifts, and mapped roles (sorted by order_no)
 $categories = [];
 $catStmt = $pdo->prepare("
     SELECT id, category_name 
@@ -29,7 +103,8 @@ $catList = $catStmt->fetchAll();
 
 foreach ($catList as $cat) {
     $categoryId = $cat['id'];
-    $shifts = [];
+    
+    // Shifts for this category
     $shiftStmt = $pdo->prepare("
         SELECT id, shift_name 
         FROM mcc_manpower_shifts 
@@ -37,35 +112,26 @@ foreach ($catList as $cat) {
         ORDER BY order_no ASC, id ASC
     ");
     $shiftStmt->execute(['category_id' => $categoryId]);
-    $shiftList = $shiftStmt->fetchAll();
+    $shifts = $shiftStmt->fetchAll();
 
-    foreach ($shiftList as $sh) {
-        $shiftId = $sh['id'];
-        
-        $typesStmt = $pdo->prepare("
-            SELECT map.manpower_type_id, t.role_name, t.order_no
-            FROM mcc_manpower_shift_type_map map
-            JOIN mcc_manpower_types t ON map.manpower_type_id = t.id
-            WHERE map.shift_id = :shift_id AND t.status = 'Active'
-            ORDER BY t.order_no ASC, t.id ASC
-        ");
-        $typesStmt->execute(['shift_id' => $shiftId]);
-        $types = $typesStmt->fetchAll();
+    // Distinct mapped roles for this category (sorted by role's order_no)
+    $rolesStmt = $pdo->prepare("
+        SELECT DISTINCT t.id AS manpower_type_id, t.role_name, t.order_no
+        FROM mcc_manpower_shift_type_map map
+        JOIN mcc_manpower_shifts sh ON map.shift_id = sh.id
+        JOIN mcc_manpower_types t ON map.manpower_type_id = t.id
+        WHERE sh.category_id = :category_id AND sh.status = 'Active' AND t.status = 'Active'
+        ORDER BY t.order_no ASC, t.id ASC
+    ");
+    $rolesStmt->execute(['category_id' => $categoryId]);
+    $roles = $rolesStmt->fetchAll();
 
-        if (!empty($types)) {
-            $shifts[] = [
-                'id' => $sh['id'],
-                'shift_name' => $sh['shift_name'],
-                'types' => $types
-            ];
-        }
-    }
-
-    if (!empty($shifts)) {
+    if (!empty($roles) && !empty($shifts)) {
         $categories[] = [
             'id' => $cat['id'],
             'category_name' => $cat['category_name'],
-            'shifts' => $shifts
+            'shifts' => $shifts,
+            'roles' => $roles
         ];
     }
 }
@@ -192,15 +258,25 @@ for ($d = 1; $d <= $daysInMonth; $d++) {
     $dayPenalty = 0.0;
     $dayScore = 0.0;
     
-    // Sum target norms for the day (targets are monthwise, so we apply the same norm daily)
+    // Sum target norms for the day (unskilled targets multiplied dynamically by coach counts for scorecard categories)
+    $effectiveTargets = [];
     foreach ($categories as $cat) {
         $cId = $cat['id'];
-        foreach ($cat['shifts'] as $sh) {
-            foreach ($sh['types'] as $type) {
-                $tId = $type['manpower_type_id'];
-                $normVal = floatval($targetsMap[$cId][$tId] ?? $targetsMap[0][$tId] ?? 0);
-                $dayToProvide += $normVal;
+        $scorecardTable = getScorecardTableForCategory($cat['category_name']);
+        $coachCount = ($scorecardTable !== null) ? getRailwayDateCoachCount($pdo, $scorecardTable, $stationId, $dateStr) : 0;
+
+        foreach ($cat['roles'] as $role) {
+            $tId = $role['manpower_type_id'];
+            $rawNorm = floatval($targetsMap[$cId][$tId] ?? $targetsMap[0][$tId] ?? 0);
+            $isUnskilled = isUnskilledRole($role['role_name']);
+
+            if ($scorecardTable !== null && $isUnskilled) {
+                $effectiveNorm = $rawNorm * $coachCount;
+            } else {
+                $effectiveNorm = $rawNorm;
             }
+            $effectiveTargets[$cId][$tId] = $effectiveNorm;
+            $dayToProvide += $effectiveNorm;
         }
     }
     
@@ -209,35 +285,45 @@ for ($d = 1; $d <= $daysInMonth; $d++) {
         $cappedAvailable = 0;
         foreach ($categories as $cat) {
             $cId = $cat['id'];
-            foreach ($cat['shifts'] as $sh) {
-                foreach ($sh['types'] as $type) {
+            foreach ($cat['roles'] as $role) {
+                $tId = $role['manpower_type_id'];
+                $effectiveNorm = $effectiveTargets[$cId][$tId] ?? 0;
+                
+                $roleProvided = 0;
+                $roleAbsent = 0;
+                $roleNoDress = 0;
+                $roleNoPpe = 0;
+                
+                foreach ($cat['shifts'] as $sh) {
                     $shId = $sh['id'];
-                    $tId = $type['manpower_type_id'];
-                    $normVal = floatval($targetsMap[$cId][$tId] ?? $targetsMap[0][$tId] ?? 0);
-                    
                     if (isset($logsMap[$dateStr][$shId][$tId])) {
                         $prov = intval($logsMap[$dateStr][$shId][$tId]['provided'] ?? 0);
                         $abs = intval($logsMap[$dateStr][$shId][$tId]['absent'] ?? 0);
                         $noDress = intval($logsMap[$dateStr][$shId][$tId]['no_dress'] ?? 0);
                         $noPpe = intval($logsMap[$dateStr][$shId][$tId]['no_ppe'] ?? 0);
-                        
-                        $avail = max(0, $prov - $abs);
-                        $dayAvailable += $avail;
-                        $dayAbsent += $abs;
-                        $dayNoDress += $noDress;
-                        $dayNoPpe += $noPpe;
-                        
-                        // Calculate penalty for this role on this day
-                        $rates = $existingPenalties[$tId] ?? ['absent' => 0.0, 'dress' => 0.0, 'gears' => 0.0];
-                        $rolePenalty = ($abs * floatval($rates['absent'])) 
-                                     + ($noDress * floatval($rates['dress'])) 
-                                     + ($noPpe * floatval($rates['gears']));
-                        $dayPenalty += $rolePenalty;
-                        
-                        // Capped availability for daily score
-                        $cappedAvailable += min($avail, $normVal);
+
+                        $roleProvided += $prov;
+                        $roleAbsent += $abs;
+                        $roleNoDress += $noDress;
+                        $roleNoPpe += $noPpe;
                     }
                 }
+                
+                $avail = max(0, $roleProvided - $roleAbsent);
+                $dayAvailable += $avail;
+                $dayAbsent += $roleAbsent;
+                $dayNoDress += $roleNoDress;
+                $dayNoPpe += $roleNoPpe;
+
+                // Calculate penalty for this role on this day
+                $rates = $existingPenalties[$tId] ?? ['absent' => 0.0, 'dress' => 0.0, 'gears' => 0.0];
+                $rolePenalty = ($roleAbsent * floatval($rates['absent'])) 
+                             + ($roleNoDress * floatval($rates['dress'])) 
+                             + ($roleNoPpe * floatval($rates['gears']));
+                $dayPenalty += $rolePenalty;
+
+                // Capped availability for daily score
+                $cappedAvailable += min($avail, $effectiveNorm);
             }
         }
         $dayScore = $dayToProvide > 0 ? ($cappedAvailable / $dayToProvide) * 100.0 : 100.0;

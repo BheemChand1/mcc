@@ -42,30 +42,52 @@ try {
     $stmt->execute(['station_id' => $stationId]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 2. Fetch filled category IDs for the given date from mcc_manpower_log
+    // 2. Fetch total active shifts count per category
+    $totalShiftsStmt = $pdo->prepare("
+        SELECT category_id, COUNT(*) AS total_shifts
+        FROM mcc_manpower_shifts
+        WHERE status = 'Active'
+        GROUP BY category_id
+    ");
+    $totalShiftsStmt->execute();
+    $totalShiftsMap = [];
+    foreach ($totalShiftsStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $totalShiftsMap[intval($r['category_id'])] = intval($r['total_shifts']);
+    }
+
+    // 3. Fetch count of distinct filled shifts per category for the given date from mcc_manpower_log
     $filledStmt = $pdo->prepare("
-        SELECT DISTINCT category_id 
+        SELECT category_id, COUNT(DISTINCT shift_id) AS filled_shifts
         FROM mcc_manpower_log
         WHERE station_id = :station_id AND report_date = :report_date
+        GROUP BY category_id
     ");
     $filledStmt->execute([
         'station_id' => $stationId,
         'report_date' => $reportDate
     ]);
-    $filledCategoryIds = $filledStmt->fetchAll(PDO::FETCH_COLUMN, 0);
-    $filledMap = array_flip($filledCategoryIds);
+    $filledShiftsMap = [];
+    foreach ($filledStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $filledShiftsMap[intval($r['category_id'])] = intval($r['filled_shifts']);
+    }
 
     $categories = [];
     foreach ($rows as $row) {
         $cId = intval($row['id']);
-        $isFilled = isset($filledMap[$cId]) ? 1 : 0;
+        $totalShifts = $totalShiftsMap[$cId] ?? 0;
+        $filledShifts = $filledShiftsMap[$cId] ?? 0;
+
+        // Status is 1 ONLY if all active shifts for this category are filled on that date
+        $isFullyFilled = ($totalShifts > 0 && $filledShifts >= $totalShifts) ? 1 : 0;
 
         $categories[] = [
             "id"            => $cId,
             "category_id"   => $cId,
             "category_name" => $row['category_name'],
             "order_no"      => intval($row['order_no']),
-            "status"        => $isFilled
+            "total_shifts"  => $totalShifts,
+            "filled_shifts" => $filledShifts,
+            "status"        => $isFullyFilled
         ];
     }
 

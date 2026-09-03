@@ -91,6 +91,157 @@
       <?php echo $extraScripts; ?>
     </script>
     <?php endif; ?>
+
+    <?php
+    if (!isset($isViewer)) {
+        $userRole = strtoupper($_SESSION['role'] ?? 'CDO');
+        $isViewer = ($userRole === 'VIEWER');
+    }
+    if (!empty($isViewer)):
+    ?>
+    <!-- Viewer Protection & Anti-Capture Script -->
+    <script>
+    (function() {
+        // 1. Override Print APIs
+        window.print = function() {
+            alert("Security Notice: Printing is strictly disabled for VIEWER role.");
+            return false;
+        };
+
+        // 2. Hide only print buttons dynamically
+        function purgePrintElements() {
+            const printSelectors = [
+                '.btn-print',
+                '.btn-filter-print',
+                '.print-btn',
+                '[onclick*="window.print"]',
+                '[data-action="print"]',
+                'button:has(i.bi-printer)',
+                'a:has(i.bi-printer)'
+            ];
+            printSelectors.forEach(selector => {
+                try {
+                    document.querySelectorAll(selector).forEach(el => {
+                        el.style.setProperty('display', 'none', 'important');
+                    });
+                } catch(e) {}
+            });
+        }
+        document.addEventListener('DOMContentLoaded', purgePrintElements);
+        setTimeout(purgePrintElements, 300);
+        setTimeout(purgePrintElements, 1000);
+
+        // 3. Screen Shield on Window Blur / App Switch (Anti-Snipping Tool)
+        const screenGuard = document.getElementById('viewer-screen-guard');
+        const resumeBtn = document.getElementById('resumeViewerBtn');
+
+        function lockScreen() {
+            if (screenGuard) {
+                screenGuard.classList.add('active');
+                document.body.classList.add('viewer-blurred');
+            }
+        }
+
+        function unlockScreen() {
+            if (screenGuard) {
+                screenGuard.classList.remove('active');
+                document.body.classList.remove('viewer-blurred');
+            }
+        }
+
+        window.addEventListener('blur', lockScreen);
+        window.addEventListener('focus', unlockScreen);
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                lockScreen();
+            } else {
+                unlockScreen();
+            }
+        });
+
+        if (resumeBtn) {
+            resumeBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                unlockScreen();
+                window.focus();
+            });
+        }
+        if (screenGuard) {
+            screenGuard.addEventListener('click', function() {
+                unlockScreen();
+                window.focus();
+            });
+        }
+
+        // 4. Intercept Keyboard Shortcuts (PrintScreen, Ctrl+P, DevTools, Save, View Source)
+        window.addEventListener('keydown', function(e) {
+            // PrintScreen Key
+            if (e.key === 'PrintScreen' || e.keyCode === 44) {
+                e.preventDefault();
+                lockScreen();
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText('');
+                }
+                setTimeout(unlockScreen, 2000);
+                return false;
+            }
+
+            // Ctrl+P / Cmd+P (Print)
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.keyCode === 80)) {
+                e.preventDefault();
+                alert("Security Notice: Printing is strictly disabled for Viewer accounts.");
+                return false;
+            }
+
+            // Ctrl+S / Cmd+S (Save Page)
+            if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S' || e.keyCode === 83)) {
+                e.preventDefault();
+                return false;
+            }
+
+            // Ctrl+Shift+S / Cmd+Shift+S (Snipping / Screenshot)
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 's' || e.key === 'S' || e.keyCode === 83)) {
+                e.preventDefault();
+                lockScreen();
+                return false;
+            }
+
+            // F12 or Ctrl+Shift+I / J / C (DevTools)
+            if (e.keyCode === 123 || ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c'))) {
+                e.preventDefault();
+                return false;
+            }
+
+            // Ctrl+U (View Source)
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'u' || e.key === 'U' || e.keyCode === 85)) {
+                e.preventDefault();
+                return false;
+            }
+        }, true);
+
+        // Wipe Clipboard if PrintScreen released
+        window.addEventListener('keyup', function(e) {
+            if (e.key === 'PrintScreen' || e.keyCode === 44) {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText('');
+                }
+            }
+        });
+
+        // 5. Disable Right-Click Context Menu
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            return false;
+        });
+
+        // 6. Disable Drag & Drop of Images and Content
+        document.addEventListener('dragstart', function(e) {
+            e.preventDefault();
+            return false;
+        });
+    })();
+    </script>
+    <?php endif; ?>
   </body>
 </html>
 

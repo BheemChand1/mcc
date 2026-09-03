@@ -27,6 +27,14 @@ if (!isset($stationName)) {
     }
 }
 
+if (!isset($userRole)) {
+    $userRole = strtoupper($_SESSION['role'] ?? 'CDO');
+}
+if (!isset($isViewer)) {
+    $isViewer = ($userRole === 'VIEWER');
+}
+$viewerUser = $_SESSION['username'] ?? ($_SESSION['user_name'] ?? 'VIEWER');
+
 // Check report access permissions based on user's station assignment
 $page_report_mapping = [
     'normal-report.php' => 'normal_audit',
@@ -460,32 +468,199 @@ if (isset($page_report_mapping[$currentPage])) {
         color: #fff !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
-      .navbar-station-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.06) 100%);
-        border: 1px solid rgba(255, 255, 255, 0.22);
-        color: #ffffff;
-        padding: 5px 14px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        letter-spacing: 0.3px;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-        backdrop-filter: blur(6px);
-        margin-left: 8px;
-      }
-
-      .navbar-station-badge i {
-        color: #38bdf8;
-        font-size: 0.95rem;
       }
     }
+
+    .navbar-station-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.06) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      color: #ffffff;
+      padding: 5px 14px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(6px);
+      margin-left: 8px;
+    }
+
+    .navbar-station-badge i {
+      color: #38bdf8;
+      font-size: 0.95rem;
+    }
+
+    /* ========================================================
+       VIEWER ROLE RESTRICTIONS & SCREEN SECURITY
+       ======================================================== */
+    <?php if (!empty($isViewer)): ?>
+    /* 1. Hide ONLY Print Buttons and Print Actions (Do NOT hide filters) */
+    body.is-viewer .btn-print,
+    body.is-viewer .btn-filter-print,
+    body.is-viewer button[onclick*="window.print"],
+    body.is-viewer a[onclick*="window.print"],
+    body.is-viewer .print-btn,
+    body.is-viewer [data-action="print"],
+    body.is-viewer button:has(i.bi-printer),
+    body.is-viewer a:has(i.bi-printer) {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+
+    /* 2. Anti-Selection & Anti-Copy */
+    body.is-viewer {
+      -webkit-user-select: none !important;
+      -moz-user-select: none !important;
+      -ms-user-select: none !important;
+      user-select: none !important;
+    }
+
+    body.is-viewer img,
+    body.is-viewer table,
+    body.is-viewer canvas {
+      -webkit-user-drag: none !important;
+      user-drag: none !important;
+    }
+
+    /* 3. Screen Mask / Blur on Inactivity (Anti-Screenshot) */
+    body.viewer-blurred .app-wrapper {
+      filter: blur(24px) grayscale(90%) !important;
+      pointer-events: none !important;
+      user-select: none !important;
+    }
+
+    .viewer-screen-guard {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(10, 15, 29, 0.97);
+      backdrop-filter: blur(25px);
+      -webkit-backdrop-filter: blur(25px);
+      z-index: 2147483647;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .viewer-screen-guard.active {
+      display: flex !important;
+    }
+
+    .viewer-guard-box {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 36px 48px;
+      max-width: 480px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      text-align: center;
+    }
+
+    .viewer-guard-icon {
+      font-size: 54px;
+      color: #ef4444;
+      margin-bottom: 16px;
+      animation: pulseGuard 2s infinite ease-in-out;
+    }
+
+    @keyframes pulseGuard {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.08); opacity: 0.8; }
+    }
+
+    .viewer-guard-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #f8fafc;
+      margin-bottom: 10px;
+    }
+
+    .viewer-guard-text {
+      font-size: 13.5px;
+      color: #94a3b8;
+      margin-bottom: 22px;
+      line-height: 1.5;
+    }
+
+    .viewer-guard-btn {
+      background: #1987C6;
+      color: #fff;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 13.5px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.2s;
+    }
+
+    .viewer-guard-btn:hover {
+      background: #126392;
+    }
+
+    /* 4. Complete Print Blockade */
+    @media print {
+      body.is-viewer * {
+        display: none !important;
+        visibility: hidden !important;
+      }
+      body.is-viewer {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: #ffffff !important;
+        height: 100vh !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      body.is-viewer::before {
+        content: "ACCESS RESTRICTED: Printing is disabled for VIEWER role.";
+        display: block !important;
+        visibility: visible !important;
+        font-size: 22pt !important;
+        font-weight: 800 !important;
+        color: #dc2626 !important;
+        text-align: center !important;
+        font-family: 'Inter', Arial, sans-serif !important;
+        border: 3px solid #dc2626 !important;
+        padding: 30px !important;
+        border-radius: 12px !important;
+        background-color: #fef2f2 !important;
+      }
+    }
+    <?php endif; ?>
   </style>
 </head>
 
-<body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
+<body class="layout-fixed sidebar-expand-lg bg-body-tertiary <?= !empty($isViewer) ? 'is-viewer viewer-mode' : '' ?>">
+  <?php if (!empty($isViewer)): ?>
+  <!-- Anti-Screenshot / Window Inactive Screen Guard -->
+  <div id="viewer-screen-guard" class="viewer-screen-guard">
+    <div class="viewer-guard-box">
+      <div class="viewer-guard-icon"><i class="bi bi-shield-lock-fill"></i></div>
+      <div class="viewer-guard-title">Confidential Content Protected</div>
+      <div class="viewer-guard-text">
+        Screen capture & unauthorized recording are disabled for Viewer accounts. Click below or return to this window to resume.
+      </div>
+      <button type="button" class="viewer-guard-btn" id="resumeViewerBtn">
+        <i class="bi bi-unlock-fill"></i> Resume Viewing
+      </button>
+    </div>
+  </div>
+  <?php endif; ?>
+
   <div class="app-wrapper">
 
     <nav class="app-header navbar navbar-expand" data-bs-theme="dark">

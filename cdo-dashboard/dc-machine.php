@@ -1,10 +1,10 @@
 <?php
 require_once 'auth.php';
 
-$fromDate = $_GET['from_date'] ?? date('Y-m-d');
+$fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
 
-// Fetch active shifts for this station - DC
+// Fetch active shifts for this station (ordered by ID) - DC
 $shiftsStmt = $pdo->prepare("
     SELECT id AS shift_id, shift AS shift_name 
     FROM dc_mcc_machine_shifts 
@@ -24,70 +24,107 @@ $machinesStmt = $pdo->prepare("
 $machinesStmt->execute(['station_id' => $stationId]);
 $machinesList = $machinesStmt->fetchAll();
 
-// Fetch targets active on selected date (using SCD range logic) - DC
+// Fetch targets that overlap the selected date range - DC
 $targetsStmt = $pdo->prepare("
-    SELECT machine_id, shift_id, nominated_area 
+    SELECT machine_id, shift_id, nominated_area, effective_from, effective_to
     FROM dc_mcc_machine_target 
     WHERE station_id = :station_id 
-      AND :date_ref_1 >= effective_from
-      AND (effective_to IS NULL OR :date_ref_2 <= effective_to)
+      AND effective_from <= :to_date
+      AND (effective_to IS NULL OR effective_to >= :from_date)
+    ORDER BY effective_from ASC, id ASC
 ");
 $targetsStmt->execute([
     'station_id' => $stationId,
-    'date_ref_1' => $fromDate,
-    'date_ref_2' => $fromDate
+    'from_date' => $fromDate,
+    'to_date' => $toDate
 ]);
 $targetsRows = $targetsStmt->fetchAll();
 
-$targetsMap = [];
-foreach ($targetsRows as $row) {
-    $targetsMap[$row['machine_id']][$row['shift_id']] = $row['nominated_area'];
-}
-
-// Fetch report data for selected date - DC
+// Fetch all daily reports in the range, keeping each day's shift values separate - DC
 $reportStmt = $pdo->prepare("
-    SELECT parameter_id AS machine_id, shift_id, used_status, auditor_name 
+    SELECT report_date, parameter_id AS machine_id, shift_id, used_status, auditor_name
     FROM dc_mcc_machine_report 
-    WHERE station_id = :station_id AND report_date = :report_date
+    WHERE station_id = :station_id AND report_date BETWEEN :from_date AND :to_date
+    ORDER BY report_date DESC, id ASC
 ");
 $reportStmt->execute([
     'station_id' => $stationId,
-    'report_date' => $fromDate
+    'from_date' => $fromDate,
+    'to_date' => $toDate
 ]);
 $reportRows = $reportStmt->fetchAll();
 
-$reportsMap = [];
-$auditorName = '';
+$reportsByDate = [];
 foreach ($reportRows as $row) {
-    $reportsMap[$row['machine_id']][$row['shift_id']] = $row['used_status'];
-    if (empty($auditorName) && !empty($row['auditor_name'])) {
-        $auditorName = $row['auditor_name'];
-    }
+    $reportsByDate[$row['report_date']][] = $row;
 }
 
-$isFallback = empty($reportRows);
+// Machine Area helper
+function getMachineArea($machineNo, $machineName) {
+    $no = strtoupper($machineNo);
+    if (strpos($no, 'PPSD') !== false) {
+        preg_match('/PPSD\s*(\d+)/i', $no, $matches);
+        if (!empty($matches[1])) {
+            $num = intval($matches[1]);
+            if ($num <= 2) return "PL1";
+            if ($num <= 4) return "PL2";
+            if ($num <= 6) return "PL3";
+            if ($num <= 8) return "PL4";
+            return "PL5";
+        }
+        return "PL1";
+    }
+    if (strpos($no, 'HHSD') !== false) {
+        return "Coach";
+    }
+    return "PL1"; 
+}
 
-// Calculate score
-$totalNominated = 0;
-$totalOperated = 0;
+// Resolve nominations and calculate a separate score for each report date.
+$sheets = [];
+foreach ($reportsByDate as $reportDate => $dailyRows) {
+    $targetsMap = [];
+    foreach ($targetsRows as $target) {
+        if ($target['effective_from'] <= $reportDate
+            && ($target['effective_to'] === null || $target['effective_to'] >= $reportDate)) {
+            $targetsMap[$target['machine_id']][$target['shift_id']] = $target['nominated_area'];
+        }
+    }
 
-foreach ($machinesList as $mach) {
-    $mId = $mach['machine_id'];
-    foreach ($shiftsList as $shift) {
-        $sId = $shift['shift_id'];
-        $nomArea = $targetsMap[$mId][$sId] ?? '';
-        $isNominated = !empty($nomArea) && strtoupper($nomArea) !== 'N' && $nomArea !== '-';
-        if ($isNominated) {
-            $totalNominated++;
-            $status = $reportsMap[$mId][$sId] ?? '-';
-            if ($status === 'Y') {
-                $totalOperated++;
+    $reportsMap = [];
+    $auditors = [];
+    foreach ($dailyRows as $row) {
+        $reportsMap[$row['machine_id']][$row['shift_id']] = $row['used_status'];
+        if (!empty($row['auditor_name']) && !in_array($row['auditor_name'], $auditors, true)) {
+            $auditors[] = $row['auditor_name'];
+        }
+    }
+
+    $totalNominated = 0;
+    $totalOperated = 0;
+    foreach ($machinesList as $mach) {
+        $mId = $mach['machine_id'];
+        foreach ($shiftsList as $shift) {
+            $sId = $shift['shift_id'];
+            $nomArea = $targetsMap[$mId][$sId] ?? '-';
+            $isNominated = !empty($nomArea) && strtoupper($nomArea) !== 'N' && $nomArea !== '-';
+            if ($isNominated) {
+                $totalNominated++;
+                if (($reportsMap[$mId][$sId] ?? '-') === 'Y') {
+                    $totalOperated++;
+                }
             }
         }
     }
-}
 
-$totalScore = $isFallback ? "0%" : ($totalNominated > 0 ? round(($totalOperated / $totalNominated) * 100, 1) . "%" : "100%");
+    $sheets[] = [
+        'report_date' => $reportDate,
+        'targets' => $targetsMap,
+        'reports' => $reportsMap,
+        'auditor_name' => implode(', ', $auditors),
+        'total_score' => $totalNominated > 0 ? round(($totalOperated / $totalNominated) * 100, 1) . '%' : '100%'
+    ];
+}
 
 $extraStyles = "";
 
@@ -110,12 +147,16 @@ include 'sidebar.php';
             </form>
 
             <div class="report-wrap">
-                <?php if ($isFallback): ?>
+                <?php if (empty($sheets)): ?>
                     <div class="alert alert-warning no-print" style="margin: 0 0 20px 0; border-radius: 8px; border: 1px solid #ffeeba; background-color: #fff3cd; color: #856404; padding: 12px 20px;">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i> No daily machine reports found for the selected date.
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> No daily machine reports found for the selected date range.
                     </div>
-                <?php else: ?>
+                <?php endif; ?>
 
+                <?php foreach ($sheets as $sheet):
+                    $targetsMap = $sheet['targets'];
+                    $reportsMap = $sheet['reports'];
+                ?>
                 <div class="report-frame">
                     <div class="report-header">
                         <h2>DC Machine Deployment Report</h2>
@@ -124,14 +165,14 @@ include 'sidebar.php';
                     <div class="report-meta-section">
                         <div class="meta-row">
                             <div class="meta-item"><span>Railway:</span> <?= htmlspecialchars($railwayName) ?></div>
-                            <div class="meta-item"><span>Date:</span> <?= htmlspecialchars(date('d-m-Y', strtotime($fromDate))) ?></div>
+                            <div class="meta-item"><span>Date:</span> <?= htmlspecialchars(date('d-m-Y', strtotime($sheet['report_date']))) ?></div>
                             <div class="meta-item"><span>Division:</span> <?= htmlspecialchars($divisionName) ?></div>
                             <div class="meta-item"><span>Station/Depot:</span> <?= htmlspecialchars($stationName) ?></div>
                         </div>
                         <div class="meta-row">
                             <div class="meta-item"><span>Contractor:</span> <?= htmlspecialchars($contractorName) ?></div>
-                            <div class="meta-item"><span>Auditor Name:</span> <?= htmlspecialchars($auditorName ?: '-') ?></div>
-                            <div class="meta-item"><span>Total Score:</span> <?= htmlspecialchars($totalScore) ?></div>
+                            <div class="meta-item"><span>Auditor Name:</span> <?= htmlspecialchars($sheet['auditor_name'] ?: '-') ?></div>
+                            <div class="meta-item"><span>Total Score:</span> <?= htmlspecialchars($sheet['total_score']) ?></div>
                         </div>
                     </div>
 
@@ -214,7 +255,7 @@ include 'sidebar.php';
                         </div>
                     </div>
                 </div>
-                <?php endif; ?>
+                <?php endforeach; ?>
             </div>
         </div>
     </div>

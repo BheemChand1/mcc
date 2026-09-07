@@ -139,7 +139,7 @@ include 'sidebar.php';
                 <label for="to_date">To:</label>
                 <input type="date" id="to_date" name="to_date" value="<?= htmlspecialchars($toDate); ?>">
                 <button type="submit" class="btn-go">Go</button>
-                <a href="machine-target.php?target_month=<?= date('Y-m', strtotime($fromDate)) ?>" class="btn-summary" target="_blank">Machine Target</a>
+                <a href="machine-target.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-summary" target="_blank">Machine Target</a>
                 <a href="machine-summary.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-summary">Summary</a>
                 <button type="button" class="btn-print" onclick="window.print()">Print</button>
             </form>

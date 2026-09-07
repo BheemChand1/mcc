@@ -40,16 +40,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_targets'])) {
                     $pq = isset($penalty_qtys[$pId]) ? floatval($penalty_qtys[$pId]) : 0;
 
                     // Check if entry exists for this month
-                    $chk = $pdo->prepare("SELECT id FROM dc_mcc_chemical_target WHERE station_id = :station_id AND param_id = :param_id AND target_month = :target_month");
+                    $chk = $pdo->prepare("SELECT id FROM dc_mcc_chemical_target WHERE station_id = :station_id AND parameter_id = :parameter_id AND target_month = :target_month");
                     $chk->execute([
                         'station_id' => $stationId,
-                        'param_id' => $pId,
+                        'parameter_id' => $pId,
                         'target_month' => $targetMonthDate
                     ]);
                     $existingId = $chk->fetchColumn();
 
                     if ($existingId) {
-                        $upd = $pdo->prepare("UPDATE dc_mcc_chemical_target SET target_qty = :q, penalty_amount = :p, penalty_qty = :pq WHERE id = :id");
+                        $upd = $pdo->prepare("UPDATE dc_mcc_chemical_target SET `qty(ml)` = :q, penalty = :p, `penalty_qty(ml)` = :pq WHERE id = :id");
                         $upd->execute([
                             'q' => $q,
                             'p' => $p,
@@ -57,10 +57,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_targets'])) {
                             'id' => $existingId
                         ]);
                     } else {
-                        $ins = $pdo->prepare("INSERT INTO dc_mcc_chemical_target (station_id, param_id, target_month, target_qty, penalty_amount, penalty_qty) VALUES (:station_id, :param_id, :target_month, :q, :p, :pq)");
+                        $ins = $pdo->prepare("INSERT INTO dc_mcc_chemical_target (station_id, parameter_id, target_month, `qty(ml)`, penalty, `penalty_qty(ml)`) VALUES (:station_id, :parameter_id, :target_month, :q, :p, :pq)");
                         $ins->execute([
                             'station_id' => $stationId,
-                            'param_id' => $pId,
+                            'parameter_id' => $pId,
                             'target_month' => $targetMonthDate,
                             'q' => $q,
                             'p' => $p,

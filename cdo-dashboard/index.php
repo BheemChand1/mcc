@@ -18,85 +18,13 @@ $year = date('Y', strtotime($selectedDate));
 // ----------------------------------------------------
 $liveOperations = [];
 
-// Fetch active sub-parameter counts for each report type for this station
-$normalMaxPerCoach = 0;
-try {
-    $subStmt = $pdo->prepare("
-        SELECT sp.id, p.parameter_name 
-        FROM mcc_normal_scorecard_sub_param sp
-        JOIN mcc_normal_scorecard_param p ON p.id = sp.parameter_id
-        WHERE p.station_id = :sid AND sp.station_id = :sid AND p.status = 'Active' AND sp.status = 'Active'
-    ");
-    $subStmt->execute(['sid' => $stationId]);
-    $subRows = $subStmt->fetchAll(PDO::FETCH_ASSOC);
-    foreach ($subRows as $sr) {
-        if (stripos($sr['parameter_name'], 'watering') !== false) {
-            $normalMaxPerCoach += 1;
-        } else {
-            $normalMaxPerCoach += 3;
-        }
-    }
-    if ($normalMaxPerCoach <= 0) $normalMaxPerCoach = 16;
-} catch (Exception $e) {
-    $normalMaxPerCoach = 16;
-}
-
-$intensiveSubCount = 0;
-try {
-    $subStmt = $pdo->prepare("
-        SELECT COUNT(*) 
-        FROM mcc_intensive_scorecard_2_sub_param sp
-        JOIN mcc_intensive_scorecard_2_param p ON p.id = sp.parameter_id
-        WHERE p.station_id = :sid AND sp.station_id = :sid AND p.status = 'Active' AND sp.status = 'Active'
-    ");
-    $subStmt->execute(['sid' => $stationId]);
-    $intensiveSubCount = intval($subStmt->fetchColumn()) ?: 20;
-} catch (Exception $e) {
-    $intensiveSubCount = 20;
-}
-
-$pantrySubCount = 0;
-try {
-    $subStmt = $pdo->prepare("
-        SELECT COUNT(*) 
-        FROM mcc_intensive_pantry_sub_param sp
-        JOIN mcc_intensive_pantry_param p ON p.id = sp.parameter_id
-        WHERE p.station_id = :sid AND sp.station_id = :sid AND p.status = 'Active' AND sp.status = 'Active'
-    ");
-    $subStmt->execute(['sid' => $stationId]);
-    $pantrySubCount = intval($subStmt->fetchColumn()) ?: 10;
-} catch (Exception $e) {
-    $pantrySubCount = 10;
-}
-
-$prtMaxPerCoach = 0;
-try {
-    $subStmt = $pdo->prepare("
-        SELECT sp.id, p.parameter_name 
-        FROM mcc_prt_scorecard_sub_param sp
-        JOIN mcc_prt_scorecard_param p ON p.id = sp.parameter_id
-        WHERE p.station_id = :sid AND sp.station_id = :sid AND p.status = 'Active' AND sp.status = 'Active'
-    ");
-    $subStmt->execute(['sid' => $stationId]);
-    $subRows = $subStmt->fetchAll(PDO::FETCH_ASSOC);
-    foreach ($subRows as $sr) {
-        if (stripos($sr['parameter_name'], 'watering') !== false) {
-            $prtMaxPerCoach += 1;
-        } else {
-            $prtMaxPerCoach += 3;
-        }
-    }
-    if ($prtMaxPerCoach <= 0) $prtMaxPerCoach = 16;
-} catch (Exception $e) {
-    $prtMaxPerCoach = 16;
-}
-
 // A. Normal Scorecard Reports
 try {
     $stmt = $pdo->prepare("
         SELECT token_id, train_no, report_date, auditor_name,
                COUNT(DISTINCT coach_no) as coaches_count,
-               SUM(CASE WHEN score_value REGEXP '^[0-9]+$' THEN CAST(score_value AS DECIMAL(5,2)) WHEN score_value = 'Y' THEN 1 ELSE 0 END) as sum_score,
+               SUM(CASE WHEN score_value REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN CAST(score_value AS DECIMAL(5,2)) WHEN score_value = 'Y' THEN 1 ELSE 0 END) as sum_score,
+               SUM(CASE WHEN score_value = 'Y' OR score_value = 'N' THEN 1 WHEN score_value REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN 3 ELSE 0 END) as max_score,
                MAX(created_at) as last_updated
         FROM mcc_normal_scorecard_report
         WHERE station_id = :sid AND report_date = :rdate
@@ -106,9 +34,8 @@ try {
     ");
     $stmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
     while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $coachesCount = intval($r['coaches_count']) > 0 ? intval($r['coaches_count']) : 1;
-        $maxPossible = $coachesCount * $normalMaxPerCoach;
-        $scorePct = $maxPossible > 0 ? round((floatval($r['sum_score']) / $maxPossible) * 100, 1) : 0;
+        $maxPossible = floatval($r['max_score'] ?? 0);
+        $scorePct = $maxPossible > 0 ? min(100.0, max(0.0, round((floatval($r['sum_score']) / $maxPossible) * 100, 1))) : 0;
         $liveOperations[] = [
             'train_no'       => $r['train_no'] ?: 'Normal Train',
             'type'           => 'MCC Normal Cleaning',
@@ -132,7 +59,8 @@ try {
     $stmt = $pdo->prepare("
         SELECT token_id, train_no, report_date, auditor_name,
                COUNT(DISTINCT coach_no) as coaches_count,
-               SUM(CASE WHEN score_value REGEXP '^[0-9]+$' THEN CAST(score_value AS DECIMAL(5,2)) ELSE 0 END) as sum_score,
+               SUM(CASE WHEN score_value REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN CAST(score_value AS DECIMAL(5,2)) WHEN score_value = 'Y' THEN 1 ELSE 0 END) as sum_score,
+               SUM(CASE WHEN score_value = 'Y' OR score_value = 'N' THEN 1 WHEN score_value REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN 1 ELSE 0 END) as max_score,
                MAX(created_at) as last_updated
         FROM mcc_intensive_scorecard_2_report
         WHERE station_id = :sid AND report_date = :rdate
@@ -142,9 +70,8 @@ try {
     ");
     $stmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
     while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $coachesCount = intval($r['coaches_count']) > 0 ? intval($r['coaches_count']) : 1;
-        $maxPossible = $coachesCount * $intensiveSubCount * 1;
-        $scorePct = $maxPossible > 0 ? round((floatval($r['sum_score']) / $maxPossible) * 100, 1) : 0;
+        $maxPossible = floatval($r['max_score'] ?? 0);
+        $scorePct = $maxPossible > 0 ? min(100.0, max(0.0, round((floatval($r['sum_score']) / $maxPossible) * 100, 1))) : 0;
         $liveOperations[] = [
             'train_no'       => $r['train_no'] ?: 'Intensive Rake',
             'type'           => 'MCC Intensive Cleaning',
@@ -168,7 +95,8 @@ try {
     $stmt = $pdo->prepare("
         SELECT token_id, train_no, report_date, auditor_name,
                COUNT(DISTINCT coach_no) as coaches_count,
-               SUM(CASE WHEN score_value REGEXP '^[0-9]+$' THEN CAST(score_value AS DECIMAL(5,2)) ELSE 0 END) as sum_score,
+               SUM(CASE WHEN score_value REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN CAST(score_value AS DECIMAL(5,2)) WHEN score_value = 'Y' THEN 1 ELSE 0 END) as sum_score,
+               SUM(CASE WHEN score_value = 'Y' OR score_value = 'N' THEN 1 WHEN score_value REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN 1 ELSE 0 END) as max_score,
                MAX(created_at) as last_updated
         FROM mcc_intensive_pantry_report
         WHERE station_id = :sid AND report_date = :rdate
@@ -178,9 +106,8 @@ try {
     ");
     $stmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
     while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $coachesCount = intval($r['coaches_count']) > 0 ? intval($r['coaches_count']) : 1;
-        $maxPossible = $coachesCount * $pantrySubCount * 1;
-        $scorePct = $maxPossible > 0 ? round((floatval($r['sum_score']) / $maxPossible) * 100, 1) : 0;
+        $maxPossible = floatval($r['max_score'] ?? 0);
+        $scorePct = $maxPossible > 0 ? min(100.0, max(0.0, round((floatval($r['sum_score']) / $maxPossible) * 100, 1))) : 0;
         $liveOperations[] = [
             'train_no'       => $r['train_no'] ?: 'Pantry Car',
             'type'           => 'Pantry Car Audit',
@@ -203,7 +130,7 @@ try {
 try {
     $stmt = $pdo->prepare("
         SELECT token_id, train_no, report_date,
-               AVG(CASE WHEN rating REGEXP '^[0-9]+$' THEN CAST(rating AS DECIMAL(5,2)) ELSE NULL END) as avg_rating,
+               AVG(CASE WHEN rating REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN CAST(rating AS DECIMAL(5,2)) ELSE NULL END) as avg_rating,
                MAX(created_at) as last_updated
         FROM dc_mcc_report
         WHERE station_id = :sid AND report_date = :rdate
@@ -213,7 +140,7 @@ try {
     ");
     $stmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
     while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $scorePct = $r['avg_rating'] !== null ? round((floatval($r['avg_rating']) / 3.0) * 100, 1) : 0;
+        $scorePct = $r['avg_rating'] !== null ? min(100.0, max(0.0, round((floatval($r['avg_rating']) / 3.0) * 100, 1))) : 0;
         $liveOperations[] = [
             'train_no'       => $r['train_no'] ?: 'DC Area',
             'type'           => 'Depot DC Cleaning',
@@ -237,7 +164,8 @@ try {
     $stmt = $pdo->prepare("
         SELECT token_id, train_no, report_date, auditor_name,
                COUNT(DISTINCT coach_no) as coaches_count,
-               SUM(CASE WHEN score_value REGEXP '^[0-9]+$' THEN CAST(score_value AS DECIMAL(5,2)) WHEN score_value = 'Y' THEN 1 ELSE 0 END) as sum_score,
+               SUM(CASE WHEN score_value REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN CAST(score_value AS DECIMAL(5,2)) WHEN score_value = 'Y' THEN 1 ELSE 0 END) as sum_score,
+               SUM(CASE WHEN score_value = 'Y' OR score_value = 'N' THEN 1 WHEN score_value REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN 3 ELSE 0 END) as max_score,
                MAX(created_at) as last_updated
         FROM mcc_prt_scorecard_report
         WHERE station_id = :sid AND report_date = :rdate
@@ -247,9 +175,8 @@ try {
     ");
     $stmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
     while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $coachesCount = intval($r['coaches_count']) > 0 ? intval($r['coaches_count']) : 1;
-        $maxPossible = $coachesCount * $prtMaxPerCoach;
-        $scorePct = $maxPossible > 0 ? round((floatval($r['sum_score']) / $maxPossible) * 100, 1) : 0;
+        $maxPossible = floatval($r['max_score'] ?? 0);
+        $scorePct = $maxPossible > 0 ? min(100.0, max(0.0, round((floatval($r['sum_score']) / $maxPossible) * 100, 1))) : 0;
         $liveOperations[] = [
             'train_no'       => $r['train_no'] ?: 'PRT Train',
             'type'           => 'Platform Return Cleaning',
@@ -263,6 +190,42 @@ try {
             'progress'       => 100,
             'status'         => 'Completed',
             'status_class'   => 'on',
+            'report_date'    => $r['report_date']
+        ];
+    }
+} catch (Exception $e) {}
+
+// F. Vande Bharat Scorecard Reports
+try {
+    $stmt = $pdo->prepare("
+        SELECT token_id, train_no, report_date, auditor_name,
+               COUNT(DISTINCT coach_no) as coaches_count,
+               SUM(CASE WHEN score_value REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN CAST(score_value AS DECIMAL(5,2)) WHEN score_value = 'Y' THEN 1 ELSE 0 END) as sum_score,
+               SUM(CASE WHEN score_value = 'Y' OR score_value = 'N' THEN 1 WHEN score_value REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN 3 ELSE 0 END) as max_score,
+               MAX(created_at) as last_updated
+        FROM mcc_vb_scorecard_report
+        WHERE station_id = :sid AND report_date = :rdate
+        GROUP BY token_id, train_no, report_date, auditor_name
+        ORDER BY report_date DESC, last_updated DESC
+        LIMIT 10
+    ");
+    $stmt->execute(['sid' => $stationId, 'rdate' => $selectedDate]);
+    while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $maxPossible = floatval($r['max_score'] ?? 0);
+        $scorePct = $maxPossible > 0 ? min(100.0, max(0.0, round((floatval($r['sum_score']) / $maxPossible) * 100, 1))) : 0;
+        $liveOperations[] = [
+            'train_no'       => $r['train_no'] ?: 'Vande Bharat',
+            'type'           => 'Vande Bharat Cleaning',
+            'type_badge_bg'  => '#17a2b8',
+            'type_badge_ico' => '🚆',
+            'location'       => 'VB Pit Line',
+            'coaches'        => $r['coaches_count'] > 0 ? $r['coaches_count'] : 16,
+            'auditor'        => $r['auditor_name'] ?: 'Auditor',
+            'time'           => !empty($r['last_updated']) ? date('h:i A', strtotime($r['last_updated'])) : '–',
+            'score'          => $scorePct > 0 ? $scorePct . '%' : '–',
+            'progress'       => 100,
+            'status'         => ($scorePct >= 85) ? 'Completed' : (($scorePct > 0) ? 'At Risk' : 'In Progress'),
+            'status_class'   => ($scorePct >= 85) ? 'on' : (($scorePct > 0) ? 'risk' : 'inspect'),
             'report_date'    => $r['report_date']
         ];
     }
@@ -293,7 +256,7 @@ foreach ($liveOperations as $op) {
         $countScores++;
     }
 }
-$avgCleaningScore = $countScores > 0 ? round($sumScores / $countScores, 1) : 0;
+$avgCleaningScore = $countScores > 0 ? min(100.0, max(0.0, round($sumScores / $countScores, 1))) : 0;
 
 // Manpower Stats
 $manpowerPresent = 0;

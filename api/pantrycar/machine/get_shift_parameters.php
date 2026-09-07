@@ -103,6 +103,7 @@ try {
         }
     }
 
+    $shiftName = null;
     if ($shiftId !== null) {
         // Get shift name
         $shiftStmt = $pdo->prepare("SELECT shift AS shift_name FROM mcc_intensive_pantry_machine_shifts WHERE id = :shift_id LIMIT 1");
@@ -115,44 +116,51 @@ try {
         $tokenId = 'TKN-PC-MCH-' . date('Ymd', strtotime($reportDate)) . '-' . ($shiftId ?? 0) . '-' . rand(1000, 9999);
     }
 
-    // 4. Assemble machines output
+    // 4. Assemble machines output (Return all machines for the station)
     $machines = [];
     foreach ($machinesList as $mach) {
         $mId = $mach['machine_id'];
         $nomVal = $targetsMap[$mId] ?? 'N';
 
-        if ($nomVal === 'Y') {
-            $machines[] = [
-                "machine_id" => intval($mId),
-                "machine_no" => $mach['machine_no'],
-                "machine_name" => $mach['machine_name'],
-                "nominated" => $nomVal,
-                "operated" => $reportsMap[$mId] ?? null
-            ];
-        }
+        $machines[] = [
+            "machine_id" => intval($mId),
+            "machine_no" => $mach['machine_no'],
+            "machine_name" => $mach['machine_name'],
+            "nominated" => $nomVal,
+            "operated" => $reportsMap[$mId] ?? null
+        ];
     }
 
     // 5. Build meta details
+    $totalNominated = 0;
+    $totalFilled = 0;
+    foreach ($machines as $m) {
+        if ($m['nominated'] === 'Y') {
+            $totalNominated++;
+            if ($m['operated'] !== null && $m['operated'] !== '' && $m['operated'] !== '-') {
+                $totalFilled++;
+            }
+        }
+    }
+
+    $shiftStatus = 0;
+    if ($totalNominated > 0) {
+        $shiftStatus = ($totalFilled === $totalNominated) ? 1 : 0;
+    } else {
+        $shiftStatus = !empty($reportRows) ? 1 : 0;
+    }
+
     $meta = [
         "station_id" => $stationId,
         "date" => $reportDate,
         "token_id" => $tokenId,
-        "auditor_name" => $auditorName
+        "auditor_name" => $auditorName,
+        "shift_status" => $shiftStatus
     ];
 
     if ($shiftId !== null) {
         $meta['shift_id'] = $shiftId;
         $meta['shift_name'] = $shiftName;
-
-        // Calculate shift completion status
-        $totalNominated = count($machines);
-        $totalFilled = 0;
-        foreach ($machines as $m) {
-            if ($m['operated'] !== null && $m['operated'] !== '' && $m['operated'] !== '-') {
-                $totalFilled++;
-            }
-        }
-        $meta['shift_status'] = ($totalNominated > 0 && $totalFilled === $totalNominated) ? 1 : 0;
     }
 
     http_response_code(200);

@@ -962,6 +962,25 @@ function getIntensivePantryScore($stationId, $year, $month) {
     $endDate = date('Y-m-t', strtotime($startDate));
 
     try {
+        $paramStmt = $pdo->prepare("
+            SELECT p.id AS param_id, sp.id AS sub_param_id 
+            FROM mcc_intensive_pantry_param p
+            JOIN mcc_intensive_pantry_sub_param sp ON p.id = sp.parameter_id
+            WHERE p.station_id = :p_station_id AND sp.station_id = :sp_station_id AND p.status = 'Active' AND sp.status = 'Active'
+            ORDER BY p.id ASC, sp.id ASC
+        ");
+        $paramStmt->execute(['p_station_id' => $stationId, 'sp_station_id' => $stationId]);
+        $paramRows = $paramStmt->fetchAll();
+
+        $dbParameters = [];
+        foreach ($paramRows as $row) {
+            $pId = $row['param_id'];
+            if (!isset($dbParameters[$pId])) {
+                $dbParameters[$pId] = [];
+            }
+            $dbParameters[$pId][] = $row['sub_param_id'];
+        }
+
         $stmt = $pdo->prepare("
             SELECT DISTINCT token_id 
             FROM mcc_intensive_pantry_report 
@@ -975,7 +994,7 @@ function getIntensivePantryScore($stationId, $year, $month) {
         }
 
         $scoresStmt = $pdo->prepare("
-            SELECT score_value 
+            SELECT sub_parameter_id, coach_no, score_value 
             FROM mcc_intensive_pantry_report 
             WHERE station_id = :station_id AND token_id = :token_id
         ");
@@ -985,27 +1004,60 @@ function getIntensivePantryScore($stationId, $year, $month) {
 
         foreach ($tokens as $tokenId) {
             $scoresStmt->execute(['station_id' => $stationId, 'token_id' => $tokenId]);
-            $entries = $scoresStmt->fetchAll(PDO::FETCH_COLUMN);
+            $entries = $scoresStmt->fetchAll();
 
-            $obtained = 0;
-            $possible = 0;
-            foreach ($entries as $val) {
-                if ($val !== '' && $val !== 'X' && $val !== '-') {
-                    if (is_numeric($val)) {
-                        $obtained += floatval($val);
-                        $possible += 3;
-                    } elseif (strtoupper($val) === 'Y') {
-                        $obtained += 3;
-                        $possible += 3;
-                    } elseif (strtoupper($val) === 'N') {
-                        $possible += 3;
-                    }
+            $uniqueCoaches = [];
+            foreach ($entries as $sc) {
+                if (!in_array($sc['coach_no'], $uniqueCoaches) && !empty($sc['coach_no'])) {
+                    $uniqueCoaches[] = $sc['coach_no'];
                 }
             }
+            if (empty($uniqueCoaches)) {
+                $uniqueCoaches = ['Coach 1'];
+            }
 
-            if ($possible > 0) {
-                $totalSheetsScore += ($obtained / $possible) * 100.0;
-                $sheetsCount++;
+            $scoreMatrix = [];
+            foreach ($entries as $sc) {
+                $scoreMatrix[$sc['sub_parameter_id']][$sc['coach_no']] = $sc['score_value'];
+            }
+
+            foreach ($uniqueCoaches as $cNo) {
+                $coachObtained = 0.0;
+                foreach ($dbParameters as $pId => $subIds) {
+                    $itemObt = 0.0;
+                    $itemPoss = 0;
+                    foreach ($subIds as $spId) {
+                        $val = $scoreMatrix[$spId][$cNo] ?? null;
+                        if ($val !== null && $val !== '' && $val !== 'X' && $val !== '-') {
+                            if (is_numeric($val)) {
+                                $itemObt += floatval($val);
+                                $itemPoss += 3;
+                            } elseif (strtoupper($val) === 'Y' || strtolower($val) === 'vg' || strtolower($val) === 'very good') {
+                                $itemObt += 3;
+                                $itemPoss += 3;
+                            } elseif (strtolower($val) === 'sat' || strtolower($val) === 'satisfactory' || strtolower($val) === 'good') {
+                                $itemObt += 2;
+                                $itemPoss += 3;
+                            } elseif (strtolower($val) === 'poor') {
+                                $itemObt += 1;
+                                $itemPoss += 3;
+                            } elseif (strtoupper($val) === 'N' || strtolower($val) === 'not attended') {
+                                $itemPoss += 3;
+                            }
+                        }
+                    }
+                    $subCount = count($subIds);
+                    if ($subCount > 1 && $itemPoss > 0) {
+                        $coachObtained += round(($itemObt / $itemPoss) * 3.0, 1);
+                    } else {
+                        $coachObtained += ($itemPoss > 0) ? $itemObt : 3.0;
+                    }
+                }
+                $eligible = (count($dbParameters) > 0 ? count($dbParameters) : 18) * 3;
+                if ($eligible > 0) {
+                    $totalSheetsScore += ($coachObtained / $eligible) * 100.0;
+                    $sheetsCount++;
+                }
             }
         }
 

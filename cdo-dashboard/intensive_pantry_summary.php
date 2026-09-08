@@ -33,7 +33,36 @@ $divisionName   = strtoupper($stnData['division_name'] ?? 'LUCKNOW - NER');
 $stationName    = ucfirst($stnData['station_name'] ?? 'Gorakhpur');
 $contractorName = $stnData['contractor_name'] ?? 'Prime Cleaning Services';
 
-// Fetch distinct report dates in selected month from mcc_intensive_pantry_report
+// 1. Fetch active parameters and subparameters from database (mcc_intensive_pantry_param & sub_param)
+$paramStmt = $pdo->prepare("
+    SELECT p.id AS param_id, p.parameter_name, sp.id AS sub_param_id, sp.sub_parameter_name 
+    FROM mcc_intensive_pantry_param p
+    JOIN mcc_intensive_pantry_sub_param sp ON p.id = sp.parameter_id
+    WHERE p.station_id = :p_station_id AND sp.station_id = :sp_station_id AND p.status = 'Active' AND sp.status = 'Active'
+    ORDER BY p.id ASC, sp.id ASC
+");
+$paramStmt->execute(['p_station_id' => $stationId, 'sp_station_id' => $stationId]);
+$paramRows = $paramStmt->fetchAll();
+
+$dbParameters = [];
+$snCounter = 1;
+foreach ($paramRows as $row) {
+    $pId = $row['param_id'];
+    if (!isset($dbParameters[$pId])) {
+        $dbParameters[$pId] = [
+            'sn' => $snCounter++,
+            'id' => $pId,
+            'desc' => $row['parameter_name'],
+            'subparts' => []
+        ];
+    }
+    $dbParameters[$pId]['subparts'][] = [
+        'id' => $row['sub_param_id'],
+        'slot' => $row['sub_parameter_name']
+    ];
+}
+
+// 2. Fetch distinct report dates in selected month from mcc_intensive_pantry_report
 $datesStmt = $pdo->prepare("
     SELECT DISTINCT report_date 
     FROM mcc_intensive_pantry_report 
@@ -47,10 +76,18 @@ $datesStmt->execute([
 ]);
 $activeDates = $datesStmt->fetchAll(PDO::FETCH_COLUMN);
 
-$scoresStmt = $pdo->prepare("
-    SELECT sub_parameter_id, coach_no, score_value, token_id
+$tokensStmt = $pdo->prepare("
+    SELECT DISTINCT token_id, train_no 
     FROM mcc_intensive_pantry_report
     WHERE station_id = :station_id AND report_date = :report_date
+    ORDER BY id ASC
+");
+
+$reportStmt = $pdo->prepare("
+    SELECT sub_parameter_id, coach_no, score_value, submitted_by 
+    FROM mcc_intensive_pantry_report
+    WHERE station_id = :station_id AND token_id = :token_id
+    ORDER BY id ASC
 ");
 
 $dailyRows = [];
@@ -59,35 +96,77 @@ $totalMonthlyPossible = 0;
 $totalMonthlyInspections = 0;
 
 foreach ($activeDates as $rDate) {
-    $scoresStmt->execute([
+    $tokensStmt->execute([
         'station_id'  => $stationId,
         'report_date' => $rDate
     ]);
-    $entries = $scoresStmt->fetchAll();
+    $tokensOnDate = $tokensStmt->fetchAll();
 
-    $tokensOnDate = [];
     $dateObtained = 0.0;
     $datePossible = 0;
+    $inspectionCount = count($tokensOnDate);
 
-    foreach ($entries as $sc) {
-        if (!empty($sc['token_id']) && !in_array($sc['token_id'], $tokensOnDate)) {
-            $tokensOnDate[] = $sc['token_id'];
+    foreach ($tokensOnDate as $tokenRow) {
+        $tokenId = $tokenRow['token_id'];
+        $reportStmt->execute(['station_id' => $stationId, 'token_id' => $tokenId]);
+        $scoreEntries = $reportStmt->fetchAll();
+
+        // Unique coaches
+        $uniqueCoaches = [];
+        foreach ($scoreEntries as $sc) {
+            if (!in_array($sc['coach_no'], $uniqueCoaches) && !empty($sc['coach_no'])) {
+                $uniqueCoaches[] = $sc['coach_no'];
+            }
+        }
+        if (empty($uniqueCoaches)) {
+            $uniqueCoaches = ['WGACCW 19208'];
         }
 
-        $val = $sc['score_value'];
-        if (is_numeric($val)) {
-            $dateObtained += floatval($val);
-            $datePossible += 3;
-        } else {
-            $v = strtolower(trim((string)$val));
-            if ($v === '3' || $v === 'vg' || $v === 'very good') { $dateObtained += 3; $datePossible += 3; }
-            elseif ($v === '2' || $v === 'sat' || $v === 'satisfactory' || $v === 'good') { $dateObtained += 2; $datePossible += 3; }
-            elseif ($v === '1' || $v === 'poor') { $dateObtained += 1; $datePossible += 3; }
-            elseif ($v === '0' || $v === 'not attended') { $dateObtained += 0; $datePossible += 3; }
+        // Map scoreMatrix[sub_parameter_id][coach_no]
+        $scoreMatrix = [];
+        foreach ($scoreEntries as $sc) {
+            $scoreMatrix[$sc['sub_parameter_id']][$sc['coach_no']] = $sc['score_value'];
+        }
+
+        // Evaluate marks per parent parameter for each coach
+        foreach ($uniqueCoaches as $cNo) {
+            $coachObtained = 0.0;
+            foreach ($dbParameters as $p) {
+                $itemObt = 0.0;
+                $itemPoss = 0;
+                foreach ($p['subparts'] as $sp) {
+                    $val = $scoreMatrix[$sp['id']][$cNo] ?? null;
+                    if ($val !== null && $val !== '' && $val !== 'X' && $val !== '-') {
+                        if (is_numeric($val)) {
+                            $itemObt += floatval($val);
+                            $itemPoss += 3;
+                        } elseif (strtoupper($val) === 'Y' || strtolower($val) === 'vg' || strtolower($val) === 'very good') {
+                            $itemObt += 3;
+                            $itemPoss += 3;
+                        } elseif (strtolower($val) === 'sat' || strtolower($val) === 'satisfactory' || strtolower($val) === 'good') {
+                            $itemObt += 2;
+                            $itemPoss += 3;
+                        } elseif (strtolower($val) === 'poor') {
+                            $itemObt += 1;
+                            $itemPoss += 3;
+                        } elseif (strtoupper($val) === 'N' || strtolower($val) === 'not attended') {
+                            $itemPoss += 3;
+                        }
+                    }
+                }
+                $subCount = count($p['subparts']);
+                if ($subCount > 1 && $itemPoss > 0) {
+                    $coachObtained += round(($itemObt / $itemPoss) * 3.0, 1);
+                } else {
+                    $coachObtained += ($itemPoss > 0) ? $itemObt : 3.0;
+                }
+            }
+            $eligible = (count($dbParameters) > 0 ? count($dbParameters) : 18) * 3;
+            $dateObtained += $coachObtained;
+            $datePossible += $eligible;
         }
     }
 
-    $inspectionCount = count($tokensOnDate);
     if ($inspectionCount === 0) {
         $inspectionCount = 1;
     }

@@ -84,7 +84,7 @@ $tokensStmt = $pdo->prepare("
 ");
 
 $reportStmt = $pdo->prepare("
-    SELECT sub_parameter_id, coach_no, score_value, submitted_by 
+    SELECT sub_parameter_id, coach_no, score_value, auditor_name 
     FROM mcc_intensive_pantry_report
     WHERE station_id = :station_id AND token_id = :token_id
     ORDER BY id ASC

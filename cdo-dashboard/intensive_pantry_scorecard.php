@@ -197,7 +197,9 @@ if (!empty($inspectionTokens)) {
             ];
         }
 
-        $overallPercent = count($coachSummary) > 0 ? round(array_sum(array_column($coachSummary, 'obtained')) / (count($coachSummary) * 54) * 100, 2) . '%' : '98.50%';
+        $totalParamMarks = count($dbParameters) * 3;
+        $totalEligible = count($coachSummary) * ($totalParamMarks > 0 ? $totalParamMarks : 54);
+        $overallPercent = $totalEligible > 0 ? round(array_sum(array_column($coachSummary, 'obtained')) / $totalEligible * 100, 2) . '%' : '100%';
 
         $sheetsData[] = [
             'token_id' => $tokenRow['token_id'],

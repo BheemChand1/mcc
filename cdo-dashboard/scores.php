@@ -929,9 +929,14 @@ function getIntensiveCleaning2Score($stationId, $year, $month) {
             foreach ($entries as $val) {
                 if ($val !== '' && $val !== 'X' && $val !== '-') {
                     if (is_numeric($val)) {
-                        $obtained += intval($val);
+                        $obtained += floatval($val);
+                        $possible += 3;
+                    } elseif (strtoupper($val) === 'Y') {
+                        $obtained += 3;
+                        $possible += 3;
+                    } elseif (strtoupper($val) === 'N') {
+                        $possible += 3;
                     }
-                    $possible++;
                 }
             }
 
@@ -987,9 +992,14 @@ function getIntensivePantryScore($stationId, $year, $month) {
             foreach ($entries as $val) {
                 if ($val !== '' && $val !== 'X' && $val !== '-') {
                     if (is_numeric($val)) {
-                        $obtained += intval($val);
+                        $obtained += floatval($val);
+                        $possible += 3;
+                    } elseif (strtoupper($val) === 'Y') {
+                        $obtained += 3;
+                        $possible += 3;
+                    } elseif (strtoupper($val) === 'N') {
+                        $possible += 3;
                     }
-                    $possible++;
                 }
             }
 

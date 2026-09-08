@@ -313,8 +313,8 @@ $topTrains = array_slice($topTrains, 0, 5);
 // eight-row live operations board).
 $summarySources = [
     'normal'    => ['table' => 'mcc_normal_scorecard_report',      'score' => 'score_value', 'maximum' => 3],
-    'intensive' => ['table' => 'mcc_intensive_scorecard_2_report', 'score' => 'score_value', 'maximum' => 1],
-    'pantry'    => ['table' => 'mcc_intensive_pantry_report',      'score' => 'score_value', 'maximum' => 1],
+    'intensive' => ['table' => 'mcc_intensive_scorecard_2_report', 'score' => 'score_value', 'maximum' => 3],
+    'pantry'    => ['table' => 'mcc_intensive_pantry_report',      'score' => 'score_value', 'maximum' => 3],
     'dc'        => ['table' => 'dc_mcc_report',                    'score' => 'rating',      'maximum' => 3],
     'vande'     => ['table' => 'mcc_vb_scorecard_report',          'score' => 'score_value', 'maximum' => 3],
     'prt'       => ['table' => 'mcc_prt_scorecard_report',         'score' => 'score_value', 'maximum' => 3],

@@ -67,9 +67,14 @@ foreach ($tokens as $t) {
             $val = $row['score_value'];
             if ($val !== '' && $val !== 'X' && $val !== '-') {
                 if (is_numeric($val)) {
-                    $totalObtained += intval($val);
+                    $totalObtained += floatval($val);
+                    $totalPossible += 3;
+                } elseif (strtoupper($val) === 'Y') {
+                    $totalObtained += 3;
+                    $totalPossible += 3;
+                } elseif (strtoupper($val) === 'N') {
+                    $totalPossible += 3;
                 }
-                $totalPossible++;
             }
         }
     }

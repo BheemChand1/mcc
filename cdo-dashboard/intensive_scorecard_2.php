@@ -141,8 +141,14 @@ if (!empty($inspectionTokens)) {
                         if (is_numeric($val)) {
                             $ts += intval($val);
                             $totalObtained += intval($val);
+                            $totalPossible += 3;
+                        } elseif (strtoupper($val) === 'Y') {
+                            $ts += 3;
+                            $totalObtained += 3;
+                            $totalPossible += 3;
+                        } elseif (strtoupper($val) === 'N') {
+                            $totalPossible += 3;
                         }
-                        $totalPossible++;
                     }
                 }
                 $subData[] = [
@@ -200,11 +206,11 @@ if (!empty($inspectionTokens)) {
             $ts = 0;
             for ($c = 0; $c < 24; $c++) {
                 if ($c < 19) {
-                    $val = '1';
+                    $val = '3';
                     $vals[] = $val;
-                    $ts += 1;
-                    $totalObtained += 1;
-                    $totalPossible += 1;
+                    $ts += 3;
+                    $totalObtained += 3;
+                    $totalPossible += 3;
                 } else {
                     $vals[] = '';
                 }
@@ -222,6 +228,8 @@ if (!empty($inspectionTokens)) {
         ];
     }
 
+    $fallbackScore = $totalPossible > 0 ? round(($totalObtained / $totalPossible) * 100, 2) . '%' : '98.50%';
+
     $sheetsData[] = [
         'page_no' => '54',
         'annexure' => 'ANNEXURE A-2',
@@ -232,7 +240,7 @@ if (!empty($inspectionTokens)) {
         'date' => date('d-m-Y', strtotime($toDate)),
         'total_coaches' => '19',
         'attended_coaches' => '19',
-        'total_score_percent' => '98.50%',
+        'total_score_percent' => $fallbackScore,
         'supervisor_name' => 'prabhunath',
         'division' => $divisionName,
         'station' => $stationName,

@@ -353,20 +353,27 @@ include 'sidebar.php';
                         <table class="report-table">
                             <thead>
                                 <tr>
-                                    <th style="width: 50px;">S.No</th>
-                                    <th style="width: 150px;">Machine ID</th>
-                                    <th style="text-align: left; padding-left: 15px;">Machine Name</th>
-                                    <th style="width: 140px;">Penalty Amount (₹)</th>
-                                    <?php foreach ($shiftsList as $shift): ?>
-                                        <th style="width: 120px;"><?= htmlspecialchars($shift['shift_name']) ?> Area</th>
-                                    <?php endforeach; ?>
+                                    <th rowspan="2" style="width: 50px;">S.No</th>
+                                    <th rowspan="2" style="width: 130px;">Machine No</th>
+                                    <th rowspan="2" style="text-align: left; padding-left: 15px;">Name of Machines</th>
+                                    <th rowspan="2" style="width: 130px;">Penalty</th>
+                                    <th colspan="<?= max(1, count($shiftsList)) ?>">Nominated Work Area for Each Machine</th>
+                                </tr>
+                                <tr>
+                                    <?php if (empty($shiftsList)): ?>
+                                        <th style="width: 100px;">Shifts</th>
+                                    <?php else: ?>
+                                        <?php foreach ($shiftsList as $shift): ?>
+                                            <th style="width: 100px;"><?= htmlspecialchars($shift['shift_name']) ?></th>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if (empty($machinesList)): ?>
                                     <tr>
                                         <td colspan="<?= 4 + count($shiftsList) ?>" class="text-center py-4 text-muted">
-                                            No machines parameter configuration registered.
+                                            No machines registered for this station.
                                         </td>
                                     </tr>
                                 <?php else: ?>
@@ -374,35 +381,40 @@ include 'sidebar.php';
                                     $serial = 1;
                                     foreach ($machinesList as $mach): 
                                         $mId = $mach['machine_id'];
-                                        // Pick the penalty amount from any of the shifts for this machine (assumed uniform)
-                                        $penaltyVal = 0.00;
-                                        foreach ($shiftsList as $shift) {
-                                            $sId = $shift['shift_id'];
-                                            if (isset($existingTargets[$mId][$sId]['penalty_amount'])) {
-                                                $penaltyVal = floatval($existingTargets[$mId][$sId]['penalty_amount']);
-                                                break;
-                                            }
+                                        // Pick the penalty amount from first shift or default empty
+                                        $firstShiftId = !empty($shiftsList) ? $shiftsList[0]['shift_id'] : 0;
+                                        $penaltyVal = isset($existingTargets[$mId][$firstShiftId]['penalty_amount']) 
+                                            ? floatval($existingTargets[$mId][$firstShiftId]['penalty_amount']) 
+                                            : '';
+                                        
+                                        if ($penaltyVal !== '' && $penaltyVal == intval($penaltyVal)) {
+                                            $penaltyVal = intval($penaltyVal);
                                         }
                                     ?>
                                         <tr>
                                             <td class="text-center font-weight-bold"><?= $serial++ ?></td>
-                                            <td class="text-center font-weight-bold"><?= htmlspecialchars($mach['machine_no']) ?></td>
+                                            <td class="text-center"><strong><?= htmlspecialchars($mach['machine_no']) ?></strong></td>
                                             <td class="text-left"><?= htmlspecialchars($mach['machine_name']) ?></td>
                                             <td class="text-center">
-                                                <input type="number" step="0.01" min="0" name="penalty[<?= $mId ?>]" 
-                                                       value="<?= number_format($penaltyVal, 2, '.', '') ?>" class="penalty-input form-control form-control-sm">
+                                                <input type="number" step="1" min="0" name="penalty[<?= $mId ?>]" 
+                                                       value="<?= htmlspecialchars($penaltyVal) ?>" 
+                                                       class="penalty-input" required placeholder="0">
                                             </td>
-                                            <?php foreach ($shiftsList as $shift): 
-                                                $sId = $shift['shift_id'];
-                                                $nom = $existingTargets[$mId][$sId]['nominated_area'] ?? 'N';
-                                            ?>
-                                                <td class="text-center">
-                                                    <select name="nomination[<?= $mId ?>][<?= $sId ?>]" class="nomination-select form-select form-select-sm">
-                                                        <option value="Y" <?= $nom === 'Y' ? 'selected' : '' ?>>Y</option>
-                                                        <option value="N" <?= $nom === 'N' ? 'selected' : '' ?>>N</option>
-                                                    </select>
-                                                </td>
-                                            <?php endforeach; ?>
+                                            <?php if (empty($shiftsList)): ?>
+                                                <td class="text-center">-</td>
+                                            <?php else: ?>
+                                                <?php foreach ($shiftsList as $shift): 
+                                                    $sId = $shift['shift_id'];
+                                                    $nom = $existingTargets[$mId][$sId]['nominated_area'] ?? 'Y';
+                                                ?>
+                                                    <td class="text-center">
+                                                        <select name="nomination[<?= $mId ?>][<?= $sId ?>]" class="nomination-select">
+                                                            <option value="Y" <?= $nom === 'Y' ? 'selected' : '' ?>>Y</option>
+                                                            <option value="N" <?= $nom === 'N' ? 'selected' : '' ?>>N</option>
+                                                        </select>
+                                                    </td>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
                                         </tr>
                                     <?php endforeach; ?>
                                 <?php endif; ?>

@@ -6,6 +6,7 @@ header("Access-Control-Max-Age: 3600");
 header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
 
 require_once __DIR__ . '/../../../connection.php';
+require_once __DIR__ . '/../../datetime_logic/railway_date.php';
 global $pdo;
 
 // Get posted data (JSON or standard POST)
@@ -16,7 +17,8 @@ if (empty($data)) {
 
 $trainNo     = isset($data['train_no']) ? trim($data['train_no']) : (isset($data['train_number']) ? trim($data['train_number']) : null);
 $stationId   = isset($data['station_id']) && intval($data['station_id']) > 0 ? intval($data['station_id']) : 1;
-$reportDate  = isset($data['date']) ? trim($data['date']) : (isset($data['report_date']) ? trim($data['report_date']) : date('Y-m-d'));
+$explicitDate = $data['report_date'] ?? ($data['date'] ?? null);
+$reportDate  = getRailwayOperatingDate($explicitDate);
 $auditorName = isset($data['auditor_name']) ? trim($data['auditor_name']) : (isset($data['submitted_by']) ? trim($data['submitted_by']) : 'prabhunath');
 
 // Support coach_no (single, array, or comma-separated) or coach_nos

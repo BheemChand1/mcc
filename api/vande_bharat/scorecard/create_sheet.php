@@ -6,6 +6,7 @@ header("Access-Control-Max-Age: 3600");
 header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
 
 require_once '../../../connection.php';
+require_once __DIR__ . '/../../datetime_logic/railway_date.php';
 global $pdo;
 
 // Get posted data
@@ -19,7 +20,8 @@ if (empty($data)) {
 $auditorName = $data['auditor_name'] ?? null;
 $trainNo = $data['train_no'] ?? null;
 $stationId = isset($data['station_id']) ? intval($data['station_id']) : 1;
-$reportDate = date('Y-m-d');
+$explicitDate = $data['report_date'] ?? ($data['date'] ?? null);
+$reportDate = getRailwayOperatingDate($explicitDate);
 $coachNos = $data['coach_nos'] ?? null; // Expect array of coach numbers or comma-separated string
 
 if (empty($auditorName) || empty($trainNo) || empty($coachNos)) {

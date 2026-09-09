@@ -6,6 +6,7 @@ header("Access-Control-Max-Age: 3600");
 header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
 
 require_once '../../../connection.php';
+require_once __DIR__ . '/../../datetime_logic/railway_date.php';
 global $pdo;
 
 // Get posted data
@@ -17,7 +18,8 @@ if (empty($data)) {
 $auditorName = $data['auditor_name'] ?? null;
 $shiftId = isset($data['shift_id']) ? intval($data['shift_id']) : null;
 $stationId = isset($data['station_id']) ? intval($data['station_id']) : 1;
-$reportDate = $data['date'] ?? date('Y-m-d');
+$explicitDate = $data['date'] ?? ($data['report_date'] ?? null);
+$reportDate = getRailwayOperatingDate($explicitDate);
 $values = $data['values'] ?? null;
 
 if (empty($auditorName) || $shiftId === null || empty($values) || !is_array($values)) {

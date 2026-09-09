@@ -6,6 +6,7 @@ header("Access-Control-Max-Age: 3600");
 header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
 
 require_once '../../../connection.php';
+require_once __DIR__ . '/../../datetime_logic/railway_date.php';
 global $pdo;
 
 // Get posted data
@@ -18,16 +19,15 @@ if (empty($data)) {
 
 $stationId = isset($data['station_id']) ? intval($data['station_id']) : null;
 $shiftId = isset($data['shift_id']) ? intval($data['shift_id']) : null;
-$reportDate = $data['date'] ?? null;
+$explicitDate = $data['date'] ?? ($data['report_date'] ?? null);
 $tokenId = $data['token_id'] ?? null;
 
-if (empty($reportDate)) {
-    // Attempt to extract YYYYMMDD date from token_id (e.g. TKN-MCH-20260827-4-7214)
-    if (!empty($tokenId) && preg_match('/(\d{4})(\d{2})(\d{2})/', $tokenId, $matches)) {
-        $reportDate = $matches[1] . '-' . $matches[2] . '-' . $matches[3];
-    } else {
-        $reportDate = date('Y-m-d');
-    }
+if (!empty($explicitDate)) {
+    $reportDate = getRailwayOperatingDate($explicitDate);
+} else if (!empty($tokenId) && preg_match('/(\d{4})(\d{2})(\d{2})/', $tokenId, $matches)) {
+    $reportDate = $matches[1] . '-' . $matches[2] . '-' . $matches[3];
+} else {
+    $reportDate = getRailwayOperatingDate();
 }
 
 $auditorName = $data['auditor_name'] ?? $data['submitted_by'] ?? null;

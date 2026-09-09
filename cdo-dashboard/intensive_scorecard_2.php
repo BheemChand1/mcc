@@ -314,7 +314,7 @@ $extraStyles = "
 
 .meta-grid {
     display: grid;
-    grid-template-columns: 1.1fr 1fr 1.3fr 1.1fr;
+    grid-template-columns: 1.1fr 1fr 1.1fr 1.3fr;
     row-gap: 10px;
     column-gap: 22px;
     align-items: center;
@@ -714,9 +714,13 @@ include 'sidebar.php';
                                     <span class="meta-label">Division:</span>
                                     <span class="meta-val"><?= htmlspecialchars($sheet['division']) ?></span>
                                 </div>
-                                <div class="meta-item" style="grid-column: span 2;">
+                                <div class="meta-item">
                                     <span class="meta-label">Station / Depot:</span>
                                     <span class="meta-val"><?= htmlspecialchars($sheet['station']) ?></span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Name of Contractor:</span>
+                                    <span class="meta-val"><?= htmlspecialchars($sheet['contractor']) ?></span>
                                 </div>
                             </div>
                         </div>

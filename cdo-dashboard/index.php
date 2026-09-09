@@ -51,7 +51,7 @@ $categories = [
     'normal'    => ['label' => 'Normal Cleaning',    'short' => 'Normal',       'table' => 'mcc_normal_scorecard_report',      'color' => '#2f8bff', 'icon' => 'bi-bus-front-fill'],
     'intensive' => ['label' => 'Intensive Cleaning', 'short' => 'Intensive',    'table' => 'mcc_intensive_scorecard_2_report', 'color' => '#a55eea', 'icon' => 'bi-droplet-fill'],
     'pantry'    => ['label' => 'Pantry Car',         'short' => 'Pantry Car',   'table' => 'mcc_intensive_pantry_report',      'color' => '#22e07c', 'icon' => 'bi-egg-fried'],
-    'prt'       => ['label' => 'PRT Trains',         'short' => 'PRT',          'table' => 'mcc_prt_scorecard_report',         'color' => '#ffaa2b', 'icon' => 'bi-person-workspace'],
+    'prt'       => ['label' => 'PFTA Trains',        'short' => 'PFTA',         'table' => 'mcc_prt_scorecard_report',         'color' => '#ffaa2b', 'icon' => 'bi-person-workspace'],
     'vande'     => ['label' => 'Vande Bharat',       'short' => 'Vande Bharat', 'table' => 'mcc_vb_scorecard_report',          'color' => '#22d3ee', 'icon' => 'bi-train-front-fill'],
 ];
 

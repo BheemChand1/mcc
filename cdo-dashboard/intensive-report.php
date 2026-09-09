@@ -10,10 +10,12 @@ $stationId = $_SESSION['station_id'] ?? 1;
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
 
-// Fetch the current station's name for meta info
-$stationQuery = $pdo->prepare("SELECT station_name FROM mcc_stations WHERE station_id = :station_id");
+// Fetch the current station's name & contractor for meta info
+$stationQuery = $pdo->prepare("SELECT station_name, contractor_name FROM mcc_stations WHERE station_id = :station_id");
 $stationQuery->execute(['station_id' => $stationId]);
-$stationName = $stationQuery->fetchColumn() ?: 'Lumdhing';
+$stnData = $stationQuery->fetch(PDO::FETCH_ASSOC);
+$stationName = $stnData['station_name'] ?? 'Lumdhing';
+$contractorName = !empty($stnData['contractor_name']) ? $stnData['contractor_name'] : 'Kingson Services';
 
 // Fetch distinct tokens/trains in this date range for intensive report
 $stmt = $pdo->prepare("
@@ -435,7 +437,7 @@ include 'sidebar.php';
                                 </div>
                                 <div class="meta-item">
                                     <span>Name of Contractor:</span>
-                                    Kingson
+                                    <?= htmlspecialchars($contractorName) ?>
                                 </div>
                                 <div class="meta-item">
                                     <span>Time Work Started:</span>

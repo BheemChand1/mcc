@@ -87,7 +87,15 @@ $page_report_mapping = [
     'vande-bharat-machine-summary.php' => 'vb_mach',
     
     'cleanliness.php' => 'cleanliness',
-    'photo-report.php' => 'photo_report'
+    'photo-report.php' => 'photo_report',
+    'man-power-log.php' => 'manpower',
+    'manpower-target.php' => 'manpower',
+    'manpower-penalty.php' => 'manpower',
+    'manpower-summary.php' => 'manpower',
+    'biometeric_manpower_log.php' => 'manpower',
+    'biometric-target.php' => 'manpower',
+    'biometric-penalty.php' => 'manpower',
+    'biometric-summary.php' => 'manpower'
 ];
 
 $currentPage = basename($_SERVER['PHP_SELF']);

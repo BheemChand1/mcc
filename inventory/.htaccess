@@ -1,0 +1,7 @@
+Options -Indexes
+DirectoryIndex index.php
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(src|database|storage|tests)(/|$) - [F,L]
+    RewriteRule ^(router\.php|README\.md|\.gitignore)$ - [F,L]
+</IfModule>

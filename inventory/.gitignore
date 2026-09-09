@@ -1,0 +1,4 @@
+/storage/*
+!/storage/.htaccess
+/tests/artifacts/
+node_modules/

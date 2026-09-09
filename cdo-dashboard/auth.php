@@ -26,9 +26,9 @@ $stationStmt = $pdo->prepare("
 $stationStmt->execute(['station_id' => $stationId]);
 $stationDetails = $stationStmt->fetch();
 
-$railwayName = strtoupper($stationDetails['zone_name'] ?? 'SOUTH CENTRAL RAILWAY');
-$divisionName = strtoupper($stationDetails['division_name'] ?? 'LMG');
-$stationName = ucfirst($stationDetails['station_name'] ?? 'Lumding');
+$railwayName = strtoupper($stationDetails['zone_name'] ?? 'SOUTH WESTERN RAILWAY');
+$divisionName = strtoupper($stationDetails['division_name'] ?? 'MYSORE');
+$stationName = ucfirst($stationDetails['station_name'] ?? 'Mysore');
 $contractorName = $stationDetails['contractor_name'] ?? 'Kingson Services';
 
 $userRole = strtoupper($_SESSION['role'] ?? 'CDO');

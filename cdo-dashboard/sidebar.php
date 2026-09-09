@@ -279,6 +279,7 @@ $subreport_names[19] = $subreport_names[19] ?? 'Man Power Log';
 $subreport_names[20] = $subreport_names[20] ?? 'Cleanliness Scorecard';
 $subreport_names[21] = $subreport_names[21] ?? 'Photo Report (Before/After)';
 $subreport_names[25] = $subreport_names[25] ?? 'Billing Invoice';
+$subreport_names[26] = $subreport_names[26] ?? 'Bio Metric';
 
 // Access mapping helper variables
 $has_normal_audit = in_array('normal-report.php', $active_subreport_urls);
@@ -315,7 +316,9 @@ $has_vb_chem      = in_array('vande-bharat-chemical.php', $active_subreport_urls
 $has_vb_mach      = in_array('vande-bharat-machine.php', $active_subreport_urls);
 $has_vb_any       = in_array(7, $active_report_ids) && ($has_vb_audit || $has_vb_chem || $has_vb_mach);
 
-$has_manpower     = in_array(8, $active_report_ids) && in_array('man-power-log.php', $active_subreport_urls);
+$has_manpower_log = in_array(8, $active_report_ids) && in_array('man-power-log.php', $active_subreport_urls);
+$has_biometric    = in_array(8, $active_report_ids) && in_array('biometeric_manpower_log.php', $active_subreport_urls);
+$has_manpower     = in_array(8, $active_report_ids) && ($has_manpower_log || $has_biometric);
 $has_cleanliness  = in_array(9, $active_report_ids) && in_array('cleanliness.php', $active_subreport_urls);
 $has_photo_report = in_array(10, $active_report_ids) && in_array('photo-report.php', $active_subreport_urls);
 $has_billing      = in_array(11, $active_report_ids) && in_array('Billing.php', $active_subreport_urls);
@@ -647,7 +650,7 @@ $has_billing      = in_array(11, $active_report_ids) && in_array('Billing.php', 
         <!-- Attendance Dropdown -->
         <?php if ($has_manpower): ?>
         <?php 
-        $attendancePages = ['man-power-log.php', 'attendance-report.php'];
+        $attendancePages = ['man-power-log.php', 'biometeric_manpower_log.php', 'attendance-report.php'];
         $isAttendanceActive = in_array($currentPage, $attendancePages);
         ?>
         <li class="nav-item <?= $isAttendanceActive ? 'menu-open' : '' ?>">
@@ -659,11 +662,20 @@ $has_billing      = in_array(11, $active_report_ids) && in_array('Billing.php', 
             </p>
           </a>
           <ul class="nav nav-treeview ms-3">
+            <?php if ($has_manpower_log): ?>
             <li class="nav-item">
               <a href="man-power-log.php" class="nav-link <?= ($currentPage == 'man-power-log.php') ? 'active' : '' ?>">
-                <p><?= htmlspecialchars($subreport_names[19]) ?></p>
+                <p><?= htmlspecialchars($subreport_names[19] ?? 'Man Power Log') ?></p>
               </a>
             </li>
+            <?php endif; ?>
+            <?php if ($has_biometric): ?>
+            <li class="nav-item">
+              <a href="biometeric_manpower_log.php" class="nav-link <?= ($currentPage == 'biometeric_manpower_log.php') ? 'active' : '' ?>">
+                <p><?= htmlspecialchars($subreport_names[26] ?? 'Bio Metric') ?></p>
+              </a>
+            </li>
+            <?php endif; ?>
           </ul>
         </li>
         <?php endif; ?>

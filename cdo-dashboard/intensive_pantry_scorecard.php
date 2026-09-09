@@ -829,6 +829,10 @@ include 'sidebar.php';
                                     <span class="meta-label">Station / Depot:</span>
                                     <span class="meta-val"><?= htmlspecialchars($sheet['station']) ?></span>
                                 </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Name of Contractor:</span>
+                                    <span class="meta-val"><?= htmlspecialchars($sheet['contractor']) ?></span>
+                                </div>
                             </div>
                         </div>
 

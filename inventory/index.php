@@ -59,7 +59,7 @@ $escape = static fn (string $text): string => htmlspecialchars($text, ENT_QUOTES
 <div class="app-main">
     <header class="topbar">
         <div class="topbar-left"><button class="icon-button menu-button" id="menuToggle" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar"><svg><use href="#i-menu"/></svg></button><span class="breadcrumb">Operations <span>/</span> <strong>Inventory</strong></span></div>
-        <div class="topbar-right"><span class="station"><span class="live-dot"></span><?= $escape($inventoryStationName) ?></span><span class="top-separator"></span><button class="icon-button" id="helpButton" aria-label="How to use inventory"><svg><use href="#i-info"/></svg></button><button class="icon-button" id="themeToggle" aria-label="Toggle light or dark theme"><svg><use href="#i-sun"/></svg></button></div>
+        <div class="topbar-right"><span class="station"><span class="live-dot"></span><?= $escape($inventoryStationName) ?></span><span class="top-separator"></span><button class="icon-button" id="helpButton" aria-label="How to use inventory"></button><button class="icon-button" id="themeToggle" aria-label="Toggle light or dark theme"><svg><use href="#i-sun"/></svg></button></div>
     </header>
     <main class="content">
         <div class="page-heading"><div><div class="eyebrow accent">MATERIALS &amp; CHEMICALS</div><h1>Inventory management</h1><p>Keep your stores in balance. One day at a time.</p></div><div class="heading-actions"><span class="today-label" id="todayLabel"></span><?php if ($inventoryCanWrite): ?><button class="button button-primary" id="addMaterial"><svg><use href="#i-plus"/></svg>Add material</button><?php endif; ?></div></div>

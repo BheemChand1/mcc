@@ -11,6 +11,13 @@ define('DB_USER', 'mccbeatleanalyti_user');
 define('DB_PASS', 'Cee;[+&e$a+9rAXe');
 define('DB_NAME', 'mccbeatleanalyti_db');
 
+
+//Datebase credentials for local testing
+// define('DB_HOST', 'localhost');
+// define('DB_USER', 'root');
+// define('DB_PASS', '');    
+// define('DB_NAME', 'mcc');
+
 // -----------------------------------------------------------------------------
 // 1. MySQLi Connection (Standard/Procedural & Object-Oriented support)
 // -----------------------------------------------------------------------------

@@ -716,6 +716,17 @@ $has_billing      = in_array(11, $active_report_ids) && in_array('Billing.php', 
           </a>
         </li>
 
+        <!-- Inventory Management -->
+        <li class="nav-item">
+          <a href="../inventory" target="_blank" class="nav-link">
+            <i class="nav-icon bi bi-box-seam"></i>
+            <p>
+              Inventory
+              <i class="nav-arrow bi bi-box-arrow-up-right"></i>
+            </p>
+          </a>
+        </li>
+
         <?php if ($has_billing): ?>
         <li class="nav-item">
           <a href="Billing.php" class="nav-link <?= ($currentPage == 'Billing.php') ? 'active' : '' ?>">

@@ -84,46 +84,16 @@ foreach ($rawLogs as $log) {
     $empName = !empty($log['employee_name']) ? trim($log['employee_name']) : $empCode;
     $devName = strtolower(trim((string)$log['device_name']));
 
-    // Determine Category: 'vb', 'prt', or 'depot'
-    if (strpos($devName, 'vande') !== false || strpos($devName, 'vb') !== false) {
-        $category = 'vb';
-    } elseif (strpos($devName, 'prt') !== false || strpos($devName, 'platform') !== false) {
-        $category = 'prt';
-    } else {
+    // Determine Category: 'depot' or 'prt'
+    if (strpos($devName, 'coaching') !== false || strpos($devName, 'depot') !== false) {
         $category = 'depot';
+    } else {
+        $category = 'prt';
     }
 
     $groupKey = $cycleDate . '_' . $shift . '_' . $empCode;
 
-    if ($category === 'vb') {
-        if (!isset($vbRecords[$groupKey])) {
-            $vbRecords[$groupKey] = [
-                'cycle_date' => $cycleDate,
-                'shift' => $shift,
-                'employee_code' => $empCode,
-                'employee_name' => $empName,
-                'punches' => []
-            ];
-        }
-        $vbRecords[$groupKey]['punches'][] = [
-            'time' => $log['punch_time'],
-            'direction' => $log['direction']
-        ];
-    } elseif ($category === 'prt') {
-        if (!isset($prtRecords[$groupKey])) {
-            $prtRecords[$groupKey] = [
-                'cycle_date' => $cycleDate,
-                'shift' => $shift,
-                'employee_code' => $empCode,
-                'employee_name' => $empName,
-                'punches' => []
-            ];
-        }
-        $prtRecords[$groupKey]['punches'][] = [
-            'time' => $log['punch_time'],
-            'direction' => $log['direction']
-        ];
-    } else {
+    if ($category === 'depot') {
         if (!isset($depotRecords[$groupKey])) {
             $depotRecords[$groupKey] = [
                 'cycle_date' => $cycleDate,
@@ -134,6 +104,20 @@ foreach ($rawLogs as $log) {
             ];
         }
         $depotRecords[$groupKey]['punches'][] = [
+            'time' => $log['punch_time'],
+            'direction' => $log['direction']
+        ];
+    } else {
+        if (!isset($prtRecords[$groupKey])) {
+            $prtRecords[$groupKey] = [
+                'cycle_date' => $cycleDate,
+                'shift' => $shift,
+                'employee_code' => $empCode,
+                'employee_name' => $empName,
+                'punches' => []
+            ];
+        }
+        $prtRecords[$groupKey]['punches'][] = [
             'time' => $log['punch_time'],
             'direction' => $log['direction']
         ];
@@ -173,7 +157,9 @@ function processShiftRecords($records) {
 
         $loginDisplay = date('H:i:s', strtotime($loginTime));
         $logoutDisplay = $logoutTime ? date('H:i:s', strtotime($logoutTime)) : '-';
+        $loginDateDisplay = date('d-m-Y', strtotime($loginTime));
 
+        $diffSeconds = 0;
         // Calculate total shift hours
         if ($logoutTime && strtotime($logoutTime) > strtotime($loginTime)) {
             $diffSeconds = strtotime($logoutTime) - strtotime($loginTime);
@@ -189,13 +175,14 @@ function processShiftRecords($records) {
 
         $rows[] = [
             'cycle_date' => $item['cycle_date'],
-            'date_display' => date('d-m-Y', strtotime($item['cycle_date'])),
+            'date_display' => $loginDateDisplay,
             'shift' => $item['shift'],
             'employee_code' => $item['employee_code'],
             'employee_name' => $item['employee_name'],
             'login' => $loginDisplay,
             'logout' => $logoutDisplay,
             'hours' => $durationStr,
+            'diff_seconds' => $diffSeconds,
             'login_ts' => strtotime($loginTime)
         ];
     }
@@ -215,8 +202,33 @@ function processShiftRecords($records) {
 }
 
 $depotData = processShiftRecords($depotRecords);
-$prtData = processShiftRecords($prtRecords);
-$vbData = processShiftRecords($vbRecords);
+$allPrtProcessed = processShiftRecords($prtRecords);
+
+// Vande Bharat: PRT attendance with total shift duration between 45 mins (2700s) and 1 hr 15 mins (4500s)
+$vbRows = array_values(array_filter($allPrtProcessed['rows'], function($r) {
+    return $r['diff_seconds'] >= 2700 && $r['diff_seconds'] <= 4500;
+}));
+$vbDistinct = [];
+foreach ($vbRows as $r) {
+    $vbDistinct[$r['employee_code']] = true;
+}
+$vbData = [
+    'rows' => $vbRows,
+    'total_present' => count($vbDistinct)
+];
+
+// Platform Return Trains: PRT attendance outside the 45m - 1h 15m window
+$prtRows = array_values(array_filter($allPrtProcessed['rows'], function($r) {
+    return !($r['diff_seconds'] >= 2700 && $r['diff_seconds'] <= 4500);
+}));
+$prtDistinct = [];
+foreach ($prtRows as $r) {
+    $prtDistinct[$r['employee_code']] = true;
+}
+$prtData = [
+    'rows' => $prtRows,
+    'total_present' => count($prtDistinct)
+];
 
 $targetManpower = 25; // Target per category
 $shiftLabels = [
@@ -224,6 +236,91 @@ $shiftLabels = [
     2 => 'Shift 2 (14:00 - 22:00)',
     3 => 'Shift 3 (22:00 - 06:00 Day 2)'
 ];
+
+// Build list of dates in selected range
+$datesInRange = [];
+$curTs = strtotime($selectedFromDate);
+$endTs = strtotime($selectedToDate);
+while ($curTs <= $endTs) {
+    $datesInRange[] = date('Y-m-d', $curTs);
+    $curTs = strtotime('+1 day', $curTs);
+}
+
+/**
+ * Render individual report cards (sheets) per date
+ */
+function renderReportSheets($datesInRange, $dataRows, $reportTitle, $railwayName, $divisionName, $stationName, $contractorName, $targetManpower, $shiftLabels, $emptyCategoryName) {
+    foreach ($datesInRange as $sheetDate) {
+        $sheetDateDisplay = date('d-m-Y', strtotime($sheetDate));
+        $sheetRows = array_filter($dataRows, function($r) use ($sheetDate) {
+            return $r['cycle_date'] === $sheetDate;
+        });
+        $sheetEmployees = [];
+        foreach ($sheetRows as $sr) {
+            $sheetEmployees[$sr['employee_code']] = true;
+        }
+        $sheetPresent = count($sheetEmployees);
+        ?>
+        <div class="report-card">
+          <div class="report-title"><?= htmlspecialchars($reportTitle) ?></div>
+          <div class="meta-grid">
+            <div class="meta"><strong>Railway:</strong> <?= htmlspecialchars($railwayName) ?></div>
+            <div class="meta"><strong>Date:</strong> <?= $sheetDateDisplay ?></div>
+            <div class="meta"><strong>Division:</strong> <?= htmlspecialchars($divisionName) ?></div>
+            <div class="meta"><strong>Coaching Depot:</strong> <?= htmlspecialchars($stationName) ?></div>
+            <div class="meta" style="grid-column:span 2"><strong>Contractor Name:</strong> <?= htmlspecialchars($contractorName) ?></div>
+            <div class="meta"><strong>Target Manpower:</strong> <?= $targetManpower ?></div>
+            <div class="meta"><strong>Total Present:</strong> <?= $sheetPresent ?></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>S.No</th>
+                  <th>Employee Name</th>
+                  <th>Employee ID</th>
+                  <th>Date</th>
+                  <th>Login Time</th>
+                  <th>Logout Time</th>
+                  <th>Total Shift Hours</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if (empty($sheetRows)): ?>
+                  <tr><td colspan="7" class="empty-data-row">No attendance records found for <?= htmlspecialchars($emptyCategoryName) ?> on <?= $sheetDateDisplay ?>.</td></tr>
+                <?php else: ?>
+                  <?php 
+                  $serial = 1;
+                  for ($s = 1; $s <= 3; $s++): 
+                      $shiftRows = array_filter($sheetRows, function($r) use ($s) { return $r['shift'] === $s; });
+                  ?>
+                    <tr class="shift-row">
+                      <td colspan="7"><?= $shiftLabels[$s] ?> &mdash; (<?= count($shiftRows) ?> Present)</td>
+                    </tr>
+                    <?php if (empty($shiftRows)): ?>
+                      <tr><td colspan="7" style="color:#888; font-style:italic;">No records for Shift <?= $s ?></td></tr>
+                    <?php else: ?>
+                      <?php foreach ($shiftRows as $row): ?>
+                        <tr>
+                          <td><?= $serial++ ?></td>
+                          <td class="name"><?= htmlspecialchars($row['employee_name']) ?></td>
+                          <td><?= htmlspecialchars($row['employee_code']) ?></td>
+                          <td><?= htmlspecialchars($row['date_display']) ?></td>
+                          <td><?= htmlspecialchars($row['login']) ?></td>
+                          <td><?= htmlspecialchars($row['logout']) ?></td>
+                          <td><?= htmlspecialchars($row['hours']) ?></td>
+                        </tr>
+                      <?php endforeach; ?>
+                    <?php endif; ?>
+                  <?php endfor; ?>
+                <?php endif; ?>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <?php
+    }
+}
 ?>
 
 <?php include 'header.php'; ?>
@@ -240,7 +337,8 @@ $shiftLabels = [
 .tabs{display:flex;gap:2px;margin:0 0 16px;padding:0 2px}
 .tab-btn{border:1px solid #0c527d;background:#eaf2f8;color:#0b3551;padding:12px 18px;font-weight:800;cursor:pointer;border-radius:8px 8px 0 0;font-size:14px;white-space:nowrap}
 .tab-btn.active{background:#062f50;color:#fff;border-color:#062f50}
-.report-card{background:#fff;border:1px solid #c7c7c7;padding:14px 10px 0}
+.report-card{background:#fff;border:1px solid #c7c7c7;padding:14px 10px 0;margin-bottom:25px;border-radius:6px}
+.report-card:last-child{margin-bottom:0}
 .report-title{text-align:center;font-size:23px;font-weight:800;margin:4px 0 22px}
 .meta-grid{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:13px 28px;max-width:1080px;margin:0 auto 18px;font-size:13px}
 .meta{display:flex;justify-content:center;gap:5px;white-space:nowrap}.meta strong{font-weight:800}
@@ -248,7 +346,16 @@ $shiftLabels = [
 .empty-data-row{padding:25px;font-weight:600;color:#666;font-style:italic}
 @media(max-width:1100px){.meta-grid{grid-template-columns:repeat(2,minmax(180px,1fr))}.datebox{width:210px}}
 @media(max-width:800px){.toolbar{padding:10px;gap:8px}.datebox{width:150px}.meta-grid{grid-template-columns:1fr}}
-@media print{.app-header,.app-sidebar,.app-footer,.toolbar,.tabs,.no-print{display:none!important}.app-main{margin:0!important;padding:0!important}.report-shell{border:none;padding:0;background:#fff}.report-panel{display:none!important}.report-panel.active{display:block!important}.report-card{border:none}.table-wrap{border:1px solid #000}}
+@media print{
+  .app-header,.app-sidebar,.app-footer,.toolbar,.tabs,.no-print{display:none!important}
+  .app-main{margin:0!important;padding:0!important}
+  .report-shell{border:none;padding:0;background:#fff}
+  .report-panel{display:none!important}
+  .report-panel.active{display:block!important}
+  .report-card{border:none;margin-bottom:20px;page-break-inside:avoid;page-break-after:always;break-after:page}
+  .report-card:last-child{page-break-after:avoid;break-after:avoid;margin-bottom:0}
+  .table-wrap{border:1px solid #000}
+}
 </style>
 
 <main class="app-main">
@@ -280,185 +387,17 @@ $shiftLabels = [
 
           <!-- Depot Panel -->
           <section id="depot" class="report-panel active">
-            <div class="report-card">
-              <div class="report-title">Manpower Report for Coaching Depot</div>
-              <div class="meta-grid">
-                <div class="meta"><strong>Railway:</strong> <?= htmlspecialchars($railwayName) ?></div>
-                <div class="meta"><strong>Date:</strong> <?= date('d-m-Y', strtotime($selectedFromDate)) . ($selectedFromDate !== $selectedToDate ? ' to ' . date('d-m-Y', strtotime($selectedToDate)) : '') ?></div>
-                <div class="meta"><strong>Division:</strong> <?= htmlspecialchars($divisionName) ?></div>
-                <div class="meta"><strong>Coaching Depot:</strong> <?= htmlspecialchars($stationName) ?></div>
-                <div class="meta" style="grid-column:span 2"><strong>Contractor Name:</strong> <?= htmlspecialchars($contractorName) ?></div>
-                <div class="meta"><strong>Target Manpower:</strong> <?= $targetManpower ?></div>
-                <div class="meta"><strong>Total Present:</strong> <?= $depotData['total_present'] ?></div>
-              </div>
-              <div class="table-wrap">
-                <table id="depotTable">
-                  <thead>
-                    <tr>
-                      <th>S.No</th>
-                      <th>Employee Name</th>
-                      <th>Employee ID</th>
-                      <th>Date</th>
-                      <th>Login Time</th>
-                      <th>Logout Time</th>
-                      <th>Total Shift Hours</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <?php if (empty($depotData['rows'])): ?>
-                      <tr><td colspan="7" class="empty-data-row">No attendance records found for Coaching Depot in selected date range.</td></tr>
-                    <?php else: ?>
-                      <?php 
-                      $depotSerial = 1;
-                      for ($s = 1; $s <= 3; $s++): 
-                          $shiftRows = array_filter($depotData['rows'], function($r) use ($s) { return $r['shift'] === $s; });
-                      ?>
-                        <tr class="shift-row">
-                          <td colspan="7"><?= $shiftLabels[$s] ?> &mdash; (<?= count($shiftRows) ?> Present)</td>
-                        </tr>
-                        <?php if (empty($shiftRows)): ?>
-                          <tr><td colspan="7" style="color:#888; font-style:italic;">No records for Shift <?= $s ?></td></tr>
-                        <?php else: ?>
-                          <?php foreach ($shiftRows as $row): ?>
-                            <tr>
-                              <td><?= $depotSerial++ ?></td>
-                              <td class="name"><?= htmlspecialchars($row['employee_name']) ?></td>
-                              <td><?= htmlspecialchars($row['employee_code']) ?></td>
-                              <td><?= htmlspecialchars($row['date_display']) ?></td>
-                              <td><?= htmlspecialchars($row['login']) ?></td>
-                              <td><?= htmlspecialchars($row['logout']) ?></td>
-                              <td><?= htmlspecialchars($row['hours']) ?></td>
-                            </tr>
-                          <?php endforeach; ?>
-                        <?php endif; ?>
-                      <?php endfor; ?>
-                    <?php endif; ?>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <?php renderReportSheets($datesInRange, $depotData['rows'], 'Manpower Report for Coaching Depot', $railwayName, $divisionName, $stationName, $contractorName, $targetManpower, $shiftLabels, 'Coaching Depot'); ?>
           </section>
 
           <!-- PRT Panel -->
           <section id="prt" class="report-panel">
-            <div class="report-card">
-              <div class="report-title">Manpower Report for Platform Return Trains</div>
-              <div class="meta-grid">
-                <div class="meta"><strong>Railway:</strong> <?= htmlspecialchars($railwayName) ?></div>
-                <div class="meta"><strong>Date:</strong> <?= date('d-m-Y', strtotime($selectedFromDate)) . ($selectedFromDate !== $selectedToDate ? ' to ' . date('d-m-Y', strtotime($selectedToDate)) : '') ?></div>
-                <div class="meta"><strong>Division:</strong> <?= htmlspecialchars($divisionName) ?></div>
-                <div class="meta"><strong>Coaching Depot:</strong> <?= htmlspecialchars($stationName) ?></div>
-                <div class="meta" style="grid-column:span 2"><strong>Contractor Name:</strong> <?= htmlspecialchars($contractorName) ?></div>
-                <div class="meta"><strong>Target Manpower:</strong> <?= $targetManpower ?></div>
-                <div class="meta"><strong>Total Present:</strong> <?= $prtData['total_present'] ?></div>
-              </div>
-              <div class="table-wrap">
-                <table id="prtTable">
-                  <thead>
-                    <tr>
-                      <th>S.No</th>
-                      <th>Employee Name</th>
-                      <th>Employee ID</th>
-                      <th>Date</th>
-                      <th>Login Time</th>
-                      <th>Logout Time</th>
-                      <th>Total Shift Hours</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <?php if (empty($prtData['rows'])): ?>
-                      <tr><td colspan="7" class="empty-data-row">No attendance records found for Platform Return Trains in selected date range.</td></tr>
-                    <?php else: ?>
-                      <?php 
-                      $prtSerial = 1;
-                      for ($s = 1; $s <= 3; $s++): 
-                          $shiftRows = array_filter($prtData['rows'], function($r) use ($s) { return $r['shift'] === $s; });
-                      ?>
-                        <tr class="shift-row">
-                          <td colspan="7"><?= $shiftLabels[$s] ?> &mdash; (<?= count($shiftRows) ?> Present)</td>
-                        </tr>
-                        <?php if (empty($shiftRows)): ?>
-                          <tr><td colspan="7" style="color:#888; font-style:italic;">No records for Shift <?= $s ?></td></tr>
-                        <?php else: ?>
-                          <?php foreach ($shiftRows as $row): ?>
-                            <tr>
-                              <td><?= $prtSerial++ ?></td>
-                              <td class="name"><?= htmlspecialchars($row['employee_name']) ?></td>
-                              <td><?= htmlspecialchars($row['employee_code']) ?></td>
-                              <td><?= htmlspecialchars($row['date_display']) ?></td>
-                              <td><?= htmlspecialchars($row['login']) ?></td>
-                              <td><?= htmlspecialchars($row['logout']) ?></td>
-                              <td><?= htmlspecialchars($row['hours']) ?></td>
-                            </tr>
-                          <?php endforeach; ?>
-                        <?php endif; ?>
-                      <?php endfor; ?>
-                    <?php endif; ?>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <?php renderReportSheets($datesInRange, $prtData['rows'], 'Manpower Report for Platform Return Trains', $railwayName, $divisionName, $stationName, $contractorName, $targetManpower, $shiftLabels, 'Platform Return Trains'); ?>
           </section>
 
           <!-- Vande Bharat Panel -->
           <section id="vb" class="report-panel">
-            <div class="report-card">
-              <div class="report-title">Manpower Report for Vande Bharat</div>
-              <div class="meta-grid">
-                <div class="meta"><strong>Railway:</strong> <?= htmlspecialchars($railwayName) ?></div>
-                <div class="meta"><strong>Date:</strong> <?= date('d-m-Y', strtotime($selectedFromDate)) . ($selectedFromDate !== $selectedToDate ? ' to ' . date('d-m-Y', strtotime($selectedToDate)) : '') ?></div>
-                <div class="meta"><strong>Division:</strong> <?= htmlspecialchars($divisionName) ?></div>
-                <div class="meta"><strong>Coaching Depot:</strong> <?= htmlspecialchars($stationName) ?></div>
-                <div class="meta" style="grid-column:span 2"><strong>Contractor Name:</strong> <?= htmlspecialchars($contractorName) ?></div>
-                <div class="meta"><strong>Target Manpower:</strong> <?= $targetManpower ?></div>
-                <div class="meta"><strong>Total Present:</strong> <?= $vbData['total_present'] ?></div>
-              </div>
-              <div class="table-wrap">
-                <table id="vbTable">
-                  <thead>
-                    <tr>
-                      <th>S.No</th>
-                      <th>Employee Name</th>
-                      <th>Employee ID</th>
-                      <th>Date</th>
-                      <th>Login Time</th>
-                      <th>Logout Time</th>
-                      <th>Total Shift Hours</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <?php if (empty($vbData['rows'])): ?>
-                      <tr><td colspan="7" class="empty-data-row">No attendance records found for Vande Bharat in selected date range.</td></tr>
-                    <?php else: ?>
-                      <?php 
-                      $vbSerial = 1;
-                      for ($s = 1; $s <= 3; $s++): 
-                          $shiftRows = array_filter($vbData['rows'], function($r) use ($s) { return $r['shift'] === $s; });
-                      ?>
-                        <tr class="shift-row">
-                          <td colspan="7"><?= $shiftLabels[$s] ?> &mdash; (<?= count($shiftRows) ?> Present)</td>
-                        </tr>
-                        <?php if (empty($shiftRows)): ?>
-                          <tr><td colspan="7" style="color:#888; font-style:italic;">No records for Shift <?= $s ?></td></tr>
-                        <?php else: ?>
-                          <?php foreach ($shiftRows as $row): ?>
-                            <tr>
-                              <td><?= $vbSerial++ ?></td>
-                              <td class="name"><?= htmlspecialchars($row['employee_name']) ?></td>
-                              <td><?= htmlspecialchars($row['employee_code']) ?></td>
-                              <td><?= htmlspecialchars($row['date_display']) ?></td>
-                              <td><?= htmlspecialchars($row['login']) ?></td>
-                              <td><?= htmlspecialchars($row['logout']) ?></td>
-                              <td><?= htmlspecialchars($row['hours']) ?></td>
-                            </tr>
-                          <?php endforeach; ?>
-                        <?php endif; ?>
-                      <?php endfor; ?>
-                    <?php endif; ?>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <?php renderReportSheets($datesInRange, $vbData['rows'], 'Manpower Report for Vande Bharat', $railwayName, $divisionName, $stationName, $contractorName, $targetManpower, $shiftLabels, 'Vande Bharat'); ?>
           </section>
         </div>
       </section>

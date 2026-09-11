@@ -27,9 +27,8 @@ if ($maxMarksTotal <= 0) {
 
 // Fetch all report entries in this month
 $reportsStmt = $pdo->prepare("
-    SELECT r.token_id, r.report_date, u.full_name AS supervisor_name, r.parameter_id, r.value
+    SELECT r.token_id, r.report_date, r.auditor_name, r.parameter_id, r.value
     FROM mcc_surprise_reports r
-    LEFT JOIN mcc_users u ON r.submitted_by = u.user_id
     WHERE r.station_id = :station_id AND r.category = 'pit_office' AND r.report_date BETWEEN :start_date AND :end_date
     ORDER BY r.report_date ASC, r.token_id ASC, r.id ASC
 ");
@@ -48,7 +47,8 @@ foreach ($reportRows as $row) {
         $sheets[$key] = [
             'token_id' => $row['token_id'],
             'report_date' => $row['report_date'],
-            'supervisor_name' => $row['supervisor_name'] ?? 'CDO',
+            'auditor_name' => $row['auditor_name'] ?? 'CDO',
+            'supervisor_name' => $row['auditor_name'] ?? 'CDO',
             'total_score' => 0
         ];
     }

@@ -10,6 +10,28 @@ $stationId = $_SESSION['station_id'] ?? 1;
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
 
+// Fetch intensive rating values from database (fallback to normal rating if needed)
+try {
+    $ratingStmt = $pdo->query("SELECT rating_name, rating_value FROM mcc_intensive_rating ORDER BY rating_value DESC");
+    $ratings = $ratingStmt->fetchAll(PDO::FETCH_ASSOC);
+    if (empty($ratings)) {
+        $ratingStmt = $pdo->query("SELECT rating_name, rating_value FROM mcc_normal_rating ORDER BY rating_value DESC");
+        $ratings = $ratingStmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+} catch (Exception $e) {
+    $ratings = [
+        ['rating_name' => 'Excellent', 'rating_value' => '3'],
+        ['rating_name' => 'Good', 'rating_value' => '2'],
+        ['rating_name' => 'Average', 'rating_value' => '1'],
+        ['rating_name' => 'Poor', 'rating_value' => '0']
+    ];
+}
+$ratingStrings = [];
+foreach ($ratings as $r) {
+    $ratingStrings[] = htmlspecialchars($r['rating_name']) . "-" . htmlspecialchars($r['rating_value']);
+}
+$ratingText = implode(', ', $ratingStrings);
+
 // Fetch the current station's name & contractor for meta info
 $stationQuery = $pdo->prepare("SELECT station_name, contractor_name FROM mcc_stations WHERE station_id = :station_id");
 $stationQuery->execute(['station_id' => $stationId]);
@@ -65,9 +87,8 @@ if ($isFallback) {
 } else {
     // Fetch reports for each token
     $scoresStmt = $pdo->prepare("
-        SELECT s.*, u.full_name AS supervisor_name 
+        SELECT s.* 
         FROM mcc_intensive_scorecard_report s
-        LEFT JOIN mcc_users u ON s.submitted_by = u.user_id
         WHERE s.station_id = :station_id AND s.token_id = :token_id
     ");
 
@@ -84,7 +105,19 @@ if ($isFallback) {
         $dbCoaches = [];
 
         if (!empty($rows)) {
-            $supervisorName = $rows[0]['supervisor_name'] ?? 'Shubham';
+            $firstRow = $rows[0];
+            if (!empty($firstRow['auditor_name'])) {
+                $supervisorName = $firstRow['auditor_name'];
+            } elseif (!empty($firstRow['submitted_by'])) {
+                if (is_numeric($firstRow['submitted_by'])) {
+                    $uStmt = $pdo->prepare("SELECT full_name FROM mcc_users WHERE user_id = :uid");
+                    $uStmt->execute(['uid' => $firstRow['submitted_by']]);
+                    $supervisorName = $uStmt->fetchColumn() ?: $firstRow['submitted_by'];
+                } else {
+                    $supervisorName = $firstRow['submitted_by'];
+                }
+            }
+
             foreach ($rows as $row) {
                 $scoresData[$row['sub_parameter_id']][$row['coach_no']] = $row['score_value'];
                 $dbCoaches[$row['coach_no']] = true;
@@ -424,10 +457,6 @@ include 'sidebar.php';
                         <div class="report-meta-section">
                             <div class="meta-row">
                                 <div class="meta-item">
-                                    <span>Agreement No & date:</span>
-                                    AGR_2026-99-02 & 01-04-2026
-                                </div>
-                                <div class="meta-item">
                                     <span>Date of Inspection:</span>
                                     <?= htmlspecialchars(date('d-m-Y', strtotime($sheet['report_date']))) ?>
                                 </div>
@@ -458,10 +487,10 @@ include 'sidebar.php';
                                     <span>Train No:</span>
                                     <?= htmlspecialchars($sheet['train_no']) ?>
                                 </div>
-                                <div class="meta-item">
-                                    <span>Number of Coaches Attended :</span>
-                                    <?= $sheet['attended_count'] ?>
-                                </div>
+                                 <div class="meta-item">
+                                     <span>Number of Coaches Attended :</span>
+                                     <?= $sheet['attended_count'] ?>
+                                 </div>
                                 <div class="meta-item">
                                     <span>Internal Cleaning Score :</span>
                                     <?= $sheet['internal_percentage'] ?> %
@@ -537,12 +566,11 @@ include 'sidebar.php';
                             <strong>Scoring Guidelines:</strong>
                             <ul>
                                 <li>
-                                    Maximum Marks will be 12 for internal cleaning. This will be counted as under: Very
-                                    Good- 3, Satisfactory-2, Poor-1,Not attended-0
+                                    Maximum Marks will be 12 for internal cleaning. This will be counted as under: <?= $ratingText ?>
                                 </li>
                                 <li>
                                     Maximum Marks will be 3 for exterior cleaning & washing. This will be counted as under:
-                                    Very Good-3, Satisfactory-2, Poor-1, Not attended-0. % can be derived as per the marks
+                                    <?= $ratingText ?>. % can be derived as per the marks
                                     separately.
                                 </li>
                             </ul>

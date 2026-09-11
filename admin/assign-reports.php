@@ -71,8 +71,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            // Seeder for manpower default categories if manpower subreport (subreport_id = 19) is activated
-            if (in_array(19, $subreport_active)) {
+            // 3. Sync mcc_station_reports access control entries for this station
+            $urlToReportKeys = [
+                'normal-report.php' => 'normal_audit',
+                'chemical-report.php' => 'normal_chem',
+                'machine-report.php' => 'normal_mach',
+                'intensive-report.php' => 'int_audit',
+                'intensive-chemical-report.php' => 'int_chem',
+                'machine-report-intensive.php' => 'int_mach',
+                'intensive_scorecard_2.php' => 'int_scorecard_2',
+                'DC-Scorecard.php' => 'dc_audit',
+                'dc-chemical.php' => 'dc_chem',
+                'dc-machine.php' => 'dc_mach',
+                'Platform-Return-TrainsScorecard.php' => 'prt_audit',
+                'Platform-Return-Chemical.php' => 'prt_chem',
+                'Platform-Return-Machine.php' => 'prt_mach',
+                'intensive_pantry_scorecard.php' => 'int_pantry',
+                'pantry-chemical.php' => 'int_pantry',
+                'pantry-machine.php' => 'int_pantry',
+                'surprise-pit-office.php' => 'sur_pit',
+                'surprise-pf-trains.php' => 'sur_pf',
+                'vande-bharat-report.php' => 'vb_audit',
+                'vande-bharat-chemical.php' => 'vb_chem',
+                'vande-bharat-machine.php' => 'vb_mach',
+                'man-power-log.php' => 'manpower',
+                'biometeric_manpower_log.php' => 'manpower',
+                'cleanliness.php' => 'cleanliness',
+                'photo-report.php' => 'photo_report',
+                'Billing.php' => 'billing'
+            ];
+
+            $delStnRep = $pdo->prepare("DELETE FROM mcc_station_reports WHERE station_id = :station_id");
+            $delStnRep->execute(['station_id' => $station_id]);
+
+            if (!empty($stationReportIds)) {
+                $inClause = implode(',', array_map('intval', $stationReportIds));
+                $activeSubsStmt = $pdo->query("SELECT report_url FROM mcc_subreports WHERE report_id IN ($inClause) AND status = 'Active'");
+                $activeUrls = $activeSubsStmt->fetchAll(PDO::FETCH_COLUMN);
+
+                $keysToInsert = [];
+                foreach ($activeUrls as $u) {
+                    if (isset($urlToReportKeys[$u])) {
+                        $keysToInsert[] = $urlToReportKeys[$u];
+                    }
+                }
+                $keysToInsert = array_unique($keysToInsert);
+
+                if (!empty($keysToInsert)) {
+                    $insStnRep = $pdo->prepare("INSERT INTO mcc_station_reports (station_id, report_key) VALUES (:station_id, :report_key)");
+                    foreach ($keysToInsert as $rk) {
+                        $insStnRep->execute([
+                            'station_id' => $station_id,
+                            'report_key' => $rk
+                        ]);
+                    }
+                }
+            }
+
+            // 4. Seeder for manpower default categories if manpower subreports are active
+            $chkManpowerActive = false;
+            if (!empty($stationReportIds)) {
+                $inClause = implode(',', array_map('intval', $stationReportIds));
+                $mpStmt = $pdo->query("SELECT COUNT(*) FROM mcc_subreports WHERE report_id IN ($inClause) AND report_url IN ('man-power-log.php', 'biometeric_manpower_log.php') AND status = 'Active'");
+                if ($mpStmt && $mpStmt->fetchColumn() > 0) {
+                    $chkManpowerActive = true;
+                }
+            }
+
+            if ($chkManpowerActive) {
                 $chkCat = $pdo->prepare("SELECT COUNT(*) FROM mcc_manpower_categories WHERE station_id = :station_id");
                 $chkCat->execute(['station_id' => $station_id]);
                 if ($chkCat->fetchColumn() == 0) {
@@ -127,38 +193,135 @@ $stationReports = [];
 if (isset($_GET['edit_station'])) {
     $selected_station_id = intval($_GET['edit_station']);
     try {
-        // Auto-seed default report categories if they do not exist for the station
-        $chkStmt = $pdo->prepare("SELECT COUNT(*) FROM mcc_reports WHERE station_id = :station_id");
-        $chkStmt->execute(['station_id' => $selected_station_id]);
-        if ($chkStmt->fetchColumn() == 0) {
-            $pdo->beginTransaction();
-            $defaultReports = [
-                1 => ['name' => 'Normal Cleaning', 'key' => 'normal_cleaning'],
-                2 => ['name' => 'Intensive Cleaning', 'key' => 'intensive_cleaning'],
-                3 => ['name' => 'DC Cleaning', 'key' => 'dc_cleaning'],
-                4 => ['name' => 'PRT Cleaning', 'key' => 'prt_cleaning'],
-                5 => ['name' => 'Pantry Car', 'key' => 'pantry_car'],
-                6 => ['name' => 'Surprise Visit Audits', 'key' => 'surprise_visit_audits'],
-                7 => ['name' => 'Vande Bharat Modules', 'key' => 'vande_bharat_modules'],
-                8 => ['name' => 'Attendance & Manpower', 'key' => 'attendance_manpower'],
-                9 => ['name' => 'Cleanliness Modules', 'key' => 'cleanliness_modules'],
-                10 => ['name' => 'Photo Reports', 'key' => 'photo_reports'],
-                11 => ['name' => 'Billing Management', 'key' => 'billing_management']
-            ];
-            
-            $insStmt = $pdo->prepare("INSERT INTO mcc_reports (report_id, report_name, app_key, station_id, status) VALUES (?, ?, ?, ?, 'Inactive')");
-            foreach ($defaultReports as $rid => $info) {
-                // Insert default reports for the station
-                $insStmt->execute([$rid, $info['name'], $info['key'], $selected_station_id]);
-            }
-            $pdo->commit();
+        $defaultTemplate = [
+            'normal_cleaning' => [
+                'name' => 'Normal Cleaning',
+                'subreports' => [
+                    ['name' => 'Scorecard', 'url' => 'normal-report.php', 'aap_key' => 'normal_scorecard'],
+                    ['name' => 'Chemical Report', 'url' => 'chemical-report.php', 'aap_key' => 'normal_chemical'],
+                    ['name' => 'Machine Report', 'url' => 'machine-report.php', 'aap_key' => 'normal_machine']
+                ]
+            ],
+            'intensive_cleaning' => [
+                'name' => 'Intensive Cleaning',
+                'subreports' => [
+                    ['name' => 'Intensive Report', 'url' => 'intensive-report.php', 'aap_key' => 'intensive_scorecard'],
+                    ['name' => 'Scorecard', 'url' => 'intensive_scorecard_2.php', 'aap_key' => 'intensive_scorecard_2'],
+                    ['name' => 'Chemical Report', 'url' => 'intensive-chemical-report.php', 'aap_key' => 'intensive_chemical'],
+                    ['name' => 'Machine Report', 'url' => 'machine-report-intensive.php', 'aap_key' => 'intensive_machine']
+                ]
+            ],
+            'dc_cleaning' => [
+                'name' => 'DC Cleaning',
+                'subreports' => [
+                    ['name' => 'Scorecard', 'url' => 'DC-Scorecard.php', 'aap_key' => 'dc_scorecard'],
+                    ['name' => 'Chemical Report', 'url' => 'dc-chemical.php', 'aap_key' => 'dc_chemical'],
+                    ['name' => 'Machine Report', 'url' => 'dc-machine.php', 'aap_key' => 'dc_machine']
+                ]
+            ],
+            'prt_cleaning' => [
+                'name' => 'PRT Cleaning',
+                'subreports' => [
+                    ['name' => 'Scorecard', 'url' => 'Platform-Return-TrainsScorecard.php', 'aap_key' => 'prt_scorecard'],
+                    ['name' => 'Chemical Report', 'url' => 'Platform-Return-Chemical.php', 'aap_key' => 'prt_chemical'],
+                    ['name' => 'Machine Report', 'url' => 'Platform-Return-Machine.php', 'aap_key' => 'prt_machine']
+                ]
+            ],
+            'pantry_car' => [
+                'name' => 'Pantry Car',
+                'subreports' => [
+                    ['name' => 'Scorecard', 'url' => 'intensive_pantry_scorecard.php', 'aap_key' => 'intensive_pantry_scorecard'],
+                    ['name' => 'Pantry Car Chemical', 'url' => 'pantry-chemical.php', 'aap_key' => 'pantry_chemical'],
+                    ['name' => 'Pantry Car Machine', 'url' => 'pantry-machine.php', 'aap_key' => 'pantry_machine']
+                ]
+            ],
+            'surprise_visit_audits' => [
+                'name' => 'Surprise Visit Audits',
+                'subreports' => [
+                    ['name' => 'Pit & Office Inspection', 'url' => 'surprise-pit-office.php', 'aap_key' => 'surprise_pit_office'],
+                    ['name' => 'PF Return Trains Audit', 'url' => 'surprise-pf-trains.php', 'aap_key' => 'surprise_pf_trains']
+                ]
+            ],
+            'vande_bharat_modules' => [
+                'name' => 'Vande Bharat Modules',
+                'subreports' => [
+                    ['name' => 'Scorecard', 'url' => 'vande-bharat-report.php', 'aap_key' => 'vande_bharat_scorecard'],
+                    ['name' => 'Chemical Report', 'url' => 'vande-bharat-chemical.php', 'aap_key' => 'vande_bharat_chemical'],
+                    ['name' => 'Machine Report', 'url' => 'vande-bharat-machine.php', 'aap_key' => 'vande_bharat_machine']
+                ]
+            ],
+            'attendance_manpower' => [
+                'name' => 'Attendance & Manpower',
+                'subreports' => [
+                    ['name' => 'Man Power Log', 'url' => 'man-power-log.php', 'aap_key' => 'man_power_log'],
+                    ['name' => 'Bio Metric', 'url' => 'biometeric_manpower_log.php', 'aap_key' => 'biometric_manpower_log']
+                ]
+            ],
+            'cleanliness_modules' => [
+                'name' => 'Cleanliness Modules',
+                'subreports' => [
+                    ['name' => 'Cleanliness Scorecard', 'url' => 'cleanliness.php', 'aap_key' => 'cleanliness_scorecard']
+                ]
+            ],
+            'photo_reports' => [
+                'name' => 'Photo Reports',
+                'subreports' => [
+                    ['name' => 'Photo Report (Before/After)', 'url' => 'photo-report.php', 'aap_key' => 'photo_report']
+                ]
+            ],
+            'billing_management' => [
+                'name' => 'Billing Management',
+                'subreports' => [
+                    ['name' => 'Billing Invoice', 'url' => 'Billing.php', 'aap_key' => 'billing_invoice']
+                ]
+            ]
+        ];
+
+        $pdo->beginTransaction();
+        
+        $chkRepStmt = $pdo->prepare("SELECT report_id, app_key FROM mcc_reports WHERE station_id = :station_id");
+        $chkRepStmt->execute(['station_id' => $selected_station_id]);
+        $existingReports = $chkRepStmt->fetchAll(PDO::FETCH_ASSOC);
+        $existingKeyMap = [];
+        foreach ($existingReports as $er) {
+            $existingKeyMap[$er['app_key']] = $er['report_id'];
         }
+
+        $insRepStmt = $pdo->prepare("INSERT INTO mcc_reports (report_name, app_key, station_id, status) VALUES (?, ?, ?, 'Inactive')");
+        $insSubStmt = $pdo->prepare("INSERT INTO mcc_subreports (report_url, report_name, report_id, status, aap_key) VALUES (?, ?, ?, 'Inactive', ?)");
+        $chkSubStmt = $pdo->prepare("SELECT COUNT(*) FROM mcc_subreports WHERE report_id = :report_id");
+
+        foreach ($defaultTemplate as $appKey => $template) {
+            if (!isset($existingKeyMap[$appKey])) {
+                // Insert new report
+                $insRepStmt->execute([$template['name'], $appKey, $selected_station_id]);
+                $repId = $pdo->lastInsertId();
+                // Insert subreports
+                foreach ($template['subreports'] as $sub) {
+                    $insSubStmt->execute([$sub['url'], $sub['name'], $repId, $sub['aap_key']]);
+                }
+            } else {
+                $repId = $existingKeyMap[$appKey];
+                // Check if subreports exist for this report
+                $chkSubStmt->execute(['report_id' => $repId]);
+                if ($chkSubStmt->fetchColumn() == 0) {
+                    foreach ($template['subreports'] as $sub) {
+                        $insSubStmt->execute([$sub['url'], $sub['name'], $repId, $sub['aap_key']]);
+                    }
+                }
+            }
+        }
+        
+        $pdo->commit();
 
         // Fetch reports list
         $stmt = $pdo->prepare("SELECT * FROM mcc_reports WHERE station_id = :station_id ORDER BY report_id ASC");
         $stmt->execute(['station_id' => $selected_station_id]);
         $stationReports = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         // Fail silently
     }
 }

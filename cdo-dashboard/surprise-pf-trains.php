@@ -21,9 +21,8 @@ $parameters = $paramsStmt->fetchAll();
 
 // 3. Fetch reports in date range
 $reportsStmt = $pdo->prepare("
-    SELECT r.token_id, r.report_date, u.full_name AS supervisor_name, r.parameter_id, r.value, r.score_label
+    SELECT r.token_id, r.report_date, r.auditor_name, r.parameter_id, r.value, r.score_label
     FROM mcc_surprise_reports r
-    LEFT JOIN mcc_users u ON r.submitted_by = u.user_id
     WHERE r.station_id = :station_id AND r.category = 'pf_trains' AND r.report_date BETWEEN :from_date AND :to_date
     ORDER BY r.report_date DESC, r.token_id DESC, r.id ASC
 ");
@@ -42,7 +41,8 @@ foreach ($reportRows as $row) {
         $groupedSheets[$key] = [
             'token_id' => $row['token_id'],
             'report_date' => $row['report_date'],
-            'supervisor_name' => $row['supervisor_name'] ?? 'CDO',
+            'auditor_name' => $row['auditor_name'] ?? 'CDO',
+            'supervisor_name' => $row['auditor_name'] ?? 'CDO',
             'scores' => [],
             'total_score' => 0
         ];
@@ -157,7 +157,7 @@ include 'sidebar.php';
                                 <div>
                                     <strong>Depot:</strong> <?= htmlspecialchars($stationName) ?> Coaching Depot &nbsp;|&nbsp;
                                     <strong>Inspection Date:</strong> <?= htmlspecialchars(date('d-m-Y', strtotime($sheet['report_date']))); ?> &nbsp;|&nbsp;
-                                    <strong>Supervisor:</strong> <?= htmlspecialchars($sheet['supervisor_name']); ?>
+                                    <strong>Auditor Name:</strong> <?= htmlspecialchars($sheet['auditor_name']); ?>
                                 </div>
                                 <div>
                                     <strong>Contractor:</strong> <?= htmlspecialchars($contractorName) ?> &nbsp;|&nbsp;

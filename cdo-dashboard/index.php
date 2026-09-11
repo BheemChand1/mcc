@@ -58,11 +58,16 @@ try {
 // Station 4 explicitly has no Pantry Car or Vande Bharat
 $hasPantry = in_array('pantry_car', $activeAppKeys) && intval($stationId) !== 4;
 $hasVande  = in_array('vande_bharat_modules', $activeAppKeys) && intval($stationId) !== 4;
+$hasDc     = in_array('dc_cleaning', $activeAppKeys) || in_array(3, $activeAppKeys) || in_array(14, $activeAppKeys) || intval($stationId) === 4;
 
 $categories = [
     'normal'    => ['label' => 'Normal Cleaning',    'short' => 'Normal',       'table' => 'mcc_normal_scorecard_report',      'color' => '#2f8bff', 'icon' => 'bi-bus-front-fill'],
     'intensive' => ['label' => 'Intensive Cleaning', 'short' => 'Intensive',    'table' => 'mcc_intensive_scorecard_2_report', 'color' => '#a55eea', 'icon' => 'bi-droplet-fill'],
 ];
+
+if ($hasDc) {
+    $categories['dc'] = ['label' => 'Depot Cleaning', 'short' => 'Depot', 'table' => 'dc_mcc_report', 'color' => '#10b981', 'icon' => 'bi-shield-check'];
+}
 
 if ($hasPantry) {
     $categories['pantry'] = ['label' => 'Pantry Car', 'short' => 'Pantry Car', 'table' => 'mcc_intensive_pantry_report', 'color' => '#22e07c', 'icon' => 'bi-egg-fried'];
@@ -77,23 +82,42 @@ if ($hasVande) {
 $mccAggregate = function (string $table, string $from, string $to) use ($pdo, $stationId, $scoreRe): array {
     $out = ['trains' => 0, 'rakes' => 0, 'coaches' => 0, 'score' => 0.0];
     try {
-        $st = $pdo->prepare("
-            SELECT COUNT(DISTINCT train_no)  AS trains,
-                   COUNT(DISTINCT token_id)  AS rakes,
-                   COUNT(DISTINCT coach_no)  AS coaches,
-                   AVG(CASE WHEN score_value REGEXP '{$scoreRe}'
-                       THEN CAST(score_value AS DECIMAL(8,2)) ELSE NULL END) AS avg_score
-            FROM {$table}
-            WHERE station_id = :sid AND report_date BETWEEN :f AND :t
-        ");
-        $st->execute([':sid' => $stationId, ':f' => $from, ':t' => $to]);
-        $r = $st->fetch(PDO::FETCH_ASSOC) ?: [];
-        $out['trains']  = intval($r['trains']  ?? 0);
-        $out['rakes']   = intval($r['rakes']   ?? 0);
-        $out['coaches'] = intval($r['coaches'] ?? 0);
-        $out['score']   = ($r['avg_score'] !== null)
-            ? round(min(100, max(0, (floatval($r['avg_score']) / 3) * 100)), 1)
-            : 0.0;
+        if ($table === 'dc_mcc_report') {
+            $st = $pdo->prepare("
+                SELECT COUNT(DISTINCT token_id) AS rakes,
+                       COUNT(DISTINCT token_id) AS trains,
+                       COUNT(DISTINCT token_id) AS coaches,
+                       AVG(rating) AS avg_score
+                FROM dc_mcc_report
+                WHERE station_id = :sid AND report_date BETWEEN :f AND :t
+            ");
+            $st->execute([':sid' => $stationId, ':f' => $from, ':t' => $to]);
+            $r = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+            $out['trains']  = intval($r['trains']  ?? 0);
+            $out['rakes']   = intval($r['rakes']   ?? 0);
+            $out['coaches'] = intval($r['coaches'] ?? 0);
+            $out['score']   = ($r['avg_score'] !== null)
+                ? round(min(100, max(0, (floatval($r['avg_score']) / 3) * 100)), 1)
+                : 0.0;
+        } else {
+            $st = $pdo->prepare("
+                SELECT COUNT(DISTINCT train_no)  AS trains,
+                       COUNT(DISTINCT token_id)  AS rakes,
+                       COUNT(DISTINCT coach_no)  AS coaches,
+                       AVG(CASE WHEN score_value REGEXP '{$scoreRe}'
+                           THEN CAST(score_value AS DECIMAL(8,2)) ELSE NULL END) AS avg_score
+                FROM {$table}
+                WHERE station_id = :sid AND report_date BETWEEN :f AND :t
+            ");
+            $st->execute([':sid' => $stationId, ':f' => $from, ':t' => $to]);
+            $r = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+            $out['trains']  = intval($r['trains']  ?? 0);
+            $out['rakes']   = intval($r['rakes']   ?? 0);
+            $out['coaches'] = intval($r['coaches'] ?? 0);
+            $out['score']   = ($r['avg_score'] !== null)
+                ? round(min(100, max(0, (floatval($r['avg_score']) / 3) * 100)), 1)
+                : 0.0;
+        }
     } catch (Exception $e) {}
     return $out;
 };
@@ -233,14 +257,24 @@ $trendSeries = [];
 foreach ($categories as $key => $cat) {
     $daily = array_fill_keys($trendDates, null);
     try {
-        $st = $pdo->prepare("
-            SELECT report_date,
-                   AVG(CASE WHEN score_value REGEXP '{$scoreRe}'
-                       THEN CAST(score_value AS DECIMAL(8,2)) ELSE NULL END) AS avg_score
-            FROM {$cat['table']}
-            WHERE station_id = :sid AND report_date BETWEEN :f AND :t
-            GROUP BY report_date
-        ");
+        if ($cat['table'] === 'dc_mcc_report') {
+            $st = $pdo->prepare("
+                SELECT report_date,
+                       AVG(rating) AS avg_score
+                FROM dc_mcc_report
+                WHERE station_id = :sid AND report_date BETWEEN :f AND :t
+                GROUP BY report_date
+            ");
+        } else {
+            $st = $pdo->prepare("
+                SELECT report_date,
+                       AVG(CASE WHEN score_value REGEXP '{$scoreRe}'
+                           THEN CAST(score_value AS DECIMAL(8,2)) ELSE NULL END) AS avg_score
+                FROM {$cat['table']}
+                WHERE station_id = :sid AND report_date BETWEEN :f AND :t
+                GROUP BY report_date
+            ");
+        }
         $st->execute([':sid' => $stationId, ':f' => $rangeStart, ':t' => $rangeEnd]);
         foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $row) {
             if (array_key_exists($row['report_date'], $daily) && $row['avg_score'] !== null) {
@@ -308,6 +342,7 @@ $donutGradient = 'conic-gradient(' . implode(', ', array_map(fn($l) => "{$l['col
 /* ------------------------------------------------------------------ */
 $topTrains = [];
 foreach ($categories as $key => $cat) {
+    if ($cat['table'] === 'dc_mcc_report') continue;
     try {
         $st = $pdo->prepare("
             SELECT train_no,
@@ -376,6 +411,31 @@ foreach ($qualityParameterSources as $src) {
         }
     } catch (Exception $e) {}
 }
+
+if ($hasDc) {
+    try {
+        $st = $pdo->prepare("
+            SELECT p.parameter_name,
+                   SUM(r.rating) AS score_sum,
+                   COUNT(*) AS score_count
+            FROM dc_mcc_report r
+            JOIN dc_mcc_param p ON p.id = r.parameter_id
+            WHERE r.station_id = :sid AND r.report_date BETWEEN :f AND :t
+            GROUP BY p.id, p.parameter_name
+        ");
+        $st->execute([':sid' => $stationId, ':f' => $rangeStart, ':t' => $rangeEnd]);
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $name = trim($row['parameter_name']);
+            if ($name === '') continue;
+            if (!isset($qualityParameterTotals[$name])) {
+                $qualityParameterTotals[$name] = ['sum' => 0.0, 'count' => 0];
+            }
+            $qualityParameterTotals[$name]['sum']   += floatval($row['score_sum']);
+            $qualityParameterTotals[$name]['count'] += intval($row['score_count']);
+        }
+    } catch (Exception $e) {}
+}
+
 $qualityParameters = [];
 foreach ($qualityParameterTotals as $name => $t) {
     if ($t['count'] <= 0) continue;
@@ -391,27 +451,50 @@ $qualityParameters = array_slice($qualityParameters, 0, 6);
 $liveAlerts = [];
 foreach ($categories as $key => $cat) {
     try {
-        $st = $pdo->prepare("
-            SELECT train_no, MAX(created_at) AS last_ts,
-                   COUNT(DISTINCT coach_no) AS coaches,
-                   AVG(CASE WHEN score_value REGEXP '{$scoreRe}'
-                       THEN CAST(score_value AS DECIMAL(8,2)) ELSE NULL END) AS avg_score
-            FROM {$cat['table']}
-            WHERE station_id = :sid AND report_date BETWEEN :f AND :t
-            GROUP BY token_id, train_no
-            ORDER BY last_ts DESC
-            LIMIT 4
-        ");
-        $st->execute([':sid' => $stationId, ':f' => $rangeStart, ':t' => $rangeEnd]);
-        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
-            $score = ($r['avg_score'] !== null) ? round(min(100, (floatval($r['avg_score']) / 3) * 100), 1) : 0;
-            $liveAlerts[] = [
-                'train_no' => $r['train_no'] ?: 'Train',
-                'type'     => $cat['label'],
-                'color'    => $cat['color'],
-                'score'    => $score,
-                'time'     => !empty($r['last_ts']) ? date('d M Y H:i', strtotime($r['last_ts'])) : date('d M Y H:i'),
-            ];
+        if ($cat['table'] === 'dc_mcc_report') {
+            $st = $pdo->prepare("
+                SELECT token_id, MAX(created_at) AS last_ts,
+                       AVG(rating) AS avg_score
+                FROM dc_mcc_report
+                WHERE station_id = :sid AND report_date BETWEEN :f AND :t
+                GROUP BY token_id
+                ORDER BY last_ts DESC
+                LIMIT 4
+            ");
+            $st->execute([':sid' => $stationId, ':f' => $rangeStart, ':t' => $rangeEnd]);
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $score = ($r['avg_score'] !== null) ? round(min(100, (floatval($r['avg_score']) / 3) * 100), 1) : 0;
+                $liveAlerts[] = [
+                    'train_no' => 'Depot Inspection #' . ($r['token_id'] ?: '1'),
+                    'type'     => $cat['label'],
+                    'color'    => $cat['color'],
+                    'score'    => $score,
+                    'time'     => !empty($r['last_ts']) ? date('d M Y H:i', strtotime($r['last_ts'])) : date('d M Y H:i'),
+                ];
+            }
+        } else {
+            $st = $pdo->prepare("
+                SELECT train_no, MAX(created_at) AS last_ts,
+                       COUNT(DISTINCT coach_no) AS coaches,
+                       AVG(CASE WHEN score_value REGEXP '{$scoreRe}'
+                           THEN CAST(score_value AS DECIMAL(8,2)) ELSE NULL END) AS avg_score
+                FROM {$cat['table']}
+                WHERE station_id = :sid AND report_date BETWEEN :f AND :t
+                GROUP BY token_id, train_no
+                ORDER BY last_ts DESC
+                LIMIT 4
+            ");
+            $st->execute([':sid' => $stationId, ':f' => $rangeStart, ':t' => $rangeEnd]);
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $score = ($r['avg_score'] !== null) ? round(min(100, (floatval($r['avg_score']) / 3) * 100), 1) : 0;
+                $liveAlerts[] = [
+                    'train_no' => $r['train_no'] ?: 'Train',
+                    'type'     => $cat['label'],
+                    'color'    => $cat['color'],
+                    'score'    => $score,
+                    'time'     => !empty($r['last_ts']) ? date('d M Y H:i', strtotime($r['last_ts'])) : date('d M Y H:i'),
+                ];
+            }
         }
     } catch (Exception $e) {}
 }
@@ -465,7 +548,7 @@ include 'sidebar.php';
           <div class="mccx-kpi-icon"><i class="bi <?= $cat['icon'] ?>"></i></div>
           <div class="mccx-kpi-body">
             <h3><?= strtoupper($cat['label']) ?></h3>
-            <small>(Coaches)</small>
+            <small>(<?= $key === 'dc' ? 'Checks' : 'Coaches' ?>)</small>
             <div class="mccx-kpi-value"><?= $stat['coaches'] ?></div>
           </div>
           <div class="mccx-kpi-delta">

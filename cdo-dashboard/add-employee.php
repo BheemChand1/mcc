@@ -222,14 +222,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         } else {
             // Insert
             $insertSql = "INSERT INTO mcc_employee (
-                employee_id, full_name, designation, age, employee_photo, father_name, mother_name, 
+                station_id, employee_id, full_name, designation, age, employee_photo, father_name, mother_name, 
                 mobile_number, dob, aadhar_number, address, ren_id, rakshak_id, pan_card, police_ver, 
                 police_ver_dt, pvc, pvc_ok_applied, pvc_issue_month, medical, medical_issue_month, 
                 education, document_status, account_name, account_number, ifsc_code, status, 
                 issue_date, valid_upto_date, valid_upto_month, formula_valid_upto, notification, 
                 document_link, remarks, blood_group, department
             ) VALUES (
-                :employee_id, :full_name, :designation, :age, :employee_photo, :father_name, :mother_name, 
+                :station_id, :employee_id, :full_name, :designation, :age, :employee_photo, :father_name, :mother_name, 
                 :mobile_number, :dob, :aadhar_number, :address, :ren_id, :rakshak_id, :pan_card, :police_ver, 
                 :police_ver_dt, :pvc, :pvc_ok_applied, :pvc_issue_month, :medical, :medical_issue_month, 
                 :education, :document_status, :account_name, :account_number, :ifsc_code, :status, 
@@ -239,6 +239,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             
             $stmt = $pdo->prepare($insertSql);
             $stmt->execute([
+                'station_id' => $stationId,
                 'employee_id' => $empId, 'full_name' => $fullName, 'designation' => $designation, 'age' => $age,
                 'employee_photo' => $photoFileName, 'father_name' => $fatherName, 'mother_name' => $motherName,
                 'mobile_number' => $mobileNumber, 'dob' => $dob, 'aadhar_number' => $aadharNumber, 'address' => $address,

@@ -47,13 +47,32 @@ $mccPctDelta = function ($cur, $prev): float {
 /* ------------------------------------------------------------------ */
 /* 1. OPERATION CATEGORIES + PERIOD AGGREGATES                        */
 /* ------------------------------------------------------------------ */
+// Fetch active report module keys for current station
+$activeAppKeys = [];
+try {
+    $st = $pdo->prepare("SELECT app_key FROM mcc_reports WHERE station_id = :sid AND status = 'Active'");
+    $st->execute([':sid' => $stationId]);
+    $activeAppKeys = $st->fetchAll(PDO::FETCH_COLUMN);
+} catch (Exception $e) {}
+
+// Station 4 explicitly has no Pantry Car or Vande Bharat
+$hasPantry = in_array('pantry_car', $activeAppKeys) && intval($stationId) !== 4;
+$hasVande  = in_array('vande_bharat_modules', $activeAppKeys) && intval($stationId) !== 4;
+
 $categories = [
     'normal'    => ['label' => 'Normal Cleaning',    'short' => 'Normal',       'table' => 'mcc_normal_scorecard_report',      'color' => '#2f8bff', 'icon' => 'bi-bus-front-fill'],
     'intensive' => ['label' => 'Intensive Cleaning', 'short' => 'Intensive',    'table' => 'mcc_intensive_scorecard_2_report', 'color' => '#a55eea', 'icon' => 'bi-droplet-fill'],
-    'pantry'    => ['label' => 'Pantry Car',         'short' => 'Pantry Car',   'table' => 'mcc_intensive_pantry_report',      'color' => '#22e07c', 'icon' => 'bi-egg-fried'],
-    'prt'       => ['label' => 'PFTA Trains',        'short' => 'PFTA',         'table' => 'mcc_prt_scorecard_report',         'color' => '#ffaa2b', 'icon' => 'bi-person-workspace'],
-    'vande'     => ['label' => 'Vande Bharat',       'short' => 'Vande Bharat', 'table' => 'mcc_vb_scorecard_report',          'color' => '#22d3ee', 'icon' => 'bi-train-front-fill'],
 ];
+
+if ($hasPantry) {
+    $categories['pantry'] = ['label' => 'Pantry Car', 'short' => 'Pantry Car', 'table' => 'mcc_intensive_pantry_report', 'color' => '#22e07c', 'icon' => 'bi-egg-fried'];
+}
+
+$categories['prt'] = ['label' => 'PFTA Trains', 'short' => 'PFTA', 'table' => 'mcc_prt_scorecard_report', 'color' => '#ffaa2b', 'icon' => 'bi-person-workspace'];
+
+if ($hasVande) {
+    $categories['vande'] = ['label' => 'Vande Bharat', 'short' => 'Vande Bharat', 'table' => 'mcc_vb_scorecard_report', 'color' => '#22d3ee', 'icon' => 'bi-train-front-fill'];
+}
 
 $mccAggregate = function (string $table, string $from, string $to) use ($pdo, $stationId, $scoreRe): array {
     $out = ['trains' => 0, 'rakes' => 0, 'coaches' => 0, 'score' => 0.0];
@@ -93,9 +112,14 @@ $chemicalPairs = [
     ['mcc_normal_chemical_report',    'mcc_normal_chemical_target'],
     ['mcc_intensive_chemical_report', 'mcc_intensive_chemical_target'],
     ['mcc_prt_chemical_report',       'mcc_prt_chemical_target'],
-    ['mcc_vb_chemical_report',        'mcc_vb_chemical_target'],
     ['dc_mcc_chemical_report',        'dc_mcc_chemical_target'],
 ];
+if ($hasPantry) {
+    $chemicalPairs[] = ['mcc_intensive_pantry_chemical_report', 'mcc_intensive_pantry_chemical_target'];
+}
+if ($hasVande) {
+    $chemicalPairs[] = ['mcc_vb_chemical_report', 'mcc_vb_chemical_target'];
+}
 
 $mccChem = function (string $reportTable, string $targetTable, string $from, string $to) use ($pdo, $stationId): float {
     $sqls = [
@@ -138,7 +162,13 @@ $chemicalScorePrev = $chemActivePrev ? round(array_sum($chemActivePrev) / count(
 /* ------------------------------------------------------------------ */
 /* 3. OVERALL MACHINE SCORE (used_status Y compliance)                */
 /* ------------------------------------------------------------------ */
-$machineTables = ['mcc_normal_machine_report', 'mcc_intensive_machine_report', 'mcc_vb_machine_report', 'dc_mcc_machine_report'];
+$machineTables = ['mcc_normal_machine_report', 'mcc_intensive_machine_report', 'dc_mcc_machine_report', 'mcc_prt_machine_report'];
+if ($hasPantry) {
+    $machineTables[] = 'mcc_intensive_pantry_machine_report';
+}
+if ($hasVande) {
+    $machineTables[] = 'mcc_vb_machine_report';
+}
 
 $mccMachine = function (string $table, string $from, string $to) use ($pdo, $stationId): float {
     try {
@@ -312,10 +342,14 @@ $topTrains = array_slice($topTrains, 0, 5);
 $qualityParameterSources = [
     ['report' => 'mcc_normal_scorecard_report',      'sub' => 'mcc_normal_scorecard_sub_param',      'param' => 'mcc_normal_scorecard_param'],
     ['report' => 'mcc_intensive_scorecard_2_report', 'sub' => 'mcc_intensive_scorecard_2_sub_param', 'param' => 'mcc_intensive_scorecard_2_param'],
-    ['report' => 'mcc_intensive_pantry_report',      'sub' => 'mcc_intensive_pantry_sub_param',      'param' => 'mcc_intensive_pantry_param'],
     ['report' => 'mcc_prt_scorecard_report',         'sub' => 'mcc_prt_scorecard_sub_param',         'param' => 'mcc_prt_scorecard_param'],
-    ['report' => 'mcc_vb_scorecard_report',          'sub' => 'mcc_vb_scorecard_sub_param',          'param' => 'mcc_vb_scorecard_param'],
 ];
+if ($hasPantry) {
+    $qualityParameterSources[] = ['report' => 'mcc_intensive_pantry_report', 'sub' => 'mcc_intensive_pantry_sub_param', 'param' => 'mcc_intensive_pantry_param'];
+}
+if ($hasVande) {
+    $qualityParameterSources[] = ['report' => 'mcc_vb_scorecard_report', 'sub' => 'mcc_vb_scorecard_sub_param', 'param' => 'mcc_vb_scorecard_param'];
+}
 $qualityParameterTotals = [];
 foreach ($qualityParameterSources as $src) {
     try {
@@ -421,7 +455,7 @@ include 'sidebar.php';
       </section>
 
       <!-- 1. KPI Row : Normal / Intensive / Pantry / PRT / Vande Bharat -->
-      <section class="mccx-kpi-row" style="grid-area:kpi">
+      <section class="mccx-kpi-row" style="grid-area:kpi; grid-template-columns: repeat(<?= max(1, count($categories)) ?>, minmax(0, 1fr)) !important;">
         <?php foreach ($categories as $key => $cat):
             $stat = $catStats[$key];
             $coachDelta = $mccPctDelta($stat['coaches'], $catStatsPrev[$key]['coaches']);

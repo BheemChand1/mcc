@@ -1,5 +1,5 @@
 <?php
-require_once '../connection.php';
+require_once 'auth.php';
 
 // Check if table mcc_employee exists, if not create it
 $tableCheck = $pdo->query("SHOW TABLES LIKE 'mcc_employee'");
@@ -51,8 +51,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id'])
     $id = intval($_GET['id']);
     
     // Get photo filename to delete from disk
-    $photoStmt = $pdo->prepare("SELECT employee_photo FROM mcc_employee WHERE id = ?");
-    $photoStmt->execute([$id]);
+    $photoStmt = $pdo->prepare("SELECT employee_photo FROM mcc_employee WHERE id = ? AND station_id = ?");
+    $photoStmt->execute([$id, $stationId]);
     $emp = $photoStmt->fetch();
     if ($emp && !empty($emp['employee_photo'])) {
         $photoPath = __DIR__ . '/uploads/' . $emp['employee_photo'];
@@ -61,8 +61,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id'])
         }
     }
     
-    $deleteStmt = $pdo->prepare("DELETE FROM mcc_employee WHERE id = ?");
-    $deleteStmt->execute([$id]);
+    $deleteStmt = $pdo->prepare("DELETE FROM mcc_employee WHERE id = ? AND station_id = ?");
+    $deleteStmt->execute([$id, $stationId]);
     header("Location: view-employee.php");
     exit;
 }
@@ -73,16 +73,18 @@ if (!empty($search)) {
     $searchWild = "%$search%";
     $stmt = $pdo->prepare("
         SELECT * FROM mcc_employee 
-        WHERE employee_id LIKE :search 
-           OR full_name LIKE :search 
-           OR designation LIKE :search 
-           OR mobile_number LIKE :search 
-           OR aadhar_number LIKE :search
+        WHERE station_id = :station_id 
+          AND (employee_id LIKE :search 
+            OR full_name LIKE :search 
+            OR designation LIKE :search 
+            OR mobile_number LIKE :search 
+            OR aadhar_number LIKE :search)
         ORDER BY id DESC
     ");
-    $stmt->execute(['search' => $searchWild]);
+    $stmt->execute(['station_id' => $stationId, 'search' => $searchWild]);
 } else {
-    $stmt = $pdo->query("SELECT * FROM mcc_employee ORDER BY id DESC");
+    $stmt = $pdo->prepare("SELECT * FROM mcc_employee WHERE station_id = :station_id ORDER BY id DESC");
+    $stmt->execute(['station_id' => $stationId]);
 }
 $employees = $stmt->fetchAll();
 

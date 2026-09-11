@@ -19,9 +19,36 @@ $paramsStmt = $pdo->prepare("
 $paramsStmt->execute(['station_id' => $stationId]);
 $parameters = $paramsStmt->fetchAll();
 
+// Fetch surprise ratings for this station
+$ratingsStmt = $pdo->prepare("
+    SELECT rating_value, rating_name 
+    FROM mcc_surprise_ratings 
+    WHERE station_id = :station_id 
+    ORDER BY rating_value DESC
+");
+$ratingsStmt->execute(['station_id' => $stationId]);
+$ratingsMap = $ratingsStmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+if (empty($ratingsMap)) {
+    $ratingsMap = [
+        5 => 'Excellent / No shortage',
+        4 => 'Very Good / 1-10% shortage',
+        3 => 'Good / Partially available',
+        2 => '11-20% shortage',
+        1 => 'Average',
+        0 => 'Poor / Not available / Shortage > 20%'
+    ];
+}
+
+$guidelineStrings = [];
+foreach ($ratingsMap as $v => $n) {
+    $guidelineStrings[] = "$v ($n)";
+}
+$guidelinesText = implode(', ', $guidelineStrings);
+
 // 3. Fetch reports in date range
 $reportsStmt = $pdo->prepare("
-    SELECT r.token_id, r.report_date, r.auditor_name, r.parameter_id, r.value, r.score_label
+    SELECT r.token_id, r.report_date, r.auditor_name, r.parameter_id, r.value
     FROM mcc_surprise_reports r
     WHERE r.station_id = :station_id AND r.category = 'pit_office' AND r.report_date BETWEEN :from_date AND :to_date
     ORDER BY r.report_date DESC, r.token_id DESC, r.id ASC
@@ -42,16 +69,17 @@ foreach ($reportRows as $row) {
             'token_id' => $row['token_id'],
             'report_date' => $row['report_date'],
             'auditor_name' => $row['auditor_name'] ?? 'CDO',
-            'supervisor_name' => $row['auditor_name'] ?? 'CDO',
             'scores' => [],
             'total_score' => 0
         ];
     }
+    $val = intval($row['value']);
+    $label = $ratingsMap[$val] ?? ($val . ' marks');
     $groupedSheets[$key]['scores'][$row['parameter_id']] = [
-        'score' => $row['value'],
-        'label' => $row['score_label']
+        'score' => $val,
+        'label' => $label
     ];
-    $groupedSheets[$key]['total_score'] += intval($row['value']);
+    $groupedSheets[$key]['total_score'] += $val;
 }
 
 $sheets = [];
@@ -202,7 +230,7 @@ include 'sidebar.php';
                         </div>
 
                         <div class="report-info no-print" style="margin-top: 15px; border-radius: 8px; border: 1px solid #cbd5e1; background-color: #f8fafc; padding: 12px 18px; font-size: 13px; color: #475569;">
-                            <strong>Scoring Guidelines:</strong> 5 (Excellent/No shortage), 4 (Very Good / 1-10% shortage), 3 (Good / Partially available), 2 (11-20% shortage), 1 (Average), 0 (Poor / Not available / Shortage > 20%).
+                            <strong>Scoring Guidelines:</strong> <?= htmlspecialchars($guidelinesText); ?>.
                         </div>
 
                         <div class="signature-row" style="display: flex; justify-content: space-between; margin-top: 40px; padding: 0 15px;">

@@ -9,7 +9,149 @@ $selectedYear = $_GET['year'] ?? date('Y');
 $selectedMonth = str_pad($selectedMonth, 2, '0', STR_PAD_LEFT);
 $selectedYear = intval($selectedYear);
 
-$targetMonthDisplay = date('F Y', strtotime("$selectedYear-$selectedMonth-01"));
+$targetMonthDate = "$selectedYear-$selectedMonth-01";
+$targetMonthDisplay = date('F Y', strtotime($targetMonthDate));
+$effectiveFromDate = "$selectedYear-$selectedMonth-01";
+$effectiveToDate = date('Y-m-t', strtotime($targetMonthDate));
+
+// 1. Fetch active designations from mcc_designation table
+$desStmt = $pdo->prepare("
+    SELECT id, designation_name 
+    FROM mcc_designation 
+    WHERE (station_id = :station_id OR station_id = 0) AND status = 'Active' 
+    ORDER BY id ASC
+");
+$desStmt->execute(['station_id' => $stationId]);
+$designations = $desStmt->fetchAll(PDO::FETCH_ASSOC);
+
+if (empty($designations)) {
+    $designations = [
+        ['id' => 1, 'designation_name' => 'Unskilled'],
+        ['id' => 2, 'designation_name' => 'Supervisor']
+    ];
+}
+
+// 2. Fetch categories from mcc_manpower_categories
+$catStmt = $pdo->prepare("
+    SELECT id, category_name 
+    FROM mcc_manpower_categories 
+    WHERE station_id = :station_id AND status = 'Active' 
+    ORDER BY order_no ASC, id ASC
+");
+$catStmt->execute(['station_id' => $stationId]);
+$categories = $catStmt->fetchAll(PDO::FETCH_ASSOC);
+
+if (empty($categories)) {
+    $categories = [
+        ['id' => 17, 'category_name' => 'Normal cleaning'],
+        ['id' => 18, 'category_name' => 'Intensive Cleaning'],
+        ['id' => 19, 'category_name' => 'Depot Cleaning'],
+        ['id' => 20, 'category_name' => 'PRT cleaning'],
+        ['id' => 21, 'category_name' => 'Vande Bharat']
+    ];
+}
+
+// Check/Create biometric_manpower_target table if not exists
+$tableCheck = $pdo->query("SHOW TABLES LIKE 'biometric_manpower_target'");
+if ($tableCheck->rowCount() == 0) {
+    $sqlBioTarget = "CREATE TABLE `biometric_manpower_target` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `station_id` INT NOT NULL DEFAULT 1,
+        `category_id` INT NOT NULL DEFAULT 0,
+        `category_name` VARCHAR(100) DEFAULT NULL,
+        `designation_id` INT NOT NULL DEFAULT 0,
+        `designation_name` VARCHAR(100) NOT NULL,
+        `target_date` DATE NOT NULL,
+        `target_qty` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        `effective_from` DATE NULL,
+        `effective_to` DATE NULL,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX (`station_id`),
+        INDEX (`target_date`),
+        UNIQUE KEY `uq_station_cat_des_date` (`station_id`, `category_id`, `designation_name`, `target_date`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;";
+    $pdo->exec($sqlBioTarget);
+}
+
+$successMsg = '';
+$errorMsg = '';
+
+// 3. Handle Save Targets POST Action
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['save_target'])) {
+    if (!empty($isViewer)) {
+        $errorMsg = "Viewers are in read-only mode and cannot modify targets.";
+    } else {
+        $submittedTargets = $_POST['target_qty'] ?? []; // [category_id][designation_name] => qty
+        
+        try {
+            $pdo->beginTransaction();
+
+            $saveStmt = $pdo->prepare("
+                INSERT INTO biometric_manpower_target 
+                (station_id, category_id, category_name, designation_id, designation_name, target_date, target_qty, effective_from, effective_to)
+                VALUES 
+                (:station_id, :category_id, :category_name, :designation_id, :designation_name, :target_date, :target_qty, :effective_from, :effective_to)
+                ON DUPLICATE KEY UPDATE 
+                    category_name = VALUES(category_name),
+                    designation_id = VALUES(designation_id),
+                    target_qty = VALUES(target_qty),
+                    effective_from = VALUES(effective_from),
+                    effective_to = VALUES(effective_to)
+            ");
+
+            foreach ($categories as $cat) {
+                $catId = $cat['id'];
+                $catName = $cat['category_name'];
+                foreach ($designations as $des) {
+                    $desName = $des['designation_name'];
+                    $desId = $des['id'];
+                    $qty = isset($submittedTargets[$catId][$desName]) ? trim($submittedTargets[$catId][$desName]) : '';
+                    
+                    if ($qty !== '') {
+                        $targetQty = floatval($qty);
+                        $saveStmt->execute([
+                            'station_id'        => $stationId,
+                            'category_id'       => $catId,
+                            'category_name'     => $catName,
+                            'designation_id'    => $desId,
+                            'designation_name'  => $desName,
+                            'target_date'       => $targetMonthDate,
+                            'target_qty'        => $targetQty,
+                            'effective_from'    => $effectiveFromDate,
+                            'effective_to'      => $effectiveToDate
+                        ]);
+                    }
+                }
+            }
+
+            $pdo->commit();
+            $successMsg = "Biometric manpower targets for $targetMonthDisplay saved successfully!";
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $errorMsg = "Failed to save targets: " . $e->getMessage();
+        }
+    }
+}
+
+// 4. Fetch existing targets for the selected month/year from biometric_manpower_target
+$existingTargets = [];
+$targetsStmt = $pdo->prepare("
+    SELECT category_id, designation_name, target_qty 
+    FROM biometric_manpower_target 
+    WHERE station_id = :station_id AND target_date = :target_date
+");
+$targetsStmt->execute([
+    'station_id'  => $stationId,
+    'target_date' => $targetMonthDate
+]);
+$targetRows = $targetsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+foreach ($targetRows as $tr) {
+    $existingTargets[$tr['category_id']][strtolower(trim($tr['designation_name']))] = $tr['target_qty'];
+}
 ?>
 
 <?php include 'header.php'; ?>
@@ -28,7 +170,7 @@ $targetMonthDisplay = date('F Y', strtotime("$selectedYear-$selectedMonth-01"));
 .meta-grid{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:13px 28px;max-width:1080px;margin:0 auto 18px;font-size:13px}
 .meta{display:flex;justify-content:center;gap:5px;white-space:nowrap}.meta strong{font-weight:800}
 .table-wrap{overflow:auto;border:1px solid #111;margin-bottom:15px}
-table{width:100%;border-collapse:collapse;min-width:1010px;background:#fff}
+table{width:100%;border-collapse:collapse;min-width:960px;background:#fff}
 thead th{background:#062e4e;color:#fff;font-size:13px;padding:12px 10px;border:1px solid #245474;text-align:center}
 tbody td{font-size:13px;padding:9px 10px;border:1px solid #c8c8c8;text-align:center}
 tbody td.name{text-align:left;font-weight:700}
@@ -36,6 +178,9 @@ tbody td.name{text-align:left;font-weight:700}
 .target-input{height:34px;width:100%;max-width:320px;border:1.5px solid #0d5584;border-radius:3px;padding:0 12px;font-weight:600;font-size:13px;background:#fff;outline:none}
 .target-input:focus{border-color:#14aee8;box-shadow:0 0 0 2px rgba(20,174,232,0.2)}
 .action-row{margin:20px 0 10px;text-align:center}
+.alert-box{padding:12px 16px;border-radius:6px;margin-bottom:18px;font-weight:600;font-size:14px}
+.alert-success{background-color:#d1fae5;color:#065f46;border:1px solid #a7f3d0}
+.alert-danger{background-color:#fee2e2;color:#991b1b;border:1px solid #fecaca}
 @media(max-width:1100px){.meta-grid{grid-template-columns:repeat(2,minmax(180px,1fr))}.selectbox{width:210px}}
 @media(max-width:800px){.toolbar{padding:10px;gap:8px}.selectbox{width:150px}.meta-grid{grid-template-columns:1fr}}
 @media print{.app-header,.app-sidebar,.app-footer,.toolbar,.no-print{display:none!important}.app-main{margin:0!important;padding:0!important}.report-shell{border:none;padding:0;background:#fff}.report-card{border:none}.table-wrap{border:1px solid #000}.target-input{border:none;background:transparent}}
@@ -75,6 +220,13 @@ tbody td.name{text-align:left;font-weight:700}
           <div class="report-card">
             <div class="report-title">Biometric Manpower Target</div>
             
+            <?php if (!empty($successMsg)): ?>
+              <div class="alert-box alert-success no-print"><?= htmlspecialchars($successMsg) ?></div>
+            <?php endif; ?>
+            <?php if (!empty($errorMsg)): ?>
+              <div class="alert-box alert-danger no-print"><?= htmlspecialchars($errorMsg) ?></div>
+            <?php endif; ?>
+
             <div class="meta-grid">
               <div class="meta"><strong>Railway:</strong> <?= htmlspecialchars($railwayName) ?></div>
               <div class="meta"><strong>Effective Month:</strong> <?= $targetMonthDisplay ?></div>
@@ -85,8 +237,9 @@ tbody td.name{text-align:left;font-weight:700}
               <div class="meta"><strong>Effective Date:</strong> 01-<?= $selectedMonth ?>-<?= $selectedYear ?></div>
             </div>
 
-            <!-- Target Rate Table matching Full-Width CDO Theme -->
+            <!-- Dynamic Target Rate Table Loaded from mcc_designation -->
             <form method="POST" action="">
+              <input type="hidden" name="save_target" value="1">
               <div class="table-wrap">
                 <table>
                   <thead>
@@ -96,93 +249,48 @@ tbody td.name{text-align:left;font-weight:700}
                     </tr>
                   </thead>
                   <tbody>
-                    <!-- Normal cleaning -->
-                    <tr class="shift-row">
-                      <td colspan="2">Normal cleaning</td>
-                    </tr>
-                    <tr>
-                      <td class="name" style="padding-left: 30px;">unskilled</td>
-                      <td>
-                        <input type="text" name="target[normal][unskilled]" class="target-input">
-                      </td>
-                    </tr>
-                    <tr>
-                      <td class="name" style="padding-left: 30px;">sup.</td>
-                      <td>
-                        <input type="text" name="target[normal][sup]" class="target-input">
-                      </td>
-                    </tr>
+                    <?php foreach ($categories as $cat): 
+                        $catId = $cat['id'];
+                    ?>
+                      <!-- Category Header -->
+                      <tr class="shift-row">
+                        <td colspan="2"><?= htmlspecialchars($cat['category_name']) ?></td>
+                      </tr>
 
-                    <!-- Intensive cleaning -->
-                    <tr class="shift-row">
-                      <td colspan="2">Intensive cleaning</td>
-                    </tr>
-                    <tr>
-                      <td class="name" style="padding-left: 30px;">unskilled</td>
-                      <td>
-                        <input type="text" name="target[intensive][unskilled]" class="target-input">
-                      </td>
-                    </tr>
-
-                    <!-- Depot cleaning -->
-                    <tr class="shift-row">
-                      <td colspan="2">Depot cleaning</td>
-                    </tr>
-                    <tr>
-                      <td class="name" style="padding-left: 30px;">unskilled</td>
-                      <td>
-                        <input type="text" name="target[depot][unskilled]" class="target-input">
-                      </td>
-                    </tr>
-                    <tr>
-                      <td class="name" style="padding-left: 30px;">sup.</td>
-                      <td>
-                        <input type="text" name="target[depot][sup]" class="target-input">
-                      </td>
-                    </tr>
-
-                    <!-- PFTA cleaning -->
-                    <tr class="shift-row">
-                      <td colspan="2">PFTA cleaning</td>
-                    </tr>
-                    <tr>
-                      <td class="name" style="padding-left: 30px;">unskilled</td>
-                      <td>
-                        <input type="text" name="target[pfta][unskilled]" class="target-input">
-                      </td>
-                    </tr>
-                    <tr>
-                      <td class="name" style="padding-left: 30px;">sup.</td>
-                      <td>
-                        <input type="text" name="target[pfta][sup]" class="target-input">
-                      </td>
-                    </tr>
-
-                    <!-- vb -->
-                    <tr class="shift-row">
-                      <td colspan="2">vb</td>
-                    </tr>
-                    <tr>
-                      <td class="name" style="padding-left: 30px;">unskilled</td>
-                      <td>
-                        <input type="text" name="target[vb][unskilled]" class="target-input">
-                      </td>
-                    </tr>
-                    <tr>
-                      <td class="name" style="padding-left: 30px;">sup.</td>
-                      <td>
-                        <input type="text" name="target[vb][sup]" class="target-input">
-                      </td>
-                    </tr>
+                      <!-- Dynamic Designations from mcc_designation -->
+                      <?php foreach ($designations as $des): 
+                          $desName = $des['designation_name'];
+                          $lookupKey = strtolower(trim($desName));
+                          $val = isset($existingTargets[$catId][$lookupKey]) ? $existingTargets[$catId][$lookupKey] : '';
+                      ?>
+                        <tr>
+                          <td class="name" style="padding-left: 30px;"><?= htmlspecialchars($desName) ?></td>
+                          <td>
+                            <input 
+                              type="number" 
+                              step="0.01" 
+                              min="0"
+                              name="target_qty[<?= $catId ?>][<?= htmlspecialchars($desName) ?>]" 
+                              value="<?= $val !== '' ? htmlspecialchars($val) : '' ?>" 
+                              placeholder="Enter target rate"
+                              class="target-input"
+                              <?= !empty($isViewer) ? 'readonly' : '' ?>
+                            >
+                          </td>
+                        </tr>
+                      <?php endforeach; ?>
+                    <?php endforeach; ?>
                   </tbody>
                 </table>
               </div>
 
-              <div class="action-row no-print">
-                <button type="submit" class="btn green" style="padding: 0 32px; font-size: 14px;">
-                  Save Targets
-                </button>
-              </div>
+              <?php if (empty($isViewer)): ?>
+                <div class="action-row no-print">
+                  <button type="submit" class="btn green" style="padding: 0 32px; font-size: 14px;">
+                    Save Targets
+                  </button>
+                </div>
+              <?php endif; ?>
             </form>
 
           </div>

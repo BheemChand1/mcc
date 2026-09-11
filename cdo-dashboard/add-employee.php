@@ -1,5 +1,38 @@
 <?php
-require_once '../connection.php';
+require_once 'auth.php';
+
+// Check if table mcc_designation exists, if not create it
+$tableCheckDes = $pdo->query("SHOW TABLES LIKE 'mcc_designation'");
+if ($tableCheckDes->rowCount() == 0) {
+    $sqlDes = "CREATE TABLE `mcc_designation` (
+        `id` INT AUTO_INCREMENT PRIMARY KEY,
+        `station_id` INT NOT NULL DEFAULT 1,
+        `designation_name` VARCHAR(100) NOT NULL,
+        `status` ENUM('Active', 'Inactive') DEFAULT 'Active',
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX (`station_id`),
+        UNIQUE KEY `unique_station_designation` (`station_id`, `designation_name`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;";
+    $pdo->exec($sqlDes);
+
+    $initDesStmt = $pdo->prepare("INSERT IGNORE INTO mcc_designation (station_id, designation_name, status) VALUES (?, ?, 'Active')");
+    $initDesStmt->execute([$stationId, 'Unskilled']);
+    $initDesStmt->execute([$stationId, 'Supervisor']);
+}
+
+// Fetch active designations station-wise
+$desStmt = $pdo->prepare("
+    SELECT designation_name 
+    FROM mcc_designation 
+    WHERE (station_id = :station_id OR station_id = 0) AND status = 'Active' 
+    ORDER BY designation_name ASC
+");
+$desStmt->execute(['station_id' => $stationId]);
+$designationOptions = $desStmt->fetchAll(PDO::FETCH_COLUMN);
+if (empty($designationOptions)) {
+    $designationOptions = ['Supervisor', 'Unskilled'];
+}
 
 // Check if table mcc_employee exists, if not create it
 $tableCheck = $pdo->query("SHOW TABLES LIKE 'mcc_employee'");
@@ -591,7 +624,17 @@ include 'sidebar.php';
               </div>
               <div class="form-group" style="grid-column: span 2;">
                 <label class="form-label">Designation <span class="required">*</span></label>
-                <input type="text" name="designation" class="form-control" placeholder="Designation" required value="<?= getVal('designation', $employee) ?>">
+                <select name="designation" class="form-select" required>
+                  <option value="">-- Select Designation --</option>
+                  <?php 
+                  $currentDes = $employee['designation'] ?? '';
+                  foreach ($designationOptions as $dOpt): 
+                  ?>
+                    <option value="<?= htmlspecialchars($dOpt) ?>" <?= ($currentDes === $dOpt) ? 'selected' : '' ?>>
+                      <?= htmlspecialchars($dOpt) ?>
+                    </option>
+                  <?php endforeach; ?>
+                </select>
               </div>
               <div class="form-group" style="grid-column: span 2;">
                 <label class="form-label">Department</label>

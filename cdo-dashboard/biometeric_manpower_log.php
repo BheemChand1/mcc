@@ -23,19 +23,21 @@ if ($selectedToDate < $selectedFromDate) {
 $startQueryTime = $selectedFromDate . ' 06:00:00';
 $endQueryTime = date('Y-m-d 06:00:00', strtotime($selectedToDate . ' +1 day'));
 
-// Fetch punches from attendance_logs
+// Fetch punches from attendance_logs joined with mcc_employee
 $logsStmt = $pdo->prepare("
     SELECT 
-        id,
-        employee_code,
-        employee_name,
-        punch_time,
-        direction,
-        device_id,
-        device_name
-    FROM attendance_logs
-    WHERE punch_time >= :start_time AND punch_time <= :end_time
-    ORDER BY punch_time ASC
+        a.id,
+        a.employee_code,
+        COALESCE(e.full_name, a.employee_name) AS employee_name,
+        e.designation,
+        a.punch_time,
+        a.direction,
+        a.device_id,
+        a.device_name
+    FROM attendance_logs a
+    LEFT JOIN mcc_employee e ON a.employee_code = e.employee_id
+    WHERE a.punch_time >= :start_time AND a.punch_time <= :end_time
+    ORDER BY a.punch_time ASC
 ");
 $logsStmt->execute([
     'start_time' => $startQueryTime,

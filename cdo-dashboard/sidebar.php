@@ -321,9 +321,6 @@ $has_int_pantry       = in_array('intensive_pantry_scorecard.php', $active_subre
 $has_pantry_chem      = in_array('pantry-chemical.php', $active_subreport_urls);
 $has_pantry_mach      = in_array('pantry-machine.php', $active_subreport_urls);
 $has_pantry_any       = (in_array('pantry_car', $active_app_keys) || in_array(5, $active_report_ids)) && ($has_int_pantry || $has_pantry_chem || $has_pantry_mach);
-if (intval($_SESSION['station_id'] ?? 1) === 4) {
-    $has_pantry_any = false;
-}
 $has_int_any          = (in_array('intensive_cleaning', $active_app_keys) || in_array(2, $active_report_ids)) && ($has_int_audit || $has_int_chem || $has_int_mach || $has_int_scorecard_2);
 
 $has_dc_audit   = in_array('DC-Scorecard.php', $active_subreport_urls);
@@ -344,9 +341,6 @@ $has_vb_audit     = in_array('vande-bharat-report.php', $active_subreport_urls);
 $has_vb_chem      = in_array('vande-bharat-chemical.php', $active_subreport_urls);
 $has_vb_mach      = in_array('vande-bharat-machine.php', $active_subreport_urls);
 $has_vb_any       = (in_array('vande_bharat_modules', $active_app_keys) || in_array(7, $active_report_ids)) && ($has_vb_audit || $has_vb_chem || $has_vb_mach);
-if (intval($_SESSION['station_id'] ?? 1) === 4) {
-    $has_vb_any = false;
-}
 
 $has_manpower_log = (in_array('attendance_manpower', $active_app_keys) || in_array(8, $active_report_ids)) && in_array('man-power-log.php', $active_subreport_urls);
 $has_biometric    = (in_array('attendance_manpower', $active_app_keys) || in_array(8, $active_report_ids)) && in_array('biometeric_manpower_log.php', $active_subreport_urls);

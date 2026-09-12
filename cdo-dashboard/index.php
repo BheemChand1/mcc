@@ -48,33 +48,58 @@ $mccPctDelta = function ($cur, $prev): float {
 /* ------------------------------------------------------------------ */
 /* 1. OPERATION CATEGORIES + PERIOD AGGREGATES                        */
 /* ------------------------------------------------------------------ */
-// Fetch active report module keys for current station
+// Fetch active report module keys & subreport urls for current station dynamically
+$activeReportIds = [];
 $activeAppKeys = [];
+$activeSubreportUrls = [];
 try {
-    $st = $pdo->prepare("SELECT app_key FROM mcc_reports WHERE station_id = :sid AND status = 'Active'");
+    $st = $pdo->prepare("SELECT report_id, app_key FROM mcc_reports WHERE station_id = :sid AND status = 'Active'");
     $st->execute([':sid' => $stationId]);
-    $activeAppKeys = $st->fetchAll(PDO::FETCH_COLUMN);
+    $repRows = $st->fetchAll(PDO::FETCH_ASSOC);
+    $activeReportIds = array_column($repRows, 'report_id');
+    $activeAppKeys = array_column($repRows, 'app_key');
+
+    if (!empty($activeReportIds)) {
+        $inClause = implode(',', array_map('intval', $activeReportIds));
+        $subSt = $pdo->query("SELECT report_url, aap_key FROM mcc_subreports WHERE report_id IN ($inClause) AND status = 'Active'");
+        $subRows = $subSt->fetchAll(PDO::FETCH_ASSOC);
+        $activeSubreportUrls = array_column($subRows, 'report_url');
+    }
 } catch (Exception $e) {}
 
-// Station 4 explicitly has no Pantry Car or Vande Bharat
-$hasPantry = in_array('pantry_car', $activeAppKeys) && intval($stationId) !== 4;
-$hasVande  = in_array('vande_bharat_modules', $activeAppKeys) && intval($stationId) !== 4;
-$hasDc     = in_array('dc_cleaning', $activeAppKeys) || in_array(3, $activeAppKeys) || in_array(14, $activeAppKeys) || intval($stationId) === 4;
+$hasNormal    = in_array('normal_cleaning', $activeAppKeys) || in_array(1, $activeReportIds) || in_array('normal-report.php', $activeSubreportUrls);
+$hasIntensive = in_array('intensive_cleaning', $activeAppKeys) || in_array(2, $activeReportIds) || in_array('intensive-report.php', $activeSubreportUrls) || in_array('intensive_scorecard_2.php', $activeSubreportUrls);
+$hasDc        = in_array('dc_cleaning', $activeAppKeys) || in_array(3, $activeReportIds) || in_array('DC-Scorecard.php', $activeSubreportUrls);
+$hasPrt       = in_array('prt_cleaning', $activeAppKeys) || in_array(4, $activeReportIds) || in_array('Platform-Return-TrainsScorecard.php', $activeSubreportUrls);
+$hasPantry    = in_array('pantry_car', $activeAppKeys) || in_array(5, $activeReportIds) || in_array('intensive_pantry_scorecard.php', $activeSubreportUrls);
+$hasVande     = in_array('vande_bharat_modules', $activeAppKeys) || in_array(7, $activeReportIds) || in_array('vande-bharat-report.php', $activeSubreportUrls);
 
-$categories = [
-    'normal'    => ['label' => 'Normal Cleaning',    'short' => 'Normal',       'table' => 'mcc_normal_scorecard_report',      'color' => '#2f8bff', 'icon' => 'bi-bus-front-fill'],
-    'intensive' => ['label' => 'Intensive Cleaning', 'short' => 'Intensive',    'table' => 'mcc_intensive_scorecard_2_report', 'color' => '#a55eea', 'icon' => 'bi-droplet-fill'],
-];
+// Detect which intensive scorecard table is configured (scorecard 1 vs scorecard 2)
+$intensiveTable = (in_array('intensive-report.php', $activeSubreportUrls) && !in_array('intensive_scorecard_2.php', $activeSubreportUrls))
+    ? 'mcc_intensive_scorecard_report'
+    : 'mcc_intensive_scorecard_2_report';
+
+$categories = [];
+
+if ($hasNormal) {
+    $categories['normal'] = ['label' => 'Normal Cleaning', 'short' => 'Normal', 'table' => 'mcc_normal_scorecard_report', 'color' => '#2f8bff', 'icon' => 'bi-bus-front-fill'];
+}
+
+if ($hasIntensive) {
+    $categories['intensive'] = ['label' => 'Intensive Cleaning', 'short' => 'Intensive', 'table' => $intensiveTable, 'color' => '#a55eea', 'icon' => 'bi-droplet-fill'];
+}
 
 if ($hasDc) {
     $categories['dc'] = ['label' => 'Depot Cleaning', 'short' => 'Depot', 'table' => 'dc_mcc_report', 'color' => '#10b981', 'icon' => 'bi-shield-check'];
 }
 
+if ($hasPrt) {
+    $categories['prt'] = ['label' => 'PFTA Trains', 'short' => 'PFTA', 'table' => 'mcc_prt_scorecard_report', 'color' => '#ffaa2b', 'icon' => 'bi-person-workspace'];
+}
+
 if ($hasPantry) {
     $categories['pantry'] = ['label' => 'Pantry Car', 'short' => 'Pantry Car', 'table' => 'mcc_intensive_pantry_report', 'color' => '#22e07c', 'icon' => 'bi-egg-fried'];
 }
-
-$categories['prt'] = ['label' => 'PFTA Trains', 'short' => 'PFTA', 'table' => 'mcc_prt_scorecard_report', 'color' => '#ffaa2b', 'icon' => 'bi-person-workspace'];
 
 if ($hasVande) {
     $categories['vande'] = ['label' => 'Vande Bharat', 'short' => 'Vande Bharat', 'table' => 'mcc_vb_scorecard_report', 'color' => '#22d3ee', 'icon' => 'bi-train-front-fill'];
@@ -133,12 +158,19 @@ foreach ($categories as $key => $cat) {
 /* ------------------------------------------------------------------ */
 /* 2. OVERALL CHEMICAL SCORE (qty_used vs target qty)                 */
 /* ------------------------------------------------------------------ */
-$chemicalPairs = [
-    ['mcc_normal_chemical_report',    'mcc_normal_chemical_target'],
-    ['mcc_intensive_chemical_report', 'mcc_intensive_chemical_target'],
-    ['mcc_prt_chemical_report',       'mcc_prt_chemical_target'],
-    ['dc_mcc_chemical_report',        'dc_mcc_chemical_target'],
-];
+$chemicalPairs = [];
+if ($hasNormal) {
+    $chemicalPairs[] = ['mcc_normal_chemical_report', 'mcc_normal_chemical_target'];
+}
+if ($hasIntensive) {
+    $chemicalPairs[] = ['mcc_intensive_chemical_report', 'mcc_intensive_chemical_target'];
+}
+if ($hasPrt) {
+    $chemicalPairs[] = ['mcc_prt_chemical_report', 'mcc_prt_chemical_target'];
+}
+if ($hasDc) {
+    $chemicalPairs[] = ['dc_mcc_chemical_report', 'dc_mcc_chemical_target'];
+}
 if ($hasPantry) {
     $chemicalPairs[] = ['mcc_intensive_pantry_chemical_report', 'mcc_intensive_pantry_chemical_target'];
 }
@@ -187,7 +219,19 @@ $chemicalScorePrev = $chemActivePrev ? round(array_sum($chemActivePrev) / count(
 /* ------------------------------------------------------------------ */
 /* 3. OVERALL MACHINE SCORE (used_status Y compliance)                */
 /* ------------------------------------------------------------------ */
-$machineTables = ['mcc_normal_machine_report', 'mcc_intensive_machine_report', 'dc_mcc_machine_report', 'mcc_prt_machine_report'];
+$machineTables = [];
+if ($hasNormal) {
+    $machineTables[] = 'mcc_normal_machine_report';
+}
+if ($hasIntensive) {
+    $machineTables[] = 'mcc_intensive_machine_report';
+}
+if ($hasDc) {
+    $machineTables[] = 'dc_mcc_machine_report';
+}
+if ($hasPrt) {
+    $machineTables[] = 'mcc_prt_machine_report';
+}
 if ($hasPantry) {
     $machineTables[] = 'mcc_intensive_pantry_machine_report';
 }
@@ -375,11 +419,20 @@ $topTrains = array_slice($topTrains, 0, 5);
 /* ------------------------------------------------------------------ */
 /* 8. QUALITY PARAMETER SCORES (parent parameters, 0-3 scale)         */
 /* ------------------------------------------------------------------ */
-$qualityParameterSources = [
-    ['report' => 'mcc_normal_scorecard_report',      'sub' => 'mcc_normal_scorecard_sub_param',      'param' => 'mcc_normal_scorecard_param'],
-    ['report' => 'mcc_intensive_scorecard_2_report', 'sub' => 'mcc_intensive_scorecard_2_sub_param', 'param' => 'mcc_intensive_scorecard_2_param'],
-    ['report' => 'mcc_prt_scorecard_report',         'sub' => 'mcc_prt_scorecard_sub_param',         'param' => 'mcc_prt_scorecard_param'],
-];
+$qualityParameterSources = [];
+if ($hasNormal) {
+    $qualityParameterSources[] = ['report' => 'mcc_normal_scorecard_report', 'sub' => 'mcc_normal_scorecard_sub_param', 'param' => 'mcc_normal_scorecard_param'];
+}
+if ($hasIntensive) {
+    if ($intensiveTable === 'mcc_intensive_scorecard_report') {
+        $qualityParameterSources[] = ['report' => 'mcc_intensive_scorecard_report', 'sub' => 'mcc_intensive_scorecard_sub_param', 'param' => 'mcc_intensive_scorecard_param'];
+    } else {
+        $qualityParameterSources[] = ['report' => 'mcc_intensive_scorecard_2_report', 'sub' => 'mcc_intensive_scorecard_2_sub_param', 'param' => 'mcc_intensive_scorecard_2_param'];
+    }
+}
+if ($hasPrt) {
+    $qualityParameterSources[] = ['report' => 'mcc_prt_scorecard_report', 'sub' => 'mcc_prt_scorecard_sub_param', 'param' => 'mcc_prt_scorecard_param'];
+}
 if ($hasPantry) {
     $qualityParameterSources[] = ['report' => 'mcc_intensive_pantry_report', 'sub' => 'mcc_intensive_pantry_sub_param', 'param' => 'mcc_intensive_pantry_param'];
 }

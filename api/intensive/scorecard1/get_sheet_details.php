@@ -70,10 +70,10 @@ try {
     $paramsStmt->execute([$meta['station_id'], $meta['station_id']]);
     $paramsRows = $paramsStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Fetch all rating options grouped by rating_group
+    // Fetch all rating options grouped by rating_group from mcc_intensive_rating
     $ratingsRows = [];
     try {
-        $ratingsStmt = $pdo->query("SELECT rating_group, rating_name, rating_value FROM mcc_intensive_scorecard_2_rating ORDER BY id ASC");
+        $ratingsStmt = $pdo->query("SELECT rating_group, rating_name, rating_value FROM mcc_intensive_rating ORDER BY id ASC");
         if ($ratingsStmt) {
             $ratingsRows = $ratingsStmt->fetchAll(PDO::FETCH_ASSOC);
         }
@@ -81,7 +81,7 @@ try {
 
     if (empty($ratingsRows)) {
         try {
-            $ratingsStmt = $pdo->query("SELECT rating_group, rating_name, rating_value FROM mcc_normal_rating ORDER BY id ASC");
+            $ratingsStmt = $pdo->query("SELECT rating_group, rating_name, rating_value FROM mcc_intensive_scorecard_2_rating ORDER BY id ASC");
             if ($ratingsStmt) {
                 $ratingsRows = $ratingsStmt->fetchAll(PDO::FETCH_ASSOC);
             }
@@ -94,8 +94,8 @@ try {
             ['rating_group' => 'cleaning', 'rating_name' => 'Good', 'rating_value' => '2'],
             ['rating_group' => 'cleaning', 'rating_name' => 'Average', 'rating_value' => '1'],
             ['rating_group' => 'cleaning', 'rating_name' => 'Poor', 'rating_value' => '0'],
-            ['rating_group' => 'yes_no', 'rating_name' => 'Yes', 'rating_value' => 'Y'],
-            ['rating_group' => 'yes_no', 'rating_name' => 'No', 'rating_value' => 'N'],
+            ['rating_group' => 'watering', 'rating_name' => 'Yes', 'rating_value' => 'Y'],
+            ['rating_group' => 'watering', 'rating_name' => 'No', 'rating_value' => 'N'],
         ];
     }
 
@@ -111,6 +111,13 @@ try {
         ];
     }
 
+    // Ensure aliases match
+    if (isset($ratingGroups['watering']) && !isset($ratingGroups['yes_no'])) {
+        $ratingGroups['yes_no'] = $ratingGroups['watering'];
+    } elseif (isset($ratingGroups['yes_no']) && !isset($ratingGroups['watering'])) {
+        $ratingGroups['watering'] = $ratingGroups['yes_no'];
+    }
+
     // Group subparameters by parameter
     $parameters = [];
     foreach ($paramsRows as $row) {
@@ -123,10 +130,13 @@ try {
             ];
         }
 
-        $inputType = (stripos($row['sub_parameter_name'], 'Yes') !== false || stripos($row['parameter_name'], 'Watering') !== false) 
-            ? 'yes_no' 
-            : 'cleaning';
-        $options = $ratingGroups[$inputType] ?? ($ratingGroups['cleaning'] ?? []);
+        $isWatering = (
+            stripos($row['sub_parameter_name'], 'Yes') !== false || 
+            stripos($row['sub_parameter_name'], 'No') !== false ||
+            stripos($row['parameter_name'], 'Watering') !== false
+        );
+        $inputType = $isWatering ? 'watering' : 'cleaning';
+        $options = $ratingGroups[$inputType] ?? ($ratingGroups['yes_no'] ?? ($ratingGroups['cleaning'] ?? []));
 
         $parameters[$pId]['sub_parameters'][] = [
             'sub_parameter_id' => $row['sub_parameter_id'],

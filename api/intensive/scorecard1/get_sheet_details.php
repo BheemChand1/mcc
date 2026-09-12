@@ -22,12 +22,23 @@ if (empty($tokenId)) {
 try {
     // 1. Fetch token details - Intensive Scorecard 1
     $metaStmt = $pdo->prepare("
-        SELECT DISTINCT token_id, train_no, report_date, submitted_by AS auditor_name, station_id
+        SELECT DISTINCT token_id, train_no, report_date, auditor_name, station_id
         FROM mcc_intensive_scorecard_report
         WHERE token_id = :token_id
     ");
     $metaStmt->execute(['token_id' => $tokenId]);
     $meta = $metaStmt->fetch(PDO::FETCH_ASSOC);
+
+    if ($meta && (empty($meta['auditor_name']) || !isset($meta['auditor_name']))) {
+        // Fallback to chemical report auditor_name if empty
+        try {
+            $auditorStmt = $pdo->prepare("SELECT auditor_name FROM mcc_intensive_chemical_report WHERE token_id = ? LIMIT 1");
+            $auditorStmt->execute([$tokenId]);
+            $meta['auditor_name'] = $auditorStmt->fetchColumn() ?: '';
+        } catch (Exception $e) {
+            $meta['auditor_name'] = '';
+        }
+    }
 
     if (!$meta) {
         http_response_code(404);

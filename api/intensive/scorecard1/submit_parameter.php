@@ -37,7 +37,7 @@ try {
     // Prepare update query - Intensive Scorecard 1
     $stmt = $pdo->prepare("
         UPDATE mcc_intensive_scorecard_report 
-        SET score_value = :score_value, submitted_by = :submitted_by
+        SET score_value = :score_value, auditor_name = :auditor_name
         WHERE token_id = :token_id 
           AND train_no = :train_no 
           AND coach_no = :coach_no 
@@ -53,7 +53,7 @@ try {
         if ($subParamId !== null) {
             $stmt->execute([
                 'score_value' => $val,
-                'submitted_by' => $auditorName,
+                'auditor_name' => $auditorName,
                 'token_id' => $tokenId,
                 'train_no' => $trainNo,
                 'coach_no' => $coachNo,

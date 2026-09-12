@@ -36,7 +36,7 @@ try {
             sp.id AS sub_parameter_id, 
             sp.sub_parameter_name, 
             r.score_value,
-            r.submitted_by,
+            r.auditor_name,
             r.report_date
         FROM mcc_intensive_scorecard_report r
         JOIN mcc_intensive_scorecard_sub_param sp ON r.sub_parameter_id = sp.id
@@ -111,7 +111,7 @@ try {
     foreach ($rows as $row) {
         $pId = $row['parameter_id'];
         if (empty($auditorName)) {
-            $auditorName = $row['submitted_by'];
+            $auditorName = $row['auditor_name'] ?? '';
         }
         if (empty($reportDate)) {
             $reportDate = $row['report_date'];

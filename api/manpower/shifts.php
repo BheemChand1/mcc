@@ -59,23 +59,43 @@ try {
 
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 2. Fetch filled shift IDs for the given date from mcc_manpower_log
+    // 2. Fetch total active mapped manpower types for each shift
+    $totalTypesStmt = $pdo->prepare("
+        SELECT map.shift_id, COUNT(DISTINCT t.id) AS total_types
+        FROM mcc_manpower_shift_type_map map
+        JOIN mcc_manpower_types t ON map.manpower_type_id = t.id
+        WHERE t.status = 'Active' AND map.station_id = :station_id
+        GROUP BY map.shift_id
+    ");
+    $totalTypesStmt->execute(['station_id' => $stationId]);
+    $totalTypesMap = $totalTypesStmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+    // Fallback: total active manpower types for the station
+    $fallbackTypesStmt = $pdo->prepare("
+        SELECT COUNT(DISTINCT id) FROM mcc_manpower_types WHERE station_id = :station_id AND status = 'Active'
+    ");
+    $fallbackTypesStmt->execute(['station_id' => $stationId]);
+    $defaultStationTypesCount = intval($fallbackTypesStmt->fetchColumn() ?: 0);
+
+    // 3. Fetch count of submitted distinct manpower types per shift for the given date
     $filledStmt = $pdo->prepare("
-        SELECT DISTINCT shift_id 
+        SELECT shift_id, COUNT(DISTINCT manpower_type_id) AS filled_types
         FROM mcc_manpower_log 
         WHERE station_id = :station_id AND report_date = :report_date
+        GROUP BY shift_id
     ");
     $filledStmt->execute([
         'station_id' => $stationId,
         'report_date' => $reportDate
     ]);
-    $filledShiftIds = $filledStmt->fetchAll(PDO::FETCH_COLUMN, 0);
-    $filledMap = array_flip($filledShiftIds);
+    $filledCountsMap = $filledStmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
     $shifts = [];
     foreach ($rows as $row) {
         $sId = intval($row['shift_id']);
-        $isFilled = isset($filledMap[$sId]) ? 1 : 0;
+        $requiredCount = isset($totalTypesMap[$sId]) ? intval($totalTypesMap[$sId]) : $defaultStationTypesCount;
+        $filledCount   = isset($filledCountsMap[$sId]) ? intval($filledCountsMap[$sId]) : 0;
+        $isFilled      = ($requiredCount > 0 && $filledCount >= $requiredCount) ? 1 : 0;
 
         $shifts[] = [
             "id"            => $sId,
@@ -84,7 +104,9 @@ try {
             "category_id"   => intval($row['category_id']),
             "category_name" => $row['category_name'],
             "order_no"      => intval($row['order_no']),
-            "status"        => $isFilled
+            "status"        => $isFilled,
+            "filled_count"  => $filledCount,
+            "total_count"   => $requiredCount
         ];
     }
 

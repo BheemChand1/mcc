@@ -118,78 +118,7 @@ foreach ($logRows as $row) {
     ];
 }
 
-// Helper function to identify unskilled manpower roles
-if (!function_exists('isUnskilledRole')) {
-    function isUnskilledRole($roleName) {
-        $r = strtolower(trim($roleName));
-        if (strpos($r, 'supervisor') !== false || strpos($r, 'chi') !== false || strpos($r, 'officer') !== false) {
-            return false;
-        }
-        if (strpos($r, 'unskilled') !== false || strpos($r, 'staff') !== false || strpos($r, 'safaiwala') !== false || strpos($r, 'safai') !== false || strpos($r, 'cleaner') !== false || strpos($r, 'labour') !== false || strpos($r, 'helper') !== false) {
-            return true;
-        }
-        if (strpos($r, 'semi') !== false || (strpos($r, 'skilled') !== false && strpos($r, 'unskilled') === false)) {
-            return false;
-        }
-        return true;
-    }
-}
 
-// Helper function to map category to scorecard table
-if (!function_exists('getScorecardTableForCategory')) {
-    function getScorecardTableForCategory($categoryName) {
-        $c = strtolower(trim($categoryName));
-        if (strpos($c, 'normal') !== false) {
-            return 'mcc_normal_scorecard_report';
-        } elseif (strpos($c, 'intensive') !== false) {
-            return 'mcc_intensive_scorecard_2_report';
-        } elseif (strpos($c, 'prt') !== false || strpos($c, 'platform') !== false) {
-            return 'mcc_prt_scorecard_report';
-        } elseif (strpos($c, 'vande') !== false || strpos($c, 'vb') !== false) {
-            return 'mcc_vb_scorecard_report';
-        }
-        return null;
-    }
-}
-
-// Helper function to get distinct coach count for a railway date (06:00 AM of $date to 07:00 AM of next day)
-if (!function_exists('getRailwayDateCoachCount')) {
-    function getRailwayDateCoachCount($pdo, $tableName, $stationId, $date) {
-        static $coachCache = [];
-        $cacheKey = "{$tableName}_{$stationId}_{$date}";
-        if (isset($coachCache[$cacheKey])) {
-            return $coachCache[$cacheKey];
-        }
-        
-        $startDateTime = $date . ' 06:00:00';
-        $nextDate = date('Y-m-d', strtotime($date . ' +1 day'));
-        $endDateTime = $nextDate . ' 07:00:00';
-        
-        try {
-            $stmt = $pdo->prepare("
-                SELECT COUNT(DISTINCT token_id, coach_no) AS total_coaches
-                FROM {$tableName}
-                WHERE station_id = :station_id
-                  AND (
-                      (created_at IS NOT NULL AND created_at >= :start_dt AND created_at <= :end_dt)
-                      OR (created_at IS NULL AND report_date = :rep_date)
-                  )
-            ");
-            $stmt->execute([
-                'station_id' => $stationId,
-                'start_dt' => $startDateTime,
-                'end_dt' => $endDateTime,
-                'rep_date' => $date
-            ]);
-            $count = intval($stmt->fetchColumn() ?: 0);
-        } catch (Exception $e) {
-            $count = 0;
-        }
-        
-        $coachCache[$cacheKey] = $count;
-        return $count;
-    }
-}
 
 $extraStyles = "
 .sub-category {
@@ -251,20 +180,10 @@ include 'sidebar.php';
                     
                     foreach ($categories as $cat) {
                         $cId = $cat['id'];
-                        $scorecardTable = getScorecardTableForCategory($cat['category_name']);
-                        $coachCount = ($scorecardTable !== null) ? getRailwayDateCoachCount($pdo, $scorecardTable, $stationId, $date) : 0;
 
                         foreach ($cat['roles'] as $role) {
                             $tId = $role['manpower_type_id'];
-                            $rawNorm = floatval($targetsMap[$targetMonthDate][$cId][$tId] ?? $targetsMap[$targetMonthDate][0][$tId] ?? 0);
-                            $isUnskilled = isUnskilledRole($role['role_name']);
-                            
-                            // Unskilled manpower target is multiplied by coach count for dynamic scorecard categories
-                            if ($scorecardTable !== null && $isUnskilled) {
-                                $effectiveNorm = $rawNorm * $coachCount;
-                            } else {
-                                $effectiveNorm = $rawNorm;
-                            }
+                            $effectiveNorm = floatval($targetsMap[$targetMonthDate][$cId][$tId] ?? $targetsMap[$targetMonthDate][0][$tId] ?? 0);
                             $totalNorms += $effectiveNorm;
                             
                             $roleTotalProvided = 0;
@@ -345,8 +264,6 @@ include 'sidebar.php';
 
                                         foreach ($categories as $cat): 
                                             $cId = $cat['id'];
-                                            $scorecardTable = getScorecardTableForCategory($cat['category_name']);
-                                            $coachCount = ($scorecardTable !== null) ? getRailwayDateCoachCount($pdo, $scorecardTable, $stationId, $date) : 0;
 
                                             $catShiftTotals = [];
                                             foreach ($cat['shifts'] as $sh) {
@@ -365,25 +282,12 @@ include 'sidebar.php';
                                             <tr class="sub-category">
                                                 <td colspan="<?= $colCount ?>" style="text-align:center !important; padding-left:0 !important; text-transform: uppercase;">
                                                     <?= htmlspecialchars($cat['category_name']) ?>
-                                                    <?php if ($scorecardTable !== null): ?>
-                                                        <span style="font-weight: 600; font-size: 13px; text-transform: none; margin-left: 10px; color: #1e3a8a; background: #dbeafe; padding: 2px 10px; border-radius: 12px;">
-                                                            <?= $coachCount ?> Coaches Cleaned
-                                                        </span>
-                                                    <?php endif; ?>
                                                 </td>
                                             </tr>
 
                                             <?php foreach ($cat['roles'] as $role): 
                                                 $tId = $role['manpower_type_id'];
-                                                $rawNorm = floatval($targetsMap[$targetMonthDate][$cId][$tId] ?? $targetsMap[$targetMonthDate][0][$tId] ?? 0);
-                                                $isUnskilled = isUnskilledRole($role['role_name']);
-
-                                                // Dynamic target for unskilled roles based on coaches cleaned
-                                                if ($scorecardTable !== null && $isUnskilled) {
-                                                    $effectiveNorm = $rawNorm * $coachCount;
-                                                } else {
-                                                    $effectiveNorm = $rawNorm;
-                                                }
+                                                $effectiveNorm = floatval($targetsMap[$targetMonthDate][$cId][$tId] ?? $targetsMap[$targetMonthDate][0][$tId] ?? 0);
                                                 $normVal = (floatval($effectiveNorm) == intval($effectiveNorm)) ? intval($effectiveNorm) : round($effectiveNorm, 2);
 
                                                 $catTotalTarget += $effectiveNorm;

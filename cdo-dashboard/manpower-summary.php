@@ -17,80 +17,6 @@ $firstDayOfMonth = "$selectedYear-$selectedMonth-01";
 $lastDayOfMonth = date('Y-m-t', strtotime($firstDayOfMonth));
 
 // Fetch active categories, shifts, and mapped roles (sorted by order_no)
-// Helper function to identify unskilled manpower roles
-if (!function_exists('isUnskilledRole')) {
-    function isUnskilledRole($roleName) {
-        $r = strtolower(trim($roleName));
-        if (strpos($r, 'supervisor') !== false || strpos($r, 'chi') !== false || strpos($r, 'officer') !== false) {
-            return false;
-        }
-        if (strpos($r, 'unskilled') !== false || strpos($r, 'staff') !== false || strpos($r, 'safaiwala') !== false || strpos($r, 'safai') !== false || strpos($r, 'cleaner') !== false || strpos($r, 'labour') !== false || strpos($r, 'helper') !== false) {
-            return true;
-        }
-        if (strpos($r, 'semi') !== false || (strpos($r, 'skilled') !== false && strpos($r, 'unskilled') === false)) {
-            return false;
-        }
-        return true;
-    }
-}
-
-// Helper function to map category to scorecard table
-if (!function_exists('getScorecardTableForCategory')) {
-    function getScorecardTableForCategory($categoryName) {
-        $c = strtolower(trim($categoryName));
-        if (strpos($c, 'normal') !== false) {
-            return 'mcc_normal_scorecard_report';
-        } elseif (strpos($c, 'intensive') !== false) {
-            return 'mcc_intensive_scorecard_2_report';
-        } elseif (strpos($c, 'prt') !== false || strpos($c, 'platform') !== false) {
-            return 'mcc_prt_scorecard_report';
-        } elseif (strpos($c, 'vande') !== false || strpos($c, 'vb') !== false) {
-            return 'mcc_vb_scorecard_report';
-        }
-        return null;
-    }
-}
-
-// Helper function to get distinct coach count for a railway date (06:00 AM of $date to 07:00 AM of next day)
-if (!function_exists('getRailwayDateCoachCount')) {
-    function getRailwayDateCoachCount($pdo, $tableName, $stationId, $date) {
-        static $coachCache = [];
-        $cacheKey = "{$tableName}_{$stationId}_{$date}";
-        if (isset($coachCache[$cacheKey])) {
-            return $coachCache[$cacheKey];
-        }
-        
-        $startDateTime = $date . ' 06:00:00';
-        $nextDate = date('Y-m-d', strtotime($date . ' +1 day'));
-        $endDateTime = $nextDate . ' 07:00:00';
-        
-        try {
-            $stmt = $pdo->prepare("
-                SELECT COUNT(DISTINCT token_id, coach_no) AS total_coaches
-                FROM {$tableName}
-                WHERE station_id = :station_id
-                  AND (
-                      (created_at IS NOT NULL AND created_at >= :start_dt AND created_at <= :end_dt)
-                      OR (created_at IS NULL AND report_date = :rep_date)
-                  )
-            ");
-            $stmt->execute([
-                'station_id' => $stationId,
-                'start_dt' => $startDateTime,
-                'end_dt' => $endDateTime,
-                'rep_date' => $date
-            ]);
-            $count = intval($stmt->fetchColumn() ?: 0);
-        } catch (Exception $e) {
-            $count = 0;
-        }
-        
-        $coachCache[$cacheKey] = $count;
-        return $count;
-    }
-}
-
-// Fetch active categories, shifts, and mapped roles (sorted by order_no)
 $categories = [];
 $catStmt = $pdo->prepare("
     SELECT id, category_name 
@@ -240,10 +166,16 @@ if (!empty($penaltyHeaderSuffix)) {
     $penaltyHeaderTitle .= " : " . $penaltyHeaderSuffix;
 }
 
-// Calculate daily scores and penalties
+// Calculate daily targets, actuals, scores and penalties
 $dailySummary = [];
+$totalMonthlyToProvide = 0;
+$totalMonthlyAvailable = 0;
+$totalMonthlyAbsent = 0;
+$totalMonthlyNoDress = 0;
+$totalMonthlyNoPpe = 0;
 $totalMonthlyPenalty = 0.0;
 $sumDailyScores = 0.0;
+$loggedDaysCount = 0;
 
 for ($d = 1; $d <= $daysInMonth; $d++) {
     $dayStr = str_pad($d, 2, '0', STR_PAD_LEFT);
@@ -258,36 +190,26 @@ for ($d = 1; $d <= $daysInMonth; $d++) {
     $dayPenalty = 0.0;
     $dayScore = 0.0;
     
-    // Sum target norms for the day (unskilled targets multiplied dynamically by coach counts for scorecard categories)
-    $effectiveTargets = [];
+    // Sum target norms for the day from configuration
     foreach ($categories as $cat) {
         $cId = $cat['id'];
-        $scorecardTable = getScorecardTableForCategory($cat['category_name']);
-        $coachCount = ($scorecardTable !== null) ? getRailwayDateCoachCount($pdo, $scorecardTable, $stationId, $dateStr) : 0;
-
         foreach ($cat['roles'] as $role) {
             $tId = $role['manpower_type_id'];
-            $rawNorm = floatval($targetsMap[$cId][$tId] ?? $targetsMap[0][$tId] ?? 0);
-            $isUnskilled = isUnskilledRole($role['role_name']);
-
-            if ($scorecardTable !== null && $isUnskilled) {
-                $effectiveNorm = $rawNorm * $coachCount;
-            } else {
-                $effectiveNorm = $rawNorm;
-            }
-            $effectiveTargets[$cId][$tId] = $effectiveNorm;
+            $effectiveNorm = floatval($targetsMap[$cId][$tId] ?? $targetsMap[0][$tId] ?? 0);
             $dayToProvide += $effectiveNorm;
         }
     }
     
     $hasLogsForDay = isset($logsMap[$dateStr]);
     if ($hasLogsForDay) {
+        $loggedDaysCount++;
         $cappedAvailable = 0;
+        
         foreach ($categories as $cat) {
             $cId = $cat['id'];
             foreach ($cat['roles'] as $role) {
                 $tId = $role['manpower_type_id'];
-                $effectiveNorm = $effectiveTargets[$cId][$tId] ?? 0;
+                $effectiveNorm = floatval($targetsMap[$cId][$tId] ?? $targetsMap[0][$tId] ?? 0);
                 
                 $roleProvided = 0;
                 $roleAbsent = 0;
@@ -331,6 +253,11 @@ for ($d = 1; $d <= $daysInMonth; $d++) {
         $dayScore = 0.0;
     }
     
+    $totalMonthlyToProvide += $dayToProvide;
+    $totalMonthlyAvailable += $dayAvailable;
+    $totalMonthlyAbsent += $dayAbsent;
+    $totalMonthlyNoDress += $dayNoDress;
+    $totalMonthlyNoPpe += $dayNoPpe;
     $totalMonthlyPenalty += $dayPenalty;
     $sumDailyScores += $dayScore;
     
@@ -346,7 +273,7 @@ for ($d = 1; $d <= $daysInMonth; $d++) {
     ];
 }
 
-$avgMonthlyScore = $daysInMonth > 0 ? ($sumDailyScores / $daysInMonth) : 0.0;
+$avgMonthlyScore = $loggedDaysCount > 0 ? ($sumDailyScores / $loggedDaysCount) : 0.0;
 
 $pageTitle = 'Monthly Manpower Summary Report | CDO Dashboard';
 
@@ -543,7 +470,7 @@ include 'sidebar.php';
                             <?php foreach ($dailySummary as $day): ?>
                                 <tr>
                                     <td style="font-weight: 600;"><?= htmlspecialchars($day['date']) ?></td>
-                                    <td><?= number_format($day['to_provide'], 0) ?></td>
+                                    <td><?= (floatval($day['to_provide']) == intval($day['to_provide'])) ? intval($day['to_provide']) : round($day['to_provide'], 2) ?></td>
                                     <td><?= number_format($day['available'], 0) ?></td>
                                     <td><?= number_format($day['absent'], 0) ?></td>
                                     <td><?= number_format($day['no_dress'], 0) ?></td>
@@ -554,7 +481,12 @@ include 'sidebar.php';
                             
                             <!-- Bottom Summary Row -->
                             <tr style="font-weight: bold; background-color: #f8fafc;">
-                                <td colspan="6" style="text-align: right; padding-right: 15px;">Total Month Penalty</td>
+                                <td>Total</td>
+                                <td><?= (floatval($totalMonthlyToProvide) == intval($totalMonthlyToProvide)) ? intval($totalMonthlyToProvide) : round($totalMonthlyToProvide, 2) ?></td>
+                                <td><?= number_format($totalMonthlyAvailable, 0) ?></td>
+                                <td><?= number_format($totalMonthlyAbsent, 0) ?></td>
+                                <td><?= number_format($totalMonthlyNoDress, 0) ?></td>
+                                <td><?= number_format($totalMonthlyNoPpe, 0) ?></td>
                                 <td><?= number_format($totalMonthlyPenalty, 0) ?></td>
                             </tr>
                         </tbody>

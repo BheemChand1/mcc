@@ -1,101 +1,476 @@
 <?php
 require_once 'auth.php';
 
-$pageTitle = 'Manpower Log | CDO';
-$extraStyles = "";
+$fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
+$toDate = $_GET['to_date'] ?? date('Y-m-d');
+
+// Generate list of dates between fromDate and toDate
+$datesList = [];
+$currentDate = $fromDate;
+while (strtotime($currentDate) <= strtotime($toDate)) {
+    $datesList[] = $currentDate;
+    $currentDate = date('Y-m-d', strtotime($currentDate . ' +1 day'));
+}
+
+// Fetch active categories, shifts, and mapped roles (sorted by order_no)
+$categories = [];
+$catStmt = $pdo->prepare("
+    SELECT id, category_name 
+    FROM mcc_manpower_categories 
+    WHERE station_id = :station_id AND status = 'Active' 
+    ORDER BY order_no ASC, id ASC
+");
+$catStmt->execute(['station_id' => $stationId]);
+$catList = $catStmt->fetchAll();
+
+foreach ($catList as $cat) {
+    $categoryId = $cat['id'];
+    
+    // Fetch shifts for this category
+    $shiftStmt = $pdo->prepare("
+        SELECT id, shift_name 
+        FROM mcc_manpower_shifts 
+        WHERE category_id = :category_id AND status = 'Active' 
+        ORDER BY order_no ASC, id ASC
+    ");
+    $shiftStmt->execute(['category_id' => $categoryId]);
+    $shifts = $shiftStmt->fetchAll();
+
+    // Fetch mapped distinct roles for this category (sorted by role's order_no)
+    $rolesStmt = $pdo->prepare("
+        SELECT DISTINCT t.id AS manpower_type_id, t.role_name, t.order_no
+        FROM mcc_manpower_shift_type_map map
+        JOIN mcc_manpower_shifts sh ON map.shift_id = sh.id
+        JOIN mcc_manpower_types t ON map.manpower_type_id = t.id
+        WHERE sh.category_id = :category_id AND sh.status = 'Active' AND t.status = 'Active'
+        ORDER BY t.order_no ASC, t.id ASC
+    ");
+    $rolesStmt->execute(['category_id' => $categoryId]);
+    $roles = $rolesStmt->fetchAll();
+
+    if (!empty($roles) && !empty($shifts)) {
+        $categories[] = [
+            'id' => $cat['id'],
+            'category_name' => $cat['category_name'],
+            'shifts' => $shifts,
+            'roles' => $roles
+        ];
+    }
+}
+
+// Fetch target norms for the selected months in range
+$startMonth = date('Y-m-01', strtotime($fromDate));
+$endMonth = date('Y-m-01', strtotime($toDate));
+
+$targetsMap = [];
+$targetsStmt = $pdo->prepare("
+    SELECT target_date, category_id, manpower_type_id, target_qty 
+    FROM mcc_manpower_targets 
+    WHERE station_id = :station_id AND target_date BETWEEN :start_month AND :end_month
+");
+$targetsStmt->execute([
+    'station_id' => $stationId,
+    'start_month' => $startMonth,
+    'end_month' => $endMonth
+]);
+$targetsRows = $targetsStmt->fetchAll();
+foreach ($targetsRows as $row) {
+    $catId = intval($row['category_id']);
+    $tId = intval($row['manpower_type_id']);
+    $targetsMap[$row['target_date']][$catId][$tId] = $row['target_qty'];
+    if ($catId === 0) {
+        $targetsMap[$row['target_date']][0][$tId] = $row['target_qty'];
+    }
+}
+
+// Fetch submitted daily logs in date range
+$logsMap = [];
+$hasLogs = false; // globally whether there are ANY logs in the range
+$logStmt = $pdo->prepare("
+    SELECT 
+        report_date,
+        shift_id,
+        manpower_type_id,
+        provided_qty,
+        absent_qty,
+        no_dress_qty,
+        no_ppe_qty,
+        auditor_name
+    FROM mcc_manpower_log
+    WHERE station_id = :station_id AND report_date BETWEEN :from_date AND :to_date
+");
+$logStmt->execute([
+    'station_id' => $stationId,
+    'from_date' => $fromDate,
+    'to_date' => $toDate
+]);
+$logRows = $logStmt->fetchAll();
+
+foreach ($logRows as $row) {
+    $hasLogs = true;
+    $date = $row['report_date'];
+    $logsMap[$date][$row['shift_id']][$row['manpower_type_id']] = [
+        'provided' => $row['provided_qty'],
+        'absent' => $row['absent_qty'],
+        'no_dress' => $row['no_dress_qty'],
+        'no_ppe' => $row['no_ppe_qty'],
+        'auditor' => $row['auditor_name']
+    ];
+}
+
+// Helper function to identify unskilled manpower roles
+if (!function_exists('isUnskilledRole')) {
+    function isUnskilledRole($roleName) {
+        $r = strtolower(trim($roleName));
+        if (strpos($r, 'supervisor') !== false || strpos($r, 'chi') !== false || strpos($r, 'officer') !== false) {
+            return false;
+        }
+        if (strpos($r, 'unskilled') !== false || strpos($r, 'staff') !== false || strpos($r, 'safaiwala') !== false || strpos($r, 'safai') !== false || strpos($r, 'cleaner') !== false || strpos($r, 'labour') !== false || strpos($r, 'helper') !== false) {
+            return true;
+        }
+        if (strpos($r, 'semi') !== false || (strpos($r, 'skilled') !== false && strpos($r, 'unskilled') === false)) {
+            return false;
+        }
+        return true;
+    }
+}
+
+// Helper function to map category to scorecard table
+if (!function_exists('getScorecardTableForCategory')) {
+    function getScorecardTableForCategory($categoryName) {
+        $c = strtolower(trim($categoryName));
+        if (strpos($c, 'normal') !== false) {
+            return 'mcc_normal_scorecard_report';
+        } elseif (strpos($c, 'intensive') !== false) {
+            return 'mcc_intensive_scorecard_2_report';
+        } elseif (strpos($c, 'prt') !== false || strpos($c, 'platform') !== false) {
+            return 'mcc_prt_scorecard_report';
+        } elseif (strpos($c, 'vande') !== false || strpos($c, 'vb') !== false) {
+            return 'mcc_vb_scorecard_report';
+        }
+        return null;
+    }
+}
+
+// Helper function to get distinct coach count for a railway date (06:00 AM of $date to 07:00 AM of next day)
+if (!function_exists('getRailwayDateCoachCount')) {
+    function getRailwayDateCoachCount($pdo, $tableName, $stationId, $date) {
+        static $coachCache = [];
+        $cacheKey = "{$tableName}_{$stationId}_{$date}";
+        if (isset($coachCache[$cacheKey])) {
+            return $coachCache[$cacheKey];
+        }
+        
+        $startDateTime = $date . ' 06:00:00';
+        $nextDate = date('Y-m-d', strtotime($date . ' +1 day'));
+        $endDateTime = $nextDate . ' 07:00:00';
+        
+        try {
+            $stmt = $pdo->prepare("
+                SELECT COUNT(DISTINCT token_id, coach_no) AS total_coaches
+                FROM {$tableName}
+                WHERE station_id = :station_id
+                  AND (
+                      (created_at IS NOT NULL AND created_at >= :start_dt AND created_at <= :end_dt)
+                      OR (created_at IS NULL AND report_date = :rep_date)
+                  )
+            ");
+            $stmt->execute([
+                'station_id' => $stationId,
+                'start_dt' => $startDateTime,
+                'end_dt' => $endDateTime,
+                'rep_date' => $date
+            ]);
+            $count = intval($stmt->fetchColumn() ?: 0);
+        } catch (Exception $e) {
+            $count = 0;
+        }
+        
+        $coachCache[$cacheKey] = $count;
+        return $count;
+    }
+}
+
+$extraStyles = "
+.sub-category {
+    background:#f2f2f2 !important;
+    font-weight:600;
+    text-align:left !important;
+}
+.sub-category td {
+    padding-left:18px !important;
+    text-align:left !important;
+    font-weight:700;
+}
+.shift-cell {
+    white-space: nowrap !important;
+}
+.datewise-sheet {
+    margin-bottom: 40px !important;
+}
+@media print {
+    .datewise-sheet {
+        page-break-after: always !important;
+        break-after: page !important;
+    }
+    .datewise-sheet:last-child {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+    }
+}
+";
+
+include 'header.php';
+include 'sidebar.php';
 ?>
 
-<?php include 'header.php'; ?>
-<?php include 'sidebar.php'; ?>
-
-<style>
-.page{padding:20px 20px 14px}
-.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;overflow-x:auto;background:#fff;border:1px solid #dce2e7;border-radius:11px;padding:12px 16px;box-shadow:0 3px 12px rgba(0,0,0,.15);margin-bottom:28px}
-.toolbar label{font-weight:700;font-size:14px}
-.datebox{height:38px;width:175px;border:1.5px solid #0d5584;border-radius:3px;padding:0 12px;font-weight:700;background:#fff}
-.btn{height:38px;border:none;border-radius:7px;padding:0 16px;color:#fff;font-weight:700;cursor:pointer;box-shadow:0 2px 5px rgba(0,0,0,.12);display:inline-flex;align-items:center;justify-content:center;text-decoration:none;white-space:nowrap;flex-shrink:0}
-.btn.cyan{background:#14aee8}.btn.dark{background:#053151}.btn.blue{background:#188fc4;border:1px solid #0c638f}
-.report-shell{background:#eee;border:1px solid #b9b9b9;padding:12px 10px 14px;min-height:680px}
-.tabs{display:flex;gap:2px;margin:0 0 16px;padding:0 2px}
-.tab-btn{border:1px solid #0c527d;background:#eaf2f8;color:#0b3551;padding:12px 18px;font-weight:800;cursor:pointer;border-radius:8px 8px 0 0;font-size:14px;white-space:nowrap}
-.tab-btn.active{background:#062f50;color:#fff;border-color:#062f50}
-.report-card{background:#fff;border:1px solid #c7c7c7;padding:14px 10px 0}
-.report-title{text-align:center;font-size:23px;font-weight:800;margin:4px 0 22px}
-.meta-grid{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:13px 28px;max-width:1080px;margin:0 auto 18px;font-size:13px}
-.meta{display:flex;justify-content:center;gap:5px;white-space:nowrap}.meta strong{font-weight:800}
-.table-wrap{overflow:auto;border:1px solid #111}table{width:100%;border-collapse:collapse;min-width:1010px;background:#fff}thead th{background:#062e4e;color:#fff;font-size:13px;padding:12px 10px;border:1px solid #245474;text-align:center}tbody td{font-size:13px;padding:9px 10px;border:1px solid #c8c8c8;text-align:center}tbody td.name{text-align:left;font-weight:700}.shift-row td{background:#e8f2fb;color:#073957;font-weight:800;text-align:left;padding:8px 11px;border-color:#abc6d9}.badge{display:inline-block;min-width:66px;padding:4px 8px;border-radius:12px;font-size:11px;font-weight:800}.s1{background:#dff5e8;color:#127847}.s2{background:#fff1d7;color:#9a6400}.s3{background:#e8e3ff;color:#5b3eb8}.report-panel{display:none}.report-panel.active{display:block}
-@media(max-width:1100px){.meta-grid{grid-template-columns:repeat(2,minmax(180px,1fr))}.datebox{width:210px}}
-@media(max-width:800px){.toolbar{padding:10px;gap:8px}.datebox{width:150px}.meta-grid{grid-template-columns:1fr}}
-@media print{.app-header,.app-sidebar,.app-footer,.toolbar,.tabs,.no-print{display:none!important}.app-main{margin:0!important;padding:0!important}.report-shell{border:none;padding:0;background:#fff}.report-panel{display:none!important}.report-panel.active{display:block!important}.report-card{border:none}.table-wrap{border:1px solid #000}}
-</style>
-
 <main class="app-main">
-  <div class="app-content">
-    <div class="container-fluid">
-      <section class="page">
-        <div class="toolbar no-print">
-          <label>From:</label><input id="fromDate" class="datebox" type="date">
-          <label>To:</label><input id="toDate" class="datebox" type="date">
-          <button class="btn cyan" onclick="syncReportDate()">Go</button>
-          <button class="btn dark" onclick="window.print()">Print</button>
-          <a class="btn blue" href="manpower-target.php">Manpower Target</a>
-          <a class="btn blue" href="manpower-penalty.php">Manpower Penalty</a>
-          <a class="btn blue" href="manpower-summary.php">Summary</a>
-        </div>
-        <div class="report-shell">
-          <div class="tabs no-print">
-            <button class="tab-btn active" data-tab="depot">Manpower Report for Coaching Depot</button>
-            <button class="tab-btn" data-tab="prt">Manpower Report for Platform Return Trains</button>
-          </div>
-          <section id="depot" class="report-panel active">
-            <div class="report-card">
-              <div class="report-title">Manpower Report for Coaching Depot</div>
-              <div class="meta-grid">
-                <div class="meta"><strong>Railway:</strong> SOUTH WESTERN RAILWAY</div>
-                <div class="meta"><strong>Date:</strong> <span class="current-date"></span></div>
-                <div class="meta"><strong>Division:</strong> Mysuru</div>
-                <div class="meta"><strong>Station:</strong> Mysore Junction</div>
-                <div class="meta" style="grid-column:span 2"><strong>Contractor Name:</strong> SMC Integrated Facility Management Solutions</div>
-                <div class="meta"><strong>Target Manpower:</strong> 25</div>
-                <div class="meta"><strong>Total Present:</strong> 25</div>
-              </div>
-              <div class="table-wrap"><table id="depotTable"></table></div>
+    <div class="app-content">
+        <div class="container-fluid">
+            <form class="report-filter no-print" method="GET">
+                <label for="from_date">From:</label>
+                <input type="date" id="from_date" name="from_date" value="<?= htmlspecialchars($fromDate); ?>">
+                <label for="to_date">To:</label>
+                <input type="date" id="to_date" name="to_date" value="<?= htmlspecialchars($toDate); ?>">
+                <button type="submit" class="btn-go">Go</button>
+                <button type="button" class="btn-print" onclick="window.print()">Print</button>
+                <a href="manpower-target.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-print" style="background: #1987C6 !important; text-decoration: none;">Manpower Target</a>
+                <a href="manpower-penalty.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-print" style="background: #1987C6 !important; text-decoration: none;">Manpower Penalty</a>
+                <a href="manpower-summary.php?month=<?= date('m', strtotime($fromDate)) ?>&year=<?= date('Y', strtotime($fromDate)) ?>" class="btn-print" style="background: #1987C6 !important; text-decoration: none;">Summary</a>
+            </form>
+
+            <div class="report-wrap">
+                <?php foreach ($datesList as $date): 
+                    $targetMonthDate = date('Y-m-01', strtotime($date));
+                    $dateLogs = $logsMap[$date] ?? [];
+                    $hasLogsForDate = !empty($dateLogs);
+                    
+                    // Calculate total score percentage based on staff availability against norms for this date
+                    $totalNorms = 0;
+                    $totalAvailable = 0;
+                    
+                    foreach ($categories as $cat) {
+                        $cId = $cat['id'];
+                        $scorecardTable = getScorecardTableForCategory($cat['category_name']);
+                        $coachCount = ($scorecardTable !== null) ? getRailwayDateCoachCount($pdo, $scorecardTable, $stationId, $date) : 0;
+
+                        foreach ($cat['roles'] as $role) {
+                            $tId = $role['manpower_type_id'];
+                            $rawNorm = floatval($targetsMap[$targetMonthDate][$cId][$tId] ?? $targetsMap[$targetMonthDate][0][$tId] ?? 0);
+                            $isUnskilled = isUnskilledRole($role['role_name']);
+                            
+                            // Unskilled manpower target is multiplied by coach count for dynamic scorecard categories
+                            if ($scorecardTable !== null && $isUnskilled) {
+                                $effectiveNorm = $rawNorm * $coachCount;
+                            } else {
+                                $effectiveNorm = $rawNorm;
+                            }
+                            $totalNorms += $effectiveNorm;
+                            
+                            $roleTotalProvided = 0;
+                            $roleTotalAbsent = 0;
+                            foreach ($cat['shifts'] as $sh) {
+                                $sId = $sh['id'];
+                                if (isset($dateLogs[$sId][$tId])) {
+                                    $roleTotalProvided += intval($dateLogs[$sId][$tId]['provided']);
+                                    $roleTotalAbsent += intval($dateLogs[$sId][$tId]['absent']);
+                                }
+                            }
+                            $avail = max(0, $roleTotalProvided - $roleTotalAbsent);
+                            $totalAvailable += min($avail, $effectiveNorm);
+                        }
+                    }
+                    
+                    $scorePercent = $totalNorms > 0 ? round(($totalAvailable / $totalNorms) * 100, 1) . "%" : "100%";
+                    if (!$hasLogsForDate) {
+                        $scorePercent = "100%";
+                    }
+                ?>
+                    <div class="report-frame datewise-sheet">
+                        <?php if (!$hasLogsForDate): ?>
+                            <div class="alert alert-warning no-print" style="margin: 0 0 20px 0; border-radius: 8px; border: 1px solid #ffeeba; background-color: #fff3cd; color: #856404; padding: 12px 20px;">
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i> No manpower logs submitted for <?= htmlspecialchars(date('d-m-Y', strtotime($date))) ?>. Displaying configuration and norms.
+                            </div>
+                        <?php endif; ?>
+
+                        <div class="report-header">
+                            <h2>Manpower Log</h2>
+                        </div>
+
+                        <div class="report-meta-section">
+                            <div class="meta-row">
+                                <div class="meta-item"><span>Railway:</span> <?= htmlspecialchars($railwayName) ?></div>
+                                <div class="meta-item"><span>Date:</span> <?= htmlspecialchars(date('d-m-Y', strtotime($date))) ?></div>
+                                <div class="meta-item"><span>Division:</span> <?= htmlspecialchars($divisionName) ?></div>
+                                <div class="meta-item"><span>Station:</span> <?= htmlspecialchars($stationName) ?></div>
+                            </div>
+                            <div class="meta-row">
+                                <div class="meta-item"><span>Contractor:</span> <?= htmlspecialchars($contractorName) ?></div>
+                                <div class="meta-item"><span>Total Score:</span> <?= htmlspecialchars($scorePercent) ?></div>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="report-table">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left; padding-left: 15px; width: 220px;">Description</th>
+                                        <?php if (!empty($categories)): ?>
+                                            <?php foreach ($categories[0]['shifts'] as $sh): ?>
+                                                <th style="text-align: center; width: 100px;"><?= htmlspecialchars($sh['shift_name']) ?></th>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <th style="text-align: center; width: 100px;">Shift 1</th>
+                                            <th style="text-align: center; width: 100px;">Shift 2</th>
+                                            <th style="text-align: center; width: 100px;">Shift 3</th>
+                                        <?php endif; ?>
+                                        <th style="text-align: center; width: 100px;">Total</th>
+                                        <th style="text-align: center; width: 120px;">Target</th>
+                                        <th style="text-align: center; width: 160px;">Found without dress code & ID cards</th>
+                                        <th style="text-align: center; width: 160px;">Found without protective gears</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($categories)): ?>
+                                        <tr>
+                                            <td colspan="8" style="text-align:center;">No manpower categories or shifts configured. Go to <a href="manpower-config.php">Man Power Config</a> to add.</td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php 
+                                        $grandShiftTotals = [];
+                                        $grandTotalProvided = 0;
+                                        $grandTotalTarget = 0;
+                                        $grandTotalNoDress = 0;
+                                        $grandTotalNoPpe = 0;
+
+                                        foreach ($categories as $cat): 
+                                            $cId = $cat['id'];
+                                            $scorecardTable = getScorecardTableForCategory($cat['category_name']);
+                                            $coachCount = ($scorecardTable !== null) ? getRailwayDateCoachCount($pdo, $scorecardTable, $stationId, $date) : 0;
+
+                                            $catShiftTotals = [];
+                                            foreach ($cat['shifts'] as $sh) {
+                                                $catShiftTotals[$sh['id']] = 0;
+                                                if (!isset($grandShiftTotals[$sh['id']])) {
+                                                    $grandShiftTotals[$sh['id']] = 0;
+                                                }
+                                            }
+                                            $catTotalProvided = 0;
+                                            $catTotalTarget = 0;
+                                            $catTotalNoDress = 0;
+                                            $catTotalNoPpe = 0;
+                                            $colCount = count($cat['shifts']) + 5;
+                                        ?>
+                                            <!-- Category Subheader -->
+                                            <tr class="sub-category">
+                                                <td colspan="<?= $colCount ?>" style="text-align:center !important; padding-left:0 !important; text-transform: uppercase;">
+                                                    <?= htmlspecialchars($cat['category_name']) ?>
+                                                    <?php if ($scorecardTable !== null): ?>
+                                                        <span style="font-weight: 600; font-size: 13px; text-transform: none; margin-left: 10px; color: #1e3a8a; background: #dbeafe; padding: 2px 10px; border-radius: 12px;">
+                                                            <?= $coachCount ?> Coaches Cleaned
+                                                        </span>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+
+                                            <?php foreach ($cat['roles'] as $role): 
+                                                $tId = $role['manpower_type_id'];
+                                                $rawNorm = floatval($targetsMap[$targetMonthDate][$cId][$tId] ?? $targetsMap[$targetMonthDate][0][$tId] ?? 0);
+                                                $isUnskilled = isUnskilledRole($role['role_name']);
+
+                                                // Dynamic target for unskilled roles based on coaches cleaned
+                                                if ($scorecardTable !== null && $isUnskilled) {
+                                                    $effectiveNorm = $rawNorm * $coachCount;
+                                                } else {
+                                                    $effectiveNorm = $rawNorm;
+                                                }
+                                                $normVal = (floatval($effectiveNorm) == intval($effectiveNorm)) ? intval($effectiveNorm) : round($effectiveNorm, 2);
+
+                                                $catTotalTarget += $effectiveNorm;
+                                                $grandTotalTarget += $effectiveNorm;
+
+                                                $roleTotalProvided = 0;
+                                                $roleNoDress = 0;
+                                                $roleNoPpe = 0;
+                                                $shiftQtys = [];
+
+                                                foreach ($cat['shifts'] as $sh) {
+                                                    $sId = $sh['id'];
+                                                    $prov = isset($dateLogs[$sId][$tId]) ? intval($dateLogs[$sId][$tId]['provided']) : 0;
+                                                    $shiftQtys[$sId] = $prov;
+                                                    $roleTotalProvided += $prov;
+                                                    $catShiftTotals[$sId] += $prov;
+                                                    $grandShiftTotals[$sId] += $prov;
+
+                                                    if (isset($dateLogs[$sId][$tId])) {
+                                                        $roleNoDress += intval($dateLogs[$sId][$tId]['no_dress']);
+                                                        $roleNoPpe += intval($dateLogs[$sId][$tId]['no_ppe']);
+                                                    }
+                                                }
+
+                                                $catTotalProvided += $roleTotalProvided;
+                                                $grandTotalProvided += $roleTotalProvided;
+                                                $catTotalNoDress += $roleNoDress;
+                                                $grandTotalNoDress += $roleNoDress;
+                                                $catTotalNoPpe += $roleNoPpe;
+                                                $grandTotalNoPpe += $roleNoPpe;
+                                            ?>
+                                                <tr>
+                                                    <td style="text-align: left; padding-left: 15px; font-weight: 500;"><?= htmlspecialchars($role['role_name']) ?></td>
+                                                    <?php foreach ($cat['shifts'] as $sh): ?>
+                                                        <td style="text-align: center;"><?= $shiftQtys[$sh['id']] ?></td>
+                                                    <?php endforeach; ?>
+                                                    <td style="text-align: center; font-weight: 600;"><?= $roleTotalProvided ?></td>
+                                                    <td style="text-align: center; font-weight: 600;"><?= $normVal ?></td>
+                                                    <td style="text-align: center;"><?= $roleNoDress ?></td>
+                                                    <td style="text-align: center;"><?= $roleNoPpe ?></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+
+                                            <!-- Category Total Row -->
+                                            <tr style="font-weight:700; background:#f9f9f9;">
+                                                <td style="text-align: left !important; padding-left: 15px !important;">Total</td>
+                                                <?php foreach ($cat['shifts'] as $sh): ?>
+                                                    <td style="text-align: center;"><?= $catShiftTotals[$sh['id']] ?></td>
+                                                <?php endforeach; ?>
+                                                <td style="text-align: center;"><?= $catTotalProvided ?></td>
+                                                <td style="text-align: center;"><?= (floatval($catTotalTarget) == intval($catTotalTarget)) ? intval($catTotalTarget) : round($catTotalTarget, 2) ?></td>
+                                                <td style="text-align: center;"><?= $catTotalNoDress ?></td>
+                                                <td style="text-align: center;"><?= $catTotalNoPpe ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+
+                                        <?php if (count($categories) > 1): ?>
+                                            <!-- Grand Total Row -->
+                                            <tr style="font-weight:700; background:#f2f2f2; border-top: 2px solid #cbd5e1;">
+                                                <td style="text-align: left !important; padding-left: 15px !important;">Grand Total</td>
+                                                <?php foreach ($categories[0]['shifts'] as $sh): ?>
+                                                    <td style="text-align: center;"><?= $grandShiftTotals[$sh['id']] ?? 0 ?></td>
+                                                <?php endforeach; ?>
+                                                <td style="text-align: center;"><?= $grandTotalProvided ?></td>
+                                                <td style="text-align: center;"><?= (floatval($grandTotalTarget) == intval($grandTotalTarget)) ? intval($grandTotalTarget) : round($grandTotalTarget, 2) ?></td>
+                                                <td style="text-align: center;"><?= $grandTotalNoDress ?></td>
+                                                <td style="text-align: center;"><?= $grandTotalNoPpe ?></td>
+                                            </tr>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="signature-row">
+                            <div class="signature-box">
+                                <div class="signature-line">Contractor's Supervisor</div>
+                            </div>
+                            <div class="signature-box">
+                                <div class="signature-line">On-Duty CHI/Railway Auth.</div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
             </div>
-          </section>
-          <section id="prt" class="report-panel">
-            <div class="report-card">
-              <div class="report-title">Manpower Report for Platform Return Trains</div>
-              <div class="meta-grid">
-                <div class="meta"><strong>Railway:</strong> SOUTH WESTERN RAILWAY</div>
-                <div class="meta"><strong>Date:</strong> <span class="current-date"></span></div>
-                <div class="meta"><strong>Division:</strong> Mysuru</div>
-                <div class="meta"><strong>Station:</strong> Mysore Junction</div>
-                <div class="meta" style="grid-column:span 2"><strong>Contractor Name:</strong> SMC Integrated Facility Management Solutions</div>
-                <div class="meta"><strong>Target Manpower:</strong> 25</div>
-                <div class="meta"><strong>Total Present:</strong> 25</div>
-              </div>
-              <div class="table-wrap"><table id="prtTable"></table></div>
-            </div>
-          </section>
         </div>
-      </section>
     </div>
-  </div>
 </main>
-<script>
-const depotNames=["Ramesh Kumar","Arun Prakash","Suresh Gowda","Manoj Kumar","Vijay Shetty","Mahesh Babu","Ravi Shankar","Anil Kumar","Pradeep Rao","Santosh Naik","Deepak Kumar","Naveen Raj","Ganesh Murthy","Harish Kumar","Ajay Singh","Kiran Kumar","Dinesh Yadav","Rajesh Patil","Mohan Lal","Sunil Kumar","Ashok Reddy","Pawan Kumar","Lokesh Gowda","Vinod Kumar","Shankar Rao"];
-const prtNames=["Amit Verma","Rahul Sharma","Sanjay Kumar","Vikas Singh","Rohit Yadav","Mukesh Patel","Naresh Kumar","Gopal Das","Keshav Rao","Sandeep Naik","Rakesh Kumar","Prakash Jha","Chandan Singh","Suraj Kumar","Devendra Rao","Akash Mishra","Manish Gupta","Nitin Kumar","Bhaskar Reddy","Arvind Kumar","Kamal Kishore","Jitendra Singh","Madhav Rao","Tarun Joshi","Hemant Kumar"];
-const loginTemplates=[["06:05:00","14:20:00"],["06:18:00","14:35:00"],["06:32:00","14:45:00"],["06:47:00","15:05:00"],["07:02:00","15:20:00"],["07:18:00","15:32:00"],["07:34:00","15:50:00"],["07:51:00","16:10:00"],["08:05:00","16:22:00"],["14:05:00","22:20:00"],["14:22:00","22:36:00"],["14:40:00","22:55:00"],["15:05:00","23:20:00"],["15:28:00","23:45:00"],["16:02:00","00:20:00"],["16:25:00","00:42:00"],["17:10:00","01:28:00"],["18:05:00","02:20:00"],["22:05:00","06:25:00"],["22:28:00","06:44:00"],["22:50:00","07:15:00"],["23:15:00","07:32:00"],["23:42:00","08:00:00"],["00:25:00","08:40:00"],["01:10:00","09:25:00"]];
-const prtTemplates=[["06:12:00","14:30:00"],["06:26:00","14:50:00"],["06:41:00","15:00:00"],["06:56:00","15:15:00"],["07:12:00","15:30:00"],["07:29:00","15:48:00"],["07:46:00","16:05:00"],["08:02:00","16:22:00"],["08:18:00","16:35:00"],["14:10:00","22:28:00"],["14:28:00","22:48:00"],["14:46:00","23:05:00"],["15:14:00","23:35:00"],["15:42:00","00:03:00"],["16:18:00","00:40:00"],["16:52:00","01:12:00"],["17:35:00","01:55:00"],["18:20:00","02:42:00"],["22:12:00","06:34:00"],["22:36:00","06:58:00"],["22:58:00","07:20:00"],["23:22:00","07:45:00"],["23:48:00","08:10:00"],["00:38:00","09:02:00"],["01:22:00","09:45:00"]];
-function pad(n){return String(n).padStart(2,"0")}function displayDate(d){return `${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()}`}function isoDate(d){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`}
-function seconds(t){const [h,m,s]=t.split(":").map(Number);return h*3600+m*60+s}function shiftOf(t){const s=seconds(t);if(s>=21600&&s<=50400)return 1;if(s>50400&&s<=79200)return 2;return 3}
-function duration(login,logout){let a=seconds(login),b=seconds(logout);if(b<a)b+=86400;const d=b-a,h=Math.floor(d/3600),m=Math.floor((d%3600)/60),s=d%60;return `${pad(h)}:${pad(m)}:${pad(s)}`}
-function makeData(names,templates,startId){return names.map((name,i)=>{const [login,logout]=templates[i];return{name,id:`EMP-${startId+i}`,login,logout,hours:duration(login,logout),shift:shiftOf(login)}}).sort((a,b)=>a.shift-b.shift||seconds(a.login)-seconds(b.login))}
-const depotData=makeData(depotNames,loginTemplates,123),prtData=makeData(prtNames,prtTemplates,301);
-function renderTable(id,rows){const d=document.getElementById("fromDate").value?new Date(document.getElementById("fromDate").value+"T00:00:00"):new Date();let html=`<thead><tr><th>S.No</th><th>Employee Name</th><th>Employee ID</th><th>Date</th><th>Login Time</th><th>Logout Time</th><th>Total Shift Hours</th><th>Shift</th></tr></thead><tbody>`,serial=1;[1,2,3].forEach(shift=>{html+=`<tr class="shift-row"><td colspan="8">Shift ${shift}</td></tr>`;rows.filter(r=>r.shift===shift).forEach(r=>{html+=`<tr><td>${serial++}</td><td class="name">${r.name}</td><td>${r.id}</td><td>${displayDate(d)}</td><td>${r.login}</td><td>${r.logout}</td><td>${r.hours}</td><td><span class="badge s${shift}">Shift ${shift}</span></td></tr>`})});document.getElementById(id).innerHTML=html+"</tbody>"}
-function syncReportDate(){const d=document.getElementById("fromDate").value?new Date(document.getElementById("fromDate").value+"T00:00:00"):new Date();document.querySelectorAll(".current-date").forEach(e=>e.textContent=displayDate(d));renderTable("depotTable",depotData);renderTable("prtTable",prtData)}
-document.querySelectorAll(".tab-btn").forEach(btn=>btn.addEventListener("click",()=>{document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));document.querySelectorAll(".report-panel").forEach(p=>p.classList.remove("active"));btn.classList.add("active");document.getElementById(btn.dataset.tab).classList.add("active")}));
-const today=new Date();document.getElementById("fromDate").value=isoDate(today);document.getElementById("toDate").value=isoDate(today);syncReportDate();
-</script>
 
 <?php include 'footer.php'; ?>

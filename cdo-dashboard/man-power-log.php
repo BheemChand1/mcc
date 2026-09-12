@@ -4,12 +4,12 @@ require_once 'auth.php';
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
 
-// Generate list of dates between fromDate and toDate
+// Generate list of dates between fromDate and toDate (latest date first)
 $datesList = [];
-$currentDate = $fromDate;
-while (strtotime($currentDate) <= strtotime($toDate)) {
+$currentDate = $toDate;
+while (strtotime($currentDate) >= strtotime($fromDate)) {
     $datesList[] = $currentDate;
-    $currentDate = date('Y-m-d', strtotime($currentDate . ' +1 day'));
+    $currentDate = date('Y-m-d', strtotime($currentDate . ' -1 day'));
 }
 
 // Fetch active categories, shifts, and mapped roles (sorted by order_no)
@@ -174,36 +174,100 @@ include 'sidebar.php';
                     $dateLogs = $logsMap[$date] ?? [];
                     $hasLogsForDate = !empty($dateLogs);
                     
-                    // Calculate total score percentage based on staff availability against norms for this date
-                    $totalNorms = 0;
+                    // Pre-calculate data, totals and score for this sheet
+                    $grandShiftTotals = [];
+                    $grandTotalProvided = 0;
+                    $grandTotalTarget = 0;
+                    $grandTotalNoDress = 0;
+                    $grandTotalNoPpe = 0;
                     $totalAvailable = 0;
                     
+                    $categoryData = [];
                     foreach ($categories as $cat) {
                         $cId = $cat['id'];
+                        $catShiftTotals = [];
+                        foreach ($cat['shifts'] as $sh) {
+                            $catShiftTotals[$sh['id']] = 0;
+                            if (!isset($grandShiftTotals[$sh['id']])) {
+                                $grandShiftTotals[$sh['id']] = 0;
+                            }
+                        }
+                        $catTotalProvided = 0;
+                        $catTotalTarget = 0;
+                        $catTotalNoDress = 0;
+                        $catTotalNoPpe = 0;
+                        $rolesData = [];
 
                         foreach ($cat['roles'] as $role) {
                             $tId = $role['manpower_type_id'];
                             $effectiveNorm = floatval($targetsMap[$targetMonthDate][$cId][$tId] ?? $targetsMap[$targetMonthDate][0][$tId] ?? 0);
-                            $totalNorms += $effectiveNorm;
-                            
+                            $normVal = (floatval($effectiveNorm) == intval($effectiveNorm)) ? intval($effectiveNorm) : round($effectiveNorm, 2);
+
+                            $catTotalTarget += $effectiveNorm;
+                            $grandTotalTarget += $effectiveNorm;
+
                             $roleTotalProvided = 0;
                             $roleTotalAbsent = 0;
+                            $roleNoDress = 0;
+                            $roleNoPpe = 0;
+                            $shiftQtys = [];
+
                             foreach ($cat['shifts'] as $sh) {
                                 $sId = $sh['id'];
+                                $prov = isset($dateLogs[$sId][$tId]) ? intval($dateLogs[$sId][$tId]['provided']) : 0;
+                                $abs = isset($dateLogs[$sId][$tId]) ? intval($dateLogs[$sId][$tId]['absent']) : 0;
+                                $shiftQtys[$sId] = $prov;
+                                $roleTotalProvided += $prov;
+                                $roleTotalAbsent += $abs;
+                                $catShiftTotals[$sId] += $prov;
+                                $grandShiftTotals[$sId] += $prov;
+
                                 if (isset($dateLogs[$sId][$tId])) {
-                                    $roleTotalProvided += intval($dateLogs[$sId][$tId]['provided']);
-                                    $roleTotalAbsent += intval($dateLogs[$sId][$tId]['absent']);
+                                    $roleNoDress += intval($dateLogs[$sId][$tId]['no_dress']);
+                                    $roleNoPpe += intval($dateLogs[$sId][$tId]['no_ppe']);
                                 }
                             }
+
                             $avail = max(0, $roleTotalProvided - $roleTotalAbsent);
                             $totalAvailable += min($avail, $effectiveNorm);
+
+                            $catTotalProvided += $roleTotalProvided;
+                            $grandTotalProvided += $roleTotalProvided;
+                            $catTotalNoDress += $roleNoDress;
+                            $grandTotalNoDress += $roleNoDress;
+                            $catTotalNoPpe += $roleNoPpe;
+                            $grandTotalNoPpe += $roleNoPpe;
+
+                            $rolesData[] = [
+                                'role_name' => $role['role_name'],
+                                'shift_qtys' => $shiftQtys,
+                                'total_provided' => $roleTotalProvided,
+                                'norm_val' => $normVal,
+                                'no_dress' => $roleNoDress,
+                                'no_ppe' => $roleNoPpe
+                            ];
                         }
+
+                        $categoryData[] = [
+                            'id' => $cat['id'],
+                            'category_name' => $cat['category_name'],
+                            'shifts' => $cat['shifts'],
+                            'roles_data' => $rolesData,
+                            'cat_shift_totals' => $catShiftTotals,
+                            'cat_total_provided' => $catTotalProvided,
+                            'cat_total_target' => $catTotalTarget,
+                            'cat_total_no_dress' => $catTotalNoDress,
+                            'cat_total_no_ppe' => $catTotalNoPpe
+                        ];
                     }
-                    
-                    $scorePercent = $totalNorms > 0 ? round(($totalAvailable / $totalNorms) * 100, 1) . "%" : "100%";
+
                     if (!$hasLogsForDate) {
-                        $scorePercent = "100%";
+                        $scorePercent = "0%";
+                    } else {
+                        $scorePercent = $grandTotalTarget > 0 ? round(($totalAvailable / $grandTotalTarget) * 100, 1) . "%" : "100%";
                     }
+
+                    $formattedGrandTotalTarget = (floatval($grandTotalTarget) == intval($grandTotalTarget)) ? intval($grandTotalTarget) : round($grandTotalTarget, 2);
                 ?>
                     <div class="report-frame datewise-sheet">
                         <?php if (!$hasLogsForDate): ?>
@@ -225,6 +289,8 @@ include 'sidebar.php';
                             </div>
                             <div class="meta-row">
                                 <div class="meta-item"><span>Contractor:</span> <?= htmlspecialchars($contractorName) ?></div>
+                                <div class="meta-item"><span>Total Target:</span> <?= $formattedGrandTotalTarget ?></div>
+                                <div class="meta-item"><span>Total Attended:</span> <?= $grandTotalProvided ?></div>
                                 <div class="meta-item"><span>Total Score:</span> <?= htmlspecialchars($scorePercent) ?></div>
                             </div>
                         </div>
@@ -255,27 +321,7 @@ include 'sidebar.php';
                                             <td colspan="8" style="text-align:center;">No manpower categories or shifts configured. Go to <a href="manpower-config.php">Man Power Config</a> to add.</td>
                                         </tr>
                                     <?php else: ?>
-                                        <?php 
-                                        $grandShiftTotals = [];
-                                        $grandTotalProvided = 0;
-                                        $grandTotalTarget = 0;
-                                        $grandTotalNoDress = 0;
-                                        $grandTotalNoPpe = 0;
-
-                                        foreach ($categories as $cat): 
-                                            $cId = $cat['id'];
-
-                                            $catShiftTotals = [];
-                                            foreach ($cat['shifts'] as $sh) {
-                                                $catShiftTotals[$sh['id']] = 0;
-                                                if (!isset($grandShiftTotals[$sh['id']])) {
-                                                    $grandShiftTotals[$sh['id']] = 0;
-                                                }
-                                            }
-                                            $catTotalProvided = 0;
-                                            $catTotalTarget = 0;
-                                            $catTotalNoDress = 0;
-                                            $catTotalNoPpe = 0;
+                                        <?php foreach ($categoryData as $cat): 
                                             $colCount = count($cat['shifts']) + 5;
                                         ?>
                                             <!-- Category Subheader -->
@@ -285,49 +331,16 @@ include 'sidebar.php';
                                                 </td>
                                             </tr>
 
-                                            <?php foreach ($cat['roles'] as $role): 
-                                                $tId = $role['manpower_type_id'];
-                                                $effectiveNorm = floatval($targetsMap[$targetMonthDate][$cId][$tId] ?? $targetsMap[$targetMonthDate][0][$tId] ?? 0);
-                                                $normVal = (floatval($effectiveNorm) == intval($effectiveNorm)) ? intval($effectiveNorm) : round($effectiveNorm, 2);
-
-                                                $catTotalTarget += $effectiveNorm;
-                                                $grandTotalTarget += $effectiveNorm;
-
-                                                $roleTotalProvided = 0;
-                                                $roleNoDress = 0;
-                                                $roleNoPpe = 0;
-                                                $shiftQtys = [];
-
-                                                foreach ($cat['shifts'] as $sh) {
-                                                    $sId = $sh['id'];
-                                                    $prov = isset($dateLogs[$sId][$tId]) ? intval($dateLogs[$sId][$tId]['provided']) : 0;
-                                                    $shiftQtys[$sId] = $prov;
-                                                    $roleTotalProvided += $prov;
-                                                    $catShiftTotals[$sId] += $prov;
-                                                    $grandShiftTotals[$sId] += $prov;
-
-                                                    if (isset($dateLogs[$sId][$tId])) {
-                                                        $roleNoDress += intval($dateLogs[$sId][$tId]['no_dress']);
-                                                        $roleNoPpe += intval($dateLogs[$sId][$tId]['no_ppe']);
-                                                    }
-                                                }
-
-                                                $catTotalProvided += $roleTotalProvided;
-                                                $grandTotalProvided += $roleTotalProvided;
-                                                $catTotalNoDress += $roleNoDress;
-                                                $grandTotalNoDress += $roleNoDress;
-                                                $catTotalNoPpe += $roleNoPpe;
-                                                $grandTotalNoPpe += $roleNoPpe;
-                                            ?>
+                                            <?php foreach ($cat['roles_data'] as $role): ?>
                                                 <tr>
                                                     <td style="text-align: left; padding-left: 15px; font-weight: 500;"><?= htmlspecialchars($role['role_name']) ?></td>
                                                     <?php foreach ($cat['shifts'] as $sh): ?>
-                                                        <td style="text-align: center;"><?= $shiftQtys[$sh['id']] ?></td>
+                                                        <td style="text-align: center;"><?= $role['shift_qtys'][$sh['id']] ?></td>
                                                     <?php endforeach; ?>
-                                                    <td style="text-align: center; font-weight: 600;"><?= $roleTotalProvided ?></td>
-                                                    <td style="text-align: center; font-weight: 600;"><?= $normVal ?></td>
-                                                    <td style="text-align: center;"><?= $roleNoDress ?></td>
-                                                    <td style="text-align: center;"><?= $roleNoPpe ?></td>
+                                                    <td style="text-align: center; font-weight: 600;"><?= $role['total_provided'] ?></td>
+                                                    <td style="text-align: center; font-weight: 600;"><?= $role['norm_val'] ?></td>
+                                                    <td style="text-align: center;"><?= $role['no_dress'] ?></td>
+                                                    <td style="text-align: center;"><?= $role['no_ppe'] ?></td>
                                                 </tr>
                                             <?php endforeach; ?>
 
@@ -335,16 +348,16 @@ include 'sidebar.php';
                                             <tr style="font-weight:700; background:#f9f9f9;">
                                                 <td style="text-align: left !important; padding-left: 15px !important;">Total</td>
                                                 <?php foreach ($cat['shifts'] as $sh): ?>
-                                                    <td style="text-align: center;"><?= $catShiftTotals[$sh['id']] ?></td>
+                                                    <td style="text-align: center;"><?= $cat['cat_shift_totals'][$sh['id']] ?></td>
                                                 <?php endforeach; ?>
-                                                <td style="text-align: center;"><?= $catTotalProvided ?></td>
-                                                <td style="text-align: center;"><?= (floatval($catTotalTarget) == intval($catTotalTarget)) ? intval($catTotalTarget) : round($catTotalTarget, 2) ?></td>
-                                                <td style="text-align: center;"><?= $catTotalNoDress ?></td>
-                                                <td style="text-align: center;"><?= $catTotalNoPpe ?></td>
+                                                <td style="text-align: center;"><?= $cat['cat_total_provided'] ?></td>
+                                                <td style="text-align: center;"><?= (floatval($cat['cat_total_target']) == intval($cat['cat_total_target'])) ? intval($cat['cat_total_target']) : round($cat['cat_total_target'], 2) ?></td>
+                                                <td style="text-align: center;"><?= $cat['cat_total_no_dress'] ?></td>
+                                                <td style="text-align: center;"><?= $cat['cat_total_no_ppe'] ?></td>
                                             </tr>
                                         <?php endforeach; ?>
 
-                                        <?php if (count($categories) > 1): ?>
+                                        <?php if (count($categoryData) > 1): ?>
                                             <!-- Grand Total Row -->
                                             <tr style="font-weight:700; background:#f2f2f2; border-top: 2px solid #cbd5e1;">
                                                 <td style="text-align: left !important; padding-left: 15px !important;">Grand Total</td>
@@ -352,7 +365,7 @@ include 'sidebar.php';
                                                     <td style="text-align: center;"><?= $grandShiftTotals[$sh['id']] ?? 0 ?></td>
                                                 <?php endforeach; ?>
                                                 <td style="text-align: center;"><?= $grandTotalProvided ?></td>
-                                                <td style="text-align: center;"><?= (floatval($grandTotalTarget) == intval($grandTotalTarget)) ? intval($grandTotalTarget) : round($grandTotalTarget, 2) ?></td>
+                                                <td style="text-align: center;"><?= $formattedGrandTotalTarget ?></td>
                                                 <td style="text-align: center;"><?= $grandTotalNoDress ?></td>
                                                 <td style="text-align: center;"><?= $grandTotalNoPpe ?></td>
                                             </tr>

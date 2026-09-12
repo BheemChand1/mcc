@@ -34,9 +34,9 @@ if (empty($auditorName) || empty($trainNo) || empty($coachNo) || empty($tokenId)
 try {
     $pdo->beginTransaction();
 
-    // Prepare update query - Intensive 2
+    // Prepare update query - Intensive Scorecard 1
     $stmt = $pdo->prepare("
-        UPDATE mcc_intensive_scorecard_2_report 
+        UPDATE mcc_intensive_scorecard_report 
         SET score_value = :score_value, submitted_by = :submitted_by
         WHERE token_id = :token_id 
           AND train_no = :train_no 
@@ -82,3 +82,4 @@ try {
         "message" => "Database error: " . $e->getMessage()
     ]);
 }
+?>

@@ -39,11 +39,11 @@ if (!is_array($coachNos)) {
 }
 
 try {
-    // 1. Fetch active parameters and subparameters - Intensive Scorecard 2
+    // 1. Fetch active parameters and subparameters - Intensive Scorecard 1
     $paramsStmt = $pdo->prepare("
         SELECT sp.id AS sub_parameter_id
-        FROM mcc_intensive_scorecard_2_param p
-        JOIN mcc_intensive_scorecard_2_sub_param sp ON p.id = sp.parameter_id
+        FROM mcc_intensive_scorecard_param p
+        JOIN mcc_intensive_scorecard_sub_param sp ON p.id = sp.parameter_id
         WHERE p.station_id = ? AND sp.station_id = ? 
           AND p.status = 'Active' AND sp.status = 'Active'
         ORDER BY p.id ASC, sp.id ASC
@@ -71,7 +71,7 @@ try {
     $tokenId = "TKN-" . $datePart . "-" . $randPart;
 
     // Verify uniqueness of generated token
-    $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM mcc_intensive_scorecard_2_report WHERE token_id = ?");
+    $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM mcc_intensive_scorecard_report WHERE token_id = ?");
     $checkStmt->execute([$tokenId]);
     while ($checkStmt->fetchColumn() > 0) {
         $randPart = sprintf("%03d", rand(1, 999));
@@ -79,11 +79,11 @@ try {
         $checkStmt->execute([$tokenId]);
     }
 
-    // 3. Insert initial scorecard records (all scores set to NULL)
+    // 3. Insert initial scorecard records (all scores set to empty/NULL)
     $pdo->beginTransaction();
 
     $insertStmt = $pdo->prepare("
-        INSERT INTO mcc_intensive_scorecard_2_report 
+        INSERT INTO mcc_intensive_scorecard_report 
         (sub_parameter_id, station_id, token_id, train_no, coach_no, score_value, submitted_by, report_date)
         VALUES (:sub_parameter_id, :station_id, :token_id, :train_no, :coach_no, '', :submitted_by, :report_date)
     ");
@@ -146,3 +146,4 @@ try {
         "message" => "Database error: " . $e->getMessage()
     ]);
 }
+?>

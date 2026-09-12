@@ -28,20 +28,19 @@ if (empty($tokenId) || empty($trainNo) || empty($coachNo)) {
 }
 
 try {
-    // 1. Fetch scores joined with parameter details for the specific coach
+    // 1. Fetch scores joined with parameter details for the specific coach - Intensive Scorecard 1
     $stmt = $pdo->prepare("
         SELECT 
             p.id AS parameter_id, 
             p.parameter_name, 
             sp.id AS sub_parameter_id, 
             sp.sub_parameter_name, 
-            sp.input_type,
             r.score_value,
             r.submitted_by,
             r.report_date
-        FROM mcc_intensive_scorecard_2_report r
-        JOIN mcc_intensive_scorecard_2_sub_param sp ON r.sub_parameter_id = sp.id
-        JOIN mcc_intensive_scorecard_2_param p ON sp.parameter_id = p.id
+        FROM mcc_intensive_scorecard_report r
+        JOIN mcc_intensive_scorecard_sub_param sp ON r.sub_parameter_id = sp.id
+        JOIN mcc_intensive_scorecard_param p ON sp.parameter_id = p.id
         WHERE r.token_id = :token_id 
           AND r.train_no = :train_no 
           AND r.coach_no = :coach_no
@@ -64,8 +63,33 @@ try {
     }
 
     // 2. Fetch rating groups and options dynamically
-    $ratingsStmt = $pdo->query("SELECT rating_group, rating_name, rating_value FROM mcc_intensive_scorecard_2_rating ORDER BY id ASC");
-    $ratingsRows = $ratingsStmt->fetchAll(PDO::FETCH_ASSOC);
+    $ratingsRows = [];
+    try {
+        $ratingsStmt = $pdo->query("SELECT rating_group, rating_name, rating_value FROM mcc_intensive_scorecard_2_rating ORDER BY id ASC");
+        if ($ratingsStmt) {
+            $ratingsRows = $ratingsStmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+    } catch (Exception $e) {}
+
+    if (empty($ratingsRows)) {
+        try {
+            $ratingsStmt = $pdo->query("SELECT rating_group, rating_name, rating_value FROM mcc_normal_rating ORDER BY id ASC");
+            if ($ratingsStmt) {
+                $ratingsRows = $ratingsStmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+        } catch (Exception $e) {}
+    }
+
+    if (empty($ratingsRows)) {
+        $ratingsRows = [
+            ['rating_group' => 'cleaning', 'rating_name' => 'Excellent', 'rating_value' => '3'],
+            ['rating_group' => 'cleaning', 'rating_name' => 'Good', 'rating_value' => '2'],
+            ['rating_group' => 'cleaning', 'rating_name' => 'Average', 'rating_value' => '1'],
+            ['rating_group' => 'cleaning', 'rating_name' => 'Poor', 'rating_value' => '0'],
+            ['rating_group' => 'yes_no', 'rating_name' => 'Yes', 'rating_value' => 'Y'],
+            ['rating_group' => 'yes_no', 'rating_name' => 'No', 'rating_value' => 'N'],
+        ];
+    }
 
     $ratingGroups = [];
     foreach ($ratingsRows as $r) {
@@ -102,8 +126,10 @@ try {
             ];
         }
 
-        $inputType = $row['input_type'] ?: 'cleaning';
-        $options = $ratingGroups[$inputType] ?? [];
+        $inputType = (stripos($row['sub_parameter_name'], 'Yes') !== false || stripos($row['parameter_name'], 'Watering') !== false) 
+            ? 'yes_no' 
+            : 'cleaning';
+        $options = $ratingGroups[$inputType] ?? ($ratingGroups['cleaning'] ?? []);
 
         $scoreValue = $row['score_value'];
         if ($scoreValue === null || $scoreValue === '') {
@@ -140,3 +166,4 @@ try {
         "message" => "Database error: " . $e->getMessage()
     ]);
 }
+?>

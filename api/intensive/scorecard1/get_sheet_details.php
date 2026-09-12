@@ -20,10 +20,10 @@ if (empty($tokenId)) {
 }
 
 try {
-    // 1. Fetch token details
+    // 1. Fetch token details - Intensive Scorecard 1
     $metaStmt = $pdo->prepare("
         SELECT DISTINCT token_id, train_no, report_date, submitted_by AS auditor_name, station_id
-        FROM mcc_intensive_scorecard_2_report
+        FROM mcc_intensive_scorecard_report
         WHERE token_id = :token_id
     ");
     $metaStmt->execute(['token_id' => $tokenId]);
@@ -41,27 +41,52 @@ try {
     // 2. Fetch distinct coaches
     $coachesStmt = $pdo->prepare("
         SELECT DISTINCT coach_no 
-        FROM mcc_intensive_scorecard_2_report 
+        FROM mcc_intensive_scorecard_report 
         WHERE token_id = :token_id
         ORDER BY coach_no ASC
     ");
     $coachesStmt->execute(['token_id' => $tokenId]);
     $coaches = $coachesStmt->fetchAll(PDO::FETCH_COLUMN);
 
-    // 3. Fetch active parameters and subparameters - Intensive 2
+    // 3. Fetch active parameters and subparameters - Intensive Scorecard 1
     $paramsStmt = $pdo->prepare("
-        SELECT p.id AS parameter_id, p.parameter_name, sp.id AS sub_parameter_id, sp.sub_parameter_name, sp.input_type
-        FROM mcc_intensive_scorecard_2_param p
-        JOIN mcc_intensive_scorecard_2_sub_param sp ON p.id = sp.parameter_id
+        SELECT p.id AS parameter_id, p.parameter_name, sp.id AS sub_parameter_id, sp.sub_parameter_name
+        FROM mcc_intensive_scorecard_param p
+        JOIN mcc_intensive_scorecard_sub_param sp ON p.id = sp.parameter_id
         WHERE p.station_id = ? AND sp.station_id = ? AND p.status = 'Active' AND sp.status = 'Active'
         ORDER BY p.id ASC, sp.id ASC
     ");
     $paramsStmt->execute([$meta['station_id'], $meta['station_id']]);
     $paramsRows = $paramsStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Fetch all rating options grouped by rating_group - Intensive 2
-    $ratingsStmt = $pdo->query("SELECT rating_group, rating_name, rating_value FROM mcc_intensive_scorecard_2_rating ORDER BY id ASC");
-    $ratingsRows = $ratingsStmt->fetchAll(PDO::FETCH_ASSOC);
+    // Fetch all rating options grouped by rating_group
+    $ratingsRows = [];
+    try {
+        $ratingsStmt = $pdo->query("SELECT rating_group, rating_name, rating_value FROM mcc_intensive_scorecard_2_rating ORDER BY id ASC");
+        if ($ratingsStmt) {
+            $ratingsRows = $ratingsStmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+    } catch (Exception $e) {}
+
+    if (empty($ratingsRows)) {
+        try {
+            $ratingsStmt = $pdo->query("SELECT rating_group, rating_name, rating_value FROM mcc_normal_rating ORDER BY id ASC");
+            if ($ratingsStmt) {
+                $ratingsRows = $ratingsStmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+        } catch (Exception $e) {}
+    }
+
+    if (empty($ratingsRows)) {
+        $ratingsRows = [
+            ['rating_group' => 'cleaning', 'rating_name' => 'Excellent', 'rating_value' => '3'],
+            ['rating_group' => 'cleaning', 'rating_name' => 'Good', 'rating_value' => '2'],
+            ['rating_group' => 'cleaning', 'rating_name' => 'Average', 'rating_value' => '1'],
+            ['rating_group' => 'cleaning', 'rating_name' => 'Poor', 'rating_value' => '0'],
+            ['rating_group' => 'yes_no', 'rating_name' => 'Yes', 'rating_value' => 'Y'],
+            ['rating_group' => 'yes_no', 'rating_name' => 'No', 'rating_value' => 'N'],
+        ];
+    }
 
     $ratingGroups = [];
     foreach ($ratingsRows as $r) {
@@ -87,8 +112,10 @@ try {
             ];
         }
 
-        $inputType = $row['input_type'] ?: 'cleaning';
-        $options = $ratingGroups[$inputType] ?? [];
+        $inputType = (stripos($row['sub_parameter_name'], 'Yes') !== false || stripos($row['parameter_name'], 'Watering') !== false) 
+            ? 'yes_no' 
+            : 'cleaning';
+        $options = $ratingGroups[$inputType] ?? ($ratingGroups['cleaning'] ?? []);
 
         $parameters[$pId]['sub_parameters'][] = [
             'sub_parameter_id' => $row['sub_parameter_id'],
@@ -99,10 +126,10 @@ try {
     }
     $parameters = array_values($parameters);
 
-    // 4. Fetch current scorecard scores
+    // 4. Fetch current scorecard scores - Intensive Scorecard 1
     $scoresStmt = $pdo->prepare("
         SELECT sub_parameter_id, coach_no, score_value 
-        FROM mcc_intensive_scorecard_2_report
+        FROM mcc_intensive_scorecard_report
         WHERE token_id = :token_id
     ");
     $scoresStmt->execute(['token_id' => $tokenId]);
@@ -124,3 +151,4 @@ try {
         "message" => "Database error: " . $e->getMessage()
     ]);
 }
+?>

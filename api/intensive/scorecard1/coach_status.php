@@ -27,12 +27,12 @@ if (empty($tokenId) || empty($trainNo)) {
 }
 
 try {
-    // Query coach completion counts - Intensive 2
+    // Query coach completion counts - Intensive Scorecard 1
     $stmt = $pdo->prepare("
         SELECT coach_no, 
                SUM(CASE WHEN score_value IS NULL OR score_value = '' THEN 1 ELSE 0 END) AS empty_count,
                COUNT(*) AS total_count
-        FROM mcc_intensive_scorecard_2_report
+        FROM mcc_intensive_scorecard_report
         WHERE token_id = :token_id AND train_no = :train_no
         GROUP BY coach_no
         ORDER BY coach_no ASC
@@ -77,3 +77,4 @@ try {
         "message" => "Database error: " . $e->getMessage()
     ]);
 }
+?>

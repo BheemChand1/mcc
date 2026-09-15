@@ -63,8 +63,9 @@ $startMonth = date('Y-m-01', strtotime($fromDate));
 $endMonth = date('Y-m-01', strtotime($toDate));
 
 $targetsMap = [];
+$coachWiseMap = [];
 $targetsStmt = $pdo->prepare("
-    SELECT target_date, category_id, manpower_type_id, target_qty 
+    SELECT target_date, category_id, manpower_type_id, target_qty, is_coach_wise 
     FROM mcc_manpower_targets 
     WHERE station_id = :station_id AND target_date BETWEEN :start_month AND :end_month
 ");
@@ -78,8 +79,10 @@ foreach ($targetsRows as $row) {
     $catId = intval($row['category_id']);
     $tId = intval($row['manpower_type_id']);
     $targetsMap[$row['target_date']][$catId][$tId] = $row['target_qty'];
+    $coachWiseMap[$row['target_date']][$catId][$tId] = intval($row['is_coach_wise'] ?? 0);
     if ($catId === 0) {
         $targetsMap[$row['target_date']][0][$tId] = $row['target_qty'];
+        $coachWiseMap[$row['target_date']][0][$tId] = intval($row['is_coach_wise'] ?? 0);
     }
 }
 
@@ -118,9 +121,113 @@ foreach ($logRows as $row) {
     ];
 }
 
+// Fetch penalty rate configurations
+$penStmt = $pdo->prepare("
+    SELECT effective_month, manpower_type_id, absent_penalty, dress_penalty, gears_penalty 
+    FROM mcc_manpower_penalties 
+    WHERE station_id = :station_id
+    ORDER BY effective_month ASC
+");
+$penStmt->execute(['station_id' => $stationId]);
+$allPenalties = $penStmt->fetchAll();
 
+if (!function_exists('getEffectivePenaltiesForMonth')) {
+    function getEffectivePenaltiesForMonth($allPenalties, $monthDate) {
+        $rates = [];
+        foreach ($allPenalties as $p) {
+            if ($p['effective_month'] <= $monthDate) {
+                $rates[$p['manpower_type_id']] = [
+                    'absent' => floatval($p['absent_penalty']),
+                    'dress'  => floatval($p['dress_penalty']),
+                    'gears'  => floatval($p['gears_penalty'])
+                ];
+            }
+        }
+        return $rates;
+    }
+}
+
+
+
+if (!function_exists('getScorecardTableForCategory')) {
+    function getScorecardTableForCategory($categoryName) {
+        $c = strtoupper(trim($categoryName));
+        if ($c === 'NORMAL CLEANING' || $c === 'EXTERNAL COACH CLEANING') {
+            return 'mcc_normal_scorecard_report';
+        } elseif ($c === 'INTENSIVE COACH CLEANING') {
+            return 'mcc_intensive_scorecard_report';
+        } elseif ($c === 'WATERING AND INTERNAL DRY CLEANING OF COACHES FOR PLATFORM RETURN TRAINS' || strpos($c, 'PLATFORM RETURN') !== false) {
+            return 'mcc_prt_scorecard_report';
+        }
+        return null;
+    }
+}
+
+if (!function_exists('getRailwayDateCoachCount')) {
+    function getRailwayDateCoachCount($pdo, $tableName, $stationId, $date) {
+        static $coachCache = [];
+        $cacheKey = "{$tableName}_{$stationId}_{$date}";
+        if (isset($coachCache[$cacheKey])) {
+            return $coachCache[$cacheKey];
+        }
+
+        $startDateTime = $date . ' 06:00:00';
+        $nextDate = date('Y-m-d', strtotime($date . ' +1 day'));
+        $endDateTime = $nextDate . ' 07:00:00';
+
+        try {
+            $stmt = $pdo->prepare("
+                SELECT COUNT(DISTINCT token_id, coach_no) AS total_coaches
+                FROM {$tableName}
+                WHERE station_id = :station_id
+                  AND (
+                      (created_at IS NOT NULL AND created_at >= :start_dt AND created_at <= :end_dt)
+                      OR (created_at IS NULL AND report_date = :rep_date)
+                      OR report_date = :rep_date
+                  )
+            ");
+            $stmt->execute([
+                'station_id' => $stationId,
+                'start_dt' => $startDateTime,
+                'end_dt' => $endDateTime,
+                'rep_date' => $date
+            ]);
+            $count = intval($stmt->fetchColumn() ?: 0);
+        } catch (Exception $e) {
+            $count = 0;
+        }
+        
+        $coachCache[$cacheKey] = $count;
+        return $count;
+    }
+}
 
 $extraStyles = "
+.report-meta-section {
+    width: 100%;
+    margin: 10px 0 15px 0 !important;
+}
+.meta-row {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 12px 24px !important;
+    margin-bottom: 8px !important;
+    flex-wrap: wrap !important;
+    line-height: 1.5 !important;
+}
+.meta-item {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+    line-height: 1.5 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+.meta-item span {
+    font-weight: 700 !important;
+}
 .sub-category {
     background:#f2f2f2 !important;
     font-weight:600;
@@ -181,10 +288,15 @@ include 'sidebar.php';
                     $grandTotalNoDress = 0;
                     $grandTotalNoPpe = 0;
                     $totalAvailable = 0;
+                    $dayPenalty = 0.0;
+                    $effectivePenalties = getEffectivePenaltiesForMonth($allPenalties, $targetMonthDate);
                     
                     $categoryData = [];
                     foreach ($categories as $cat) {
                         $cId = $cat['id'];
+                        $scorecardTable = getScorecardTableForCategory($cat['category_name']);
+                        $coachCount = ($scorecardTable !== null) ? getRailwayDateCoachCount($pdo, $scorecardTable, $stationId, $date) : null;
+
                         $catShiftTotals = [];
                         foreach ($cat['shifts'] as $sh) {
                             $catShiftTotals[$sh['id']] = 0;
@@ -200,7 +312,15 @@ include 'sidebar.php';
 
                         foreach ($cat['roles'] as $role) {
                             $tId = $role['manpower_type_id'];
-                            $effectiveNorm = floatval($targetsMap[$targetMonthDate][$cId][$tId] ?? $targetsMap[$targetMonthDate][0][$tId] ?? 0);
+                            $rawNorm = floatval($targetsMap[$targetMonthDate][$cId][$tId] ?? $targetsMap[$targetMonthDate][0][$tId] ?? 0);
+                            $isCoachWise = intval($coachWiseMap[$targetMonthDate][$cId][$tId] ?? $coachWiseMap[$targetMonthDate][0][$tId] ?? 0);
+
+                            // Multiply target with coach count if target is coach wise and category has coach count, then round UP (ceil)
+                            if ($isCoachWise === 1 && $coachCount !== null) {
+                                $effectiveNorm = ceil($rawNorm * $coachCount);
+                            } else {
+                                $effectiveNorm = $rawNorm;
+                            }
                             $normVal = (floatval($effectiveNorm) == intval($effectiveNorm)) ? intval($effectiveNorm) : round($effectiveNorm, 2);
 
                             $catTotalTarget += $effectiveNorm;
@@ -238,6 +358,16 @@ include 'sidebar.php';
                             $catTotalNoPpe += $roleNoPpe;
                             $grandTotalNoPpe += $roleNoPpe;
 
+                            // Calculate penalty for this role on this date
+                            if ($hasLogsForDate) {
+                                $absentCount = max($roleTotalAbsent, max(0, $effectiveNorm - $roleTotalProvided));
+                                $rates = $effectivePenalties[$tId] ?? ['absent' => 0.0, 'dress' => 0.0, 'gears' => 0.0];
+                                $rolePenalty = ($absentCount * floatval($rates['absent'])) 
+                                             + ($roleNoDress * floatval($rates['dress'])) 
+                                             + ($roleNoPpe * floatval($rates['gears']));
+                                $dayPenalty += $rolePenalty;
+                            }
+
                             $rolesData[] = [
                                 'role_name' => $role['role_name'],
                                 'shift_qtys' => $shiftQtys,
@@ -251,6 +381,7 @@ include 'sidebar.php';
                         $categoryData[] = [
                             'id' => $cat['id'],
                             'category_name' => $cat['category_name'],
+                            'coach_count' => $coachCount,
                             'shifts' => $cat['shifts'],
                             'roles_data' => $rolesData,
                             'cat_shift_totals' => $catShiftTotals,
@@ -292,6 +423,7 @@ include 'sidebar.php';
                                 <div class="meta-item"><span>Total Target:</span> <?= $formattedGrandTotalTarget ?></div>
                                 <div class="meta-item"><span>Total Attended:</span> <?= $grandTotalProvided ?></div>
                                 <div class="meta-item"><span>Total Score:</span> <?= htmlspecialchars($scorePercent) ?></div>
+                                <div class="meta-item"><span>Penalty of the Day:</span> <strong style="color: #dc2626;">Rs. <?= (floatval($dayPenalty) == intval($dayPenalty)) ? number_format($dayPenalty, 0) : number_format($dayPenalty, 2) ?></strong></div>
                             </div>
                         </div>
 
@@ -333,7 +465,7 @@ include 'sidebar.php';
                                             <!-- Category Subheader -->
                                             <tr class="sub-category">
                                                 <td colspan="<?= $colCount ?>" style="text-align:center !important; padding-left:0 !important; text-transform: uppercase;">
-                                                    <?= htmlspecialchars($cat['category_name']) ?>
+                                                    <?= htmlspecialchars($cat['category_name']) ?><?php if ($cat['coach_count'] !== null): ?> (<?= $cat['coach_count'] ?> Coaches)<?php endif; ?>
                                                 </td>
                                             </tr>
 

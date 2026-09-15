@@ -53,6 +53,37 @@ $currentPage = basename($_SERVER['PHP_SELF']);
           </a>
         </li>
 
+        <?php 
+        $trainPages = ['create-trains.php', 'view-trains.php', 'trains.php', 'edit-train.php'];
+        $isTrainActive = in_array($currentPage, $trainPages);
+        ?>
+        <!-- Trains Dropdown Link -->
+        <li class="nav-item mb-1 <?= $isTrainActive ? 'menu-open' : '' ?>">
+          <a href="#trainsSubmenu" data-bs-toggle="collapse" class="nav-link p-2 d-flex align-items-center justify-content-between rounded-3 <?= $isTrainActive ? 'active bg-indigo text-white' : 'text-secondary-emphasis' ?>" style="transition: all 0.3s ease; text-decoration: none;" aria-expanded="<?= $isTrainActive ? 'true' : 'false' ?>">
+            <div class="d-flex align-items-center">
+              <i class="bi bi-train-front me-3" style="font-size: 1.15rem;"></i>
+              <p class="m-0">Trains</p>
+            </div>
+            <i class="bi bi-chevron-down small" style="transition: transform 0.2s ease;"></i>
+          </a>
+          <div class="collapse <?= $isTrainActive ? 'show' : '' ?> ps-3 mt-1" id="trainsSubmenu">
+            <ul class="nav flex-column" style="border-left: 2px solid rgba(99, 102, 241, 0.4); padding-left: 8px;">
+              <li class="nav-item mb-1">
+                <a href="create-trains.php" class="nav-link py-1 px-2 d-flex align-items-center rounded-2 <?= ($currentPage == 'create-trains.php') ? 'active bg-indigo text-white' : 'text-secondary-emphasis' ?>" style="font-size: 0.88rem;">
+                  <i class="bi bi-plus-circle me-2" style="font-size: 0.95rem;"></i>
+                  <span>Create Trains</span>
+                </a>
+              </li>
+              <li class="nav-item mb-1">
+                <a href="view-trains.php" class="nav-link py-1 px-2 d-flex align-items-center rounded-2 <?= (in_array($currentPage, ['view-trains.php', 'trains.php'])) ? 'active bg-indigo text-white' : 'text-secondary-emphasis' ?>" style="font-size: 0.88rem;">
+                  <i class="bi bi-list-columns-reverse me-2" style="font-size: 0.95rem;"></i>
+                  <span>View Trains</span>
+                </a>
+              </li>
+            </ul>
+          </div>
+        </li>
+
         <!-- Users Link -->
         <li class="nav-item mb-1">
           <a href="users.php" class="nav-link p-2 d-flex align-items-center rounded-3 <?= ($currentPage == 'users.php') ? 'active bg-indigo text-white' : 'text-secondary-emphasis' ?>" style="transition: all 0.3s ease;">

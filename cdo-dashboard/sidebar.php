@@ -734,6 +734,33 @@ $has_billing      = (in_array('billing_management', $active_app_keys) || in_arra
         </li>
         <?php endif; ?>
 
+        <!-- Trains Dropdown -->
+        <?php 
+        $trainDashboardPages = ['create-trains.php', 'view-trains.php', 'trains.php'];
+        $isTrainDashActive = in_array($currentPage, $trainDashboardPages);
+        ?>
+        <li class="nav-item <?= $isTrainDashActive ? 'menu-open' : '' ?>">
+          <a href="#" class="nav-link <?= $isTrainDashActive ? 'active' : '' ?>">
+            <i class="nav-icon bi bi-train-front"></i>
+            <p>
+              Trains
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview ms-3">
+            <li class="nav-item">
+              <a href="create-trains.php" class="nav-link <?= ($currentPage == 'create-trains.php') ? 'active' : '' ?>">
+                <p>Create Trains</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="view-trains.php" class="nav-link <?= (in_array($currentPage, ['view-trains.php', 'trains.php'])) ? 'active' : '' ?>">
+                <p>View Trains</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+
         <!-- User Management -->
         <li class="nav-item">
           <a href="auditors.php" class="nav-link <?= ($currentPage == 'auditors.php') ? 'active' : '' ?>">

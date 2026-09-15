@@ -299,7 +299,17 @@ include 'sidebar.php';
                             <table class="report-table">
                                 <thead>
                                     <tr>
-                                        <th style="text-align: left; padding-left: 15px; width: 220px;">Description</th>
+                                        <th rowspan="2" style="text-align: left; padding-left: 15px; width: 220px; vertical-align: middle;">Description</th>
+                                        <th rowspan="2" style="text-align: center; width: 130px; vertical-align: middle;">Total Target of the day</th>
+                                        <?php 
+                                            $shiftColSpan = !empty($categories) ? count($categories[0]['shifts']) : 3;
+                                        ?>
+                                        <th colspan="<?= $shiftColSpan ?>" style="text-align: center;">Found Present</th>
+                                        <th rowspan="2" style="text-align: center; width: 160px; vertical-align: middle;">Found without dress code & ID cards</th>
+                                        <th rowspan="2" style="text-align: center; width: 160px; vertical-align: middle;">Found without protective gears</th>
+                                        <th rowspan="2" style="text-align: center; width: 110px; vertical-align: middle;">Total Present</th>
+                                    </tr>
+                                    <tr>
                                         <?php if (!empty($categories)): ?>
                                             <?php foreach ($categories[0]['shifts'] as $sh): ?>
                                                 <th style="text-align: center; width: 100px;"><?= htmlspecialchars($sh['shift_name']) ?></th>
@@ -309,10 +319,6 @@ include 'sidebar.php';
                                             <th style="text-align: center; width: 100px;">Shift 2</th>
                                             <th style="text-align: center; width: 100px;">Shift 3</th>
                                         <?php endif; ?>
-                                        <th style="text-align: center; width: 100px;">Total</th>
-                                        <th style="text-align: center; width: 120px;">Target</th>
-                                        <th style="text-align: center; width: 160px;">Found without dress code & ID cards</th>
-                                        <th style="text-align: center; width: 160px;">Found without protective gears</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -334,26 +340,26 @@ include 'sidebar.php';
                                             <?php foreach ($cat['roles_data'] as $role): ?>
                                                 <tr>
                                                     <td style="text-align: left; padding-left: 15px; font-weight: 500;"><?= htmlspecialchars($role['role_name']) ?></td>
+                                                    <td style="text-align: center; font-weight: 600;"><?= $role['norm_val'] ?></td>
                                                     <?php foreach ($cat['shifts'] as $sh): ?>
                                                         <td style="text-align: center;"><?= $role['shift_qtys'][$sh['id']] ?></td>
                                                     <?php endforeach; ?>
-                                                    <td style="text-align: center; font-weight: 600;"><?= $role['total_provided'] ?></td>
-                                                    <td style="text-align: center; font-weight: 600;"><?= $role['norm_val'] ?></td>
                                                     <td style="text-align: center;"><?= $role['no_dress'] ?></td>
                                                     <td style="text-align: center;"><?= $role['no_ppe'] ?></td>
+                                                    <td style="text-align: center; font-weight: 600;"><?= $role['total_provided'] ?></td>
                                                 </tr>
                                             <?php endforeach; ?>
 
                                             <!-- Category Total Row -->
                                             <tr style="font-weight:700; background:#f9f9f9;">
                                                 <td style="text-align: left !important; padding-left: 15px !important;">Total</td>
+                                                <td style="text-align: center;"><?= (floatval($cat['cat_total_target']) == intval($cat['cat_total_target'])) ? intval($cat['cat_total_target']) : round($cat['cat_total_target'], 2) ?></td>
                                                 <?php foreach ($cat['shifts'] as $sh): ?>
                                                     <td style="text-align: center;"><?= $cat['cat_shift_totals'][$sh['id']] ?></td>
                                                 <?php endforeach; ?>
-                                                <td style="text-align: center;"><?= $cat['cat_total_provided'] ?></td>
-                                                <td style="text-align: center;"><?= (floatval($cat['cat_total_target']) == intval($cat['cat_total_target'])) ? intval($cat['cat_total_target']) : round($cat['cat_total_target'], 2) ?></td>
                                                 <td style="text-align: center;"><?= $cat['cat_total_no_dress'] ?></td>
                                                 <td style="text-align: center;"><?= $cat['cat_total_no_ppe'] ?></td>
+                                                <td style="text-align: center;"><?= $cat['cat_total_provided'] ?></td>
                                             </tr>
                                         <?php endforeach; ?>
 
@@ -361,13 +367,13 @@ include 'sidebar.php';
                                             <!-- Grand Total Row -->
                                             <tr style="font-weight:700; background:#f2f2f2; border-top: 2px solid #cbd5e1;">
                                                 <td style="text-align: left !important; padding-left: 15px !important;">Grand Total</td>
+                                                <td style="text-align: center;"><?= $formattedGrandTotalTarget ?></td>
                                                 <?php foreach ($categories[0]['shifts'] as $sh): ?>
                                                     <td style="text-align: center;"><?= $grandShiftTotals[$sh['id']] ?? 0 ?></td>
                                                 <?php endforeach; ?>
-                                                <td style="text-align: center;"><?= $grandTotalProvided ?></td>
-                                                <td style="text-align: center;"><?= $formattedGrandTotalTarget ?></td>
                                                 <td style="text-align: center;"><?= $grandTotalNoDress ?></td>
                                                 <td style="text-align: center;"><?= $grandTotalNoPpe ?></td>
+                                                <td style="text-align: center;"><?= $grandTotalProvided ?></td>
                                             </tr>
                                         <?php endif; ?>
                                     <?php endif; ?>

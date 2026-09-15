@@ -54,7 +54,10 @@ try {
     $pdo->exec("ALTER TABLE mcc_manpower_targets ADD COLUMN category_id INT(11) NOT NULL DEFAULT 0 AFTER station_id");
 } catch (Exception $e) {}
 try {
-    $pdo->exec("ALTER TABLE mcc_manpower_targets ADD COLUMN effective_from DATE NULL AFTER target_qty");
+    $pdo->exec("ALTER TABLE mcc_manpower_targets ADD COLUMN is_coach_wise TINYINT(1) NOT NULL DEFAULT 0 AFTER target_qty");
+} catch (Exception $e) {}
+try {
+    $pdo->exec("ALTER TABLE mcc_manpower_targets ADD COLUMN effective_from DATE NULL AFTER is_coach_wise");
 } catch (Exception $e) {}
 try {
     $pdo->exec("ALTER TABLE mcc_manpower_targets ADD COLUMN effective_to DATE NULL AFTER effective_from");
@@ -145,6 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
         if (!empty($selectedMonth) && !empty($selectedYear)) {
             $targetMonthDate = $selectedYear . "-" . str_pad($selectedMonth, 2, '0', STR_PAD_LEFT) . "-01";
             $submittedTargets = $_POST['target_qty'] ?? []; // [category_id][manpower_type_id] => qty
+            $submittedCoachWise = $_POST['is_coach_wise'] ?? []; // [category_id][manpower_type_id] => 1
             
             $pdo->beginTransaction();
             try {
@@ -161,8 +165,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
                 // Insert updated manpower targets (one entry per category and role/type)
                 $insertStmt = $pdo->prepare("
                     INSERT INTO mcc_manpower_targets 
-                    (station_id, category_id, target_date, manpower_type_id, manpower_type, target_qty, effective_from, effective_to) 
-                    VALUES (:station_id, :category_id, :target_date, :manpower_type_id, :manpower_type, :target_qty, :effective_from, :effective_to)
+                    (station_id, category_id, target_date, manpower_type_id, manpower_type, target_qty, is_coach_wise, effective_from, effective_to) 
+                    VALUES (:station_id, :category_id, :target_date, :manpower_type_id, :manpower_type, :target_qty, :is_coach_wise, :effective_from, :effective_to)
                 ");
                 
                 foreach ($categories as $cat) {
@@ -170,6 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
                     foreach ($cat['roles'] as $role) {
                         $tId = $role['manpower_type_id'];
                         $qty = floatval($submittedTargets[$catId][$tId] ?? 0);
+                        $isCoachWise = isset($submittedCoachWise[$catId][$tId]) ? 1 : 0;
                         $roleName = $roleNamesMap[$tId] ?? $role['role_name'] ?? 'Staff';
                         
                         $insertStmt->execute([
@@ -179,6 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
                             'manpower_type_id' => $tId,
                             'manpower_type' => $roleName,
                             'target_qty' => $qty,
+                            'is_coach_wise' => $isCoachWise,
                             'effective_from' => $effectiveFromInput,
                             'effective_to' => $effectiveToInput
                         ]);
@@ -197,11 +203,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_target'])) {
 
 // Fetch existing target norms for the selected month
 $targetsMap = [];
+$coachWiseMap = [];
 $effectiveFrom = $targetMonthDate;
 $effectiveTo = date('Y-m-t', strtotime($targetMonthDate));
 
 $targetsStmt = $pdo->prepare("
-    SELECT category_id, manpower_type_id, target_qty, effective_from, effective_to
+    SELECT category_id, manpower_type_id, target_qty, is_coach_wise, effective_from, effective_to
     FROM mcc_manpower_targets 
     WHERE station_id = :station_id AND target_date = :target_date
 ");
@@ -214,8 +221,10 @@ foreach ($targetsRows as $row) {
     $catId = intval($row['category_id']);
     $tId = intval($row['manpower_type_id']);
     $targetsMap[$catId][$tId] = $row['target_qty'];
+    $coachWiseMap[$catId][$tId] = intval($row['is_coach_wise'] ?? 0);
     if ($catId === 0) {
         $targetsMap[0][$tId] = $row['target_qty'];
+        $coachWiseMap[0][$tId] = intval($row['is_coach_wise'] ?? 0);
     }
     if (!empty($row['effective_from'])) $effectiveFrom = $row['effective_from'];
     if (!empty($row['effective_to'])) $effectiveTo = $row['effective_to'];
@@ -416,7 +425,8 @@ include 'sidebar.php';
                                     <thead>
                                         <tr>
                                             <th style="text-align: left !important; padding-left: 25px !important;">Description</th>
-                                            <th style="width: 280px; text-align: center !important;">Target</th>
+                                            <th style="width: 170px; text-align: center !important;">Coach Wise</th>
+                                            <th style="width: 250px; text-align: center !important;">Target</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -425,7 +435,7 @@ include 'sidebar.php';
                                         ?>
                                             <!-- Category Subheader -->
                                             <tr class="sub-category">
-                                                <td colspan="2" style="text-align:center !important; padding-left:0 !important; text-transform: uppercase;">
+                                                <td colspan="3" style="text-align:center !important; padding-left:0 !important; text-transform: uppercase;">
                                                     <?= htmlspecialchars($cat['category_name']) ?>
                                                 </td>
                                             </tr>
@@ -438,10 +448,24 @@ include 'sidebar.php';
                                                 } else {
                                                     $targetVal = '';
                                                 }
+                                                $isCoachWise = ($coachWiseMap[$catId][$tId] ?? $coachWiseMap[0][$tId] ?? 0) == 1;
                                             ?>
                                                 <tr>
-                                                    <td style="text-align: left !important; padding-left: 25px !important; font-weight: 500; color: #334155;"><?= htmlspecialchars($role['role_name']) ?></td>
-                                                    <td style="text-align: center;">
+                                                    <td style="text-align: left !important; padding-left: 25px !important; font-weight: 500; color: #334155; vertical-align: middle;">
+                                                        <?= htmlspecialchars($role['role_name']) ?>
+                                                    </td>
+                                                    <td style="text-align: center; vertical-align: middle;">
+                                                        <label style="cursor: pointer; display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: 13.5px; color: #334155; margin: 0; user-select: none;">
+                                                            <input type="checkbox" 
+                                                                name="is_coach_wise[<?= $catId ?>][<?= $tId ?>]" 
+                                                                value="1" 
+                                                                <?= $isCoachWise ? 'checked' : '' ?> 
+                                                                <?= !empty($isViewer) ? 'disabled' : '' ?>
+                                                                style="cursor: pointer; width: 18px; height: 18px; accent-color: #1987C6;">
+                                                            <span>Coach Wise</span>
+                                                        </label>
+                                                    </td>
+                                                    <td style="text-align: center; vertical-align: middle;">
                                                         <input type="number" min="0" step="0.01" 
                                                             name="target_qty[<?= $catId ?>][<?= $tId ?>]" 
                                                             value="<?= htmlspecialchars($targetVal) ?>" 

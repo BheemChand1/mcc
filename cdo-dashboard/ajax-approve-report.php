@@ -61,20 +61,25 @@ if (!in_array($table, $allowedTables)) {
 }
 
 try {
+    $auditBy = $currentUserId ?: ($_SESSION['user_id'] ?? null);
+
     if (!empty($tokenId)) {
-        $stmt = $pdo->prepare("UPDATE `$table` SET isApproved = 1, audit_by = :audit_by WHERE token_id = :token_id AND station_id = :station_id");
+        // Simple and robust: update all rows matching this token_id
+        $stmt = $pdo->prepare("UPDATE `$table` SET isApproved = 1, audit_by = :audit_by WHERE token_id = :token_id");
         $stmt->execute([
-            'audit_by'   => $currentUserId,
-            'token_id'   => $tokenId,
-            'station_id' => $stationId
+            'audit_by' => $auditBy,
+            'token_id' => $tokenId
         ]);
-    } elseif ($table === 'mcc_manpower_log' && !empty($reportDate)) {
-        $where = "report_date = :report_date AND station_id = :station_id";
+    } elseif (!empty($reportDate)) {
+        $where = "report_date = :report_date";
         $params = [
-            'audit_by'    => $currentUserId,
-            'report_date' => $reportDate,
-            'station_id'  => $stationId
+            'audit_by'    => $auditBy,
+            'report_date' => $reportDate
         ];
+        if ($stationId) {
+            $where .= " AND station_id = :station_id";
+            $params['station_id'] = $stationId;
+        }
         if ($categoryId > 0) {
             $where .= " AND category_id = :category_id";
             $params['category_id'] = $categoryId;
@@ -86,16 +91,15 @@ try {
         $stmt = $pdo->prepare("UPDATE `$table` SET isApproved = 1, audit_by = :audit_by WHERE $where");
         $stmt->execute($params);
     } elseif ($reportId > 0) {
-        $stmt = $pdo->prepare("UPDATE `$table` SET isApproved = 1, audit_by = :audit_by WHERE id = :id AND station_id = :station_id");
+        $stmt = $pdo->prepare("UPDATE `$table` SET isApproved = 1, audit_by = :audit_by WHERE id = :id");
         $stmt->execute([
-            'audit_by'   => $currentUserId,
-            'id'         => $reportId,
-            'station_id' => $stationId
+            'audit_by' => $auditBy,
+            'id'       => $reportId
         ]);
     } else {
         echo json_encode([
             'success' => false,
-            'message' => 'Missing report identifier.'
+            'message' => 'Missing report token_id or identifier.'
         ]);
         exit;
     }

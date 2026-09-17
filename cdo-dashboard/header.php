@@ -34,7 +34,7 @@ if (!isset($isViewer)) {
     $isViewer = ($userRole === 'VIEWER');
 }
 if (!isset($isCDO)) {
-    $isCDO = in_array($userRole, ['CDO', 'ADMIN']);
+    $isCDO = ($userRole !== 'VIEWER');
 }
 if (!isset($currentUserId)) {
     $currentUserId = $_SESSION['user_id'] ?? null;

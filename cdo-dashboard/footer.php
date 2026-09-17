@@ -84,6 +84,8 @@
                 link.classList.remove("active");
             }
         });
+    });
+
     // Global Report Approval Handler
     function approveReport(btn, table, tokenId, extra) {
         if (!confirm('Are you sure you want to approve this report?')) return;
@@ -99,6 +101,7 @@
             if (extra.report_date) formData.append('report_date', extra.report_date);
             if (extra.shift_id) formData.append('shift_id', extra.shift_id);
             if (extra.category_id) formData.append('category_id', extra.category_id);
+            if (extra.id) formData.append('report_id', extra.id);
             if (extra.report_id) formData.append('report_id', extra.report_id);
         }
         
@@ -117,11 +120,13 @@
             }
         })
         .catch(err => {
+            console.error('Approval error:', err);
             alert('Error connecting to server.');
             btn.disabled = false;
             btn.innerHTML = origHtml;
         });
     }
+    window.approveReport = approveReport;
     </script>
     <?php if (isset($extraScripts)): ?>
     <script>

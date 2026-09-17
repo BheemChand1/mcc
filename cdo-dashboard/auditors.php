@@ -341,6 +341,7 @@ include 'sidebar.php';
                                                     </button>
                                                 </form>
 
+                                                <!-- Delete button commented out for now
                                                 <form method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to permanently delete this user?');">
                                                     <input type="hidden" name="action" value="delete_user">
                                                     <input type="hidden" name="user_id" value="<?= $a['user_id'] ?>">
@@ -348,6 +349,7 @@ include 'sidebar.php';
                                                         <i class="bi bi-trash3"></i>
                                                     </button>
                                                 </form>
+                                                -->
                                             </div>
                                         </td>
                                     </tr>

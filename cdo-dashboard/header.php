@@ -33,6 +33,12 @@ if (!isset($userRole)) {
 if (!isset($isViewer)) {
     $isViewer = ($userRole === 'VIEWER');
 }
+if (!isset($isCDO)) {
+    $isCDO = in_array($userRole, ['CDO', 'ADMIN']);
+}
+if (!isset($currentUserId)) {
+    $currentUserId = $_SESSION['user_id'] ?? null;
+}
 $viewerUser = $_SESSION['username'] ?? ($_SESSION['user_name'] ?? 'VIEWER');
 
 // Check report access permissions based on user's station assignment

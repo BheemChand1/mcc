@@ -1,11 +1,6 @@
 <?php
-require_once __DIR__ . '/../connection.php';
+require_once 'auth.php';
 global $pdo;
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-$stationId = $_SESSION['station_id'] ?? 1;
 
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');

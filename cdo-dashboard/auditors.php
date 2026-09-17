@@ -65,20 +65,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = "Email address '$email' is already in use.";
                     $messageType = 'danger';
                 } else {
-                    if ($action === 'add_auditor' || $action === 'add_user') {
-                        // Handle signature upload on auditor creation
-                        $savedSignatureName = null;
-                        if (isset($_FILES['signature_file']) && $_FILES['signature_file']['error'] === UPLOAD_ERR_OK) {
-                            $fileTmp = $_FILES['signature_file']['tmp_name'];
-                            $origName = $_FILES['signature_file']['name'];
-                            $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-                            $allowed = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
-                            if (in_array($ext, $allowed)) {
-                                $savedSignatureName = 'sig_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-                                move_uploaded_file($fileTmp, $uploadSigDir . '/' . $savedSignatureName);
-                            }
-                        }
+                    // Process signature file upload if provided (only for AUDITOR)
+                    $savedSignatureName = null;
+                    $removeSignature = !empty($_POST['remove_signature']) && $_POST['remove_signature'] === '1';
 
+                    if ($role === 'AUDITOR' && isset($_FILES['signature_file']) && $_FILES['signature_file']['error'] === UPLOAD_ERR_OK) {
+                        $fileTmp = $_FILES['signature_file']['tmp_name'];
+                        $origName = $_FILES['signature_file']['name'];
+                        $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+                        $allowed = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
+                        if (in_array($ext, $allowed)) {
+                            $savedSignatureName = 'sig_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+                            move_uploaded_file($fileTmp, $uploadSigDir . '/' . $savedSignatureName);
+                        }
+                    }
+
+                    if ($action === 'add_auditor' || $action === 'add_user') {
                         $hash = password_hash($password, PASSWORD_BCRYPT);
                         $ins = $pdo->prepare("
                             INSERT INTO mcc_users (user_name, full_name, username, email, password_hash, role, station_id, status, digital_signature)
@@ -97,14 +99,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $message = "User account for '$fullName' ($role) created successfully!";
                         $messageType = 'success';
                     } else {
+                        $sigClause = "";
+                        $sigParams = [];
+                        if ($savedSignatureName !== null) {
+                            $sigClause = ", digital_signature = :digital_sig";
+                            $sigParams['digital_sig'] = $savedSignatureName;
+                        } elseif ($removeSignature) {
+                            $sigClause = ", digital_signature = NULL";
+                        }
+
                         if (!empty($password)) {
                             $hash = password_hash($password, PASSWORD_BCRYPT);
                             $upd = $pdo->prepare("
                                 UPDATE mcc_users 
-                                SET user_name = :user_name, full_name = :full_name, username = :username, email = :email, role = :role, password_hash = :password_hash
+                                SET user_name = :user_name, full_name = :full_name, username = :username, email = :email, role = :role, password_hash = :password_hash $sigClause
                                 WHERE user_id = :id AND station_id = :station_id AND $manageableRolesClause
                             ");
-                            $upd->execute([
+                            $params = array_merge([
                                 'user_name'      => $fullName,
                                 'full_name'      => $fullName,
                                 'username'       => $username,
@@ -113,14 +124,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'password_hash'  => $hash,
                                 'id'             => $userId,
                                 'station_id'     => $stationId
-                            ]);
+                            ], $sigParams);
+                            $upd->execute($params);
                         } else {
                             $upd = $pdo->prepare("
                                 UPDATE mcc_users 
-                                SET user_name = :user_name, full_name = :full_name, username = :username, email = :email, role = :role
+                                SET user_name = :user_name, full_name = :full_name, username = :username, email = :email, role = :role $sigClause
                                 WHERE user_id = :id AND station_id = :station_id AND $manageableRolesClause
                             ");
-                            $upd->execute([
+                            $params = array_merge([
                                 'user_name'  => $fullName,
                                 'full_name'  => $fullName,
                                 'username'   => $username,
@@ -128,7 +140,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'role'       => $role,
                                 'id'         => $userId,
                                 'station_id' => $stationId
-                            ]);
+                            ], $sigParams);
+                            $upd->execute($params);
                         }
                         $message = "User details for '$fullName' updated successfully!";
                         $messageType = 'success';
@@ -427,6 +440,7 @@ include 'sidebar.php';
             <form method="POST" id="auditorForm" enctype="multipart/form-data">
                 <input type="hidden" name="action" id="formAction" value="add_user">
                 <input type="hidden" name="user_id" id="userId" value="0">
+                <input type="hidden" name="remove_signature" id="removeSignatureInput" value="0">
 
                 <div class="modal-header text-white" style="background: linear-gradient(135deg, #07203a 0%, #0c3b6d 100%); border-radius: 12px 12px 0 0;">
                     <h5 class="modal-title font-weight-bold" id="auditorModalLabel"><i class="bi bi-person-plus-fill me-2"></i> Add New User</h5>
@@ -468,15 +482,36 @@ include 'sidebar.php';
                         <small class="text-muted" id="pwdHelp">Must be at least 6 characters.</small>
                     </div>
 
-                    <!-- Digital Signature Upload Section (Only shown when creating an Auditor) -->
-                    <div id="signatureUploadSection" class="mt-4 pt-3 border-top">
+                    <!-- Digital Signature Upload / Update Section (Visible only when Role is AUDITOR) -->
+                    <div id="signatureUploadSection" class="mt-4 pt-3 border-top d-none">
                         <div class="d-flex justify-content-between align-items-center mb-2">
-                            <label class="form-label font-weight-bold text-dark small text-uppercase mb-0">
-                                <i class="bi bi-pen-fill text-primary me-1"></i> Upload Digital Signature
+                            <label class="form-label font-weight-bold text-dark small text-uppercase mb-0" id="sigSectionTitle">
+                                <i class="bi bi-pen-fill text-primary me-1"></i> Digital Signature
                             </label>
                             <span class="badge bg-light text-muted border">Optional</span>
                         </div>
 
+                        <!-- Current signature preview when editing an Auditor -->
+                        <div id="existingSignatureBox" class="p-2 mb-2 bg-light rounded border d-none">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="small fw-bold text-secondary">Current Signature:</span>
+                                    <div class="bg-white p-1 border rounded d-inline-block">
+                                        <img id="existingSigImg" src="" alt="Current Signature" style="max-height: 40px; max-width: 140px; object-fit: contain;">
+                                    </div>
+                                </div>
+                                <div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" id="removeSigBtn" onclick="markRemoveSignature()">
+                                        <i class="bi bi-trash3 me-1"></i> Remove
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="sigRemovedNotice" class="alert alert-warning py-1 px-2 mt-2 mb-0 small d-none">
+                                <i class="bi bi-info-circle me-1"></i> Signature will be removed on save unless a new image is chosen below.
+                            </div>
+                        </div>
+
+                        <label class="form-label small text-muted mb-1" id="sigFileInputLabel">Choose signature image file:</label>
                         <div class="input-group">
                             <input type="file" class="form-control" name="signature_file" id="signatureFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" onchange="previewUploadedSig(this)">
                             <button class="btn btn-outline-secondary" type="button" onclick="clearUploadedFile()">Clear</button>
@@ -537,6 +572,22 @@ function clearUploadedFile() {
     if (previewBox) previewBox.classList.add('d-none');
 }
 
+function markRemoveSignature() {
+    document.getElementById('removeSignatureInput').value = '1';
+    document.getElementById('sigRemovedNotice').classList.remove('d-none');
+    document.getElementById('removeSigBtn').classList.add('d-none');
+}
+
+function toggleSignatureSection() {
+    const role = document.getElementById('userRoleSelect').value;
+    const sigSection = document.getElementById('signatureUploadSection');
+    if (role === 'AUDITOR') {
+        sigSection.classList.remove('d-none');
+    } else {
+        sigSection.classList.add('d-none');
+    }
+}
+
 function previewSignature(src, userName) {
     document.getElementById('modalSigImage').src = src;
     document.getElementById('sigPreviewTitle').innerHTML = '<i class="bi bi-pen me-2"></i> Digital Signature: ' + userName;
@@ -558,9 +609,16 @@ function openAddModal() {
     document.getElementById('pwdHelp').innerText = 'Must be at least 6 characters.';
     document.getElementById('submitBtn').innerHTML = '<i class="bi bi-check-circle me-1"></i> Create User';
 
-    // Show upload signature only when creating
-    document.getElementById('signatureUploadSection').classList.remove('d-none');
+    // Signature UI reset for Add mode
+    document.getElementById('sigSectionTitle').innerHTML = '<i class="bi bi-pen-fill text-primary me-1"></i> Upload Digital Signature';
+    document.getElementById('sigFileInputLabel').innerText = 'Choose signature image file:';
+    document.getElementById('existingSignatureBox').classList.add('d-none');
+    document.getElementById('sigRemovedNotice').classList.add('d-none');
+    document.getElementById('removeSignatureInput').value = '0';
     clearUploadedFile();
+
+    // Check role to show/hide
+    toggleSignatureSection();
 }
 
 function openEditModal(user) {
@@ -577,13 +635,34 @@ function openEditModal(user) {
     document.getElementById('pwdHelp').innerText = 'Leave empty if you do not want to reset password.';
     document.getElementById('submitBtn').innerHTML = '<i class="bi bi-check-circle me-1"></i> Update User';
     
-    // Hide upload signature section when editing
-    document.getElementById('signatureUploadSection').classList.add('d-none');
+    // Signature UI setup for Edit mode
+    document.getElementById('sigSectionTitle').innerHTML = '<i class="bi bi-pen-fill text-primary me-1"></i> Digital Signature';
+    document.getElementById('sigFileInputLabel').innerText = user.digital_signature ? 'Choose new image to replace current signature:' : 'Choose signature image file:';
+    document.getElementById('removeSignatureInput').value = '0';
+    document.getElementById('sigRemovedNotice').classList.add('d-none');
+    document.getElementById('removeSigBtn').classList.remove('d-none');
     clearUploadedFile();
+
+    if (user.digital_signature) {
+        document.getElementById('existingSigImg').src = 'uploads/signatures/' + user.digital_signature;
+        document.getElementById('existingSignatureBox').classList.remove('d-none');
+    } else {
+        document.getElementById('existingSignatureBox').classList.add('d-none');
+    }
+
+    // Check role to show/hide
+    toggleSignatureSection();
 
     var modal = new bootstrap.Modal(document.getElementById('auditorModal'));
     modal.show();
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const roleSelect = document.getElementById('userRoleSelect');
+    if (roleSelect) {
+        roleSelect.addEventListener('change', toggleSignatureSection);
+    }
+});
 </script>
 
 <?php include 'footer.php'; ?>

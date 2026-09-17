@@ -565,10 +565,10 @@ include 'sidebar.php';
 
                         <div class="signature-row">
                             <div class="signature-box">
-                                <div class="signature-line">Contractor's Supervisor</div>
+                                <div class="signature-line">Contractor's Representative</div>
                             </div>
                             <div class="signature-box">
-                                <div class="signature-line">Auth. Rep. of Sr.DME/CDO</div>
+                                <div class="signature-line">Authorized Railway personnel</div>
                             </div>
                         </div>
                     </div>

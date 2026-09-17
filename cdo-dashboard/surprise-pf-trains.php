@@ -235,10 +235,10 @@ include 'sidebar.php';
 
                         <div class="signature-row" style="display: flex; justify-content: space-between; margin-top: 40px; padding: 0 15px;">
                             <div class="signature-box" style="text-align: center;">
-                                <div class="signature-line" style="border-top: 1px solid #94a3b8; width: 200px; padding-top: 5px; color: #475569; font-weight: 600; font-size: 13px;">Auditor Signature</div>
+                                <div class="signature-line" style="border-top: 1px solid #94a3b8; width: 200px; padding-top: 5px; color: #475569; font-weight: 600; font-size: 13px;">Contractor's Representative</div>
                             </div>
                             <div class="signature-box" style="text-align: center;">
-                                <div class="signature-line" style="border-top: 1px solid #94a3b8; width: 200px; padding-top: 5px; color: #475569; font-weight: 600; font-size: 13px;">On Duty Supervisor Signature</div>
+                                <div class="signature-line" style="border-top: 1px solid #94a3b8; width: 200px; padding-top: 5px; color: #475569; font-weight: 600; font-size: 13px;">Authorized Railway personnel</div>
                             </div>
                         </div>
                     </div>

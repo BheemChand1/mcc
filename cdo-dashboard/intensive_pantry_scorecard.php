@@ -936,10 +936,10 @@ include 'sidebar.php';
                         <!-- Signatures Section (Matching Photo 2) -->
                         <div class="pantry-sig-row">
                             <div class="pantry-sig-box">
-                                <div class="pantry-sig-title">Signature of Contractor's Supervisor</div>
+                                <div class="pantry-sig-title">Contractor's Representative</div>
                             </div>
                             <div class="pantry-sig-box">
-                                <div class="pantry-sig-title">SSE/JE/C&W</div>
+                                <div class="pantry-sig-title">Authorized Railway personnel</div>
                             </div>
                         </div>
 

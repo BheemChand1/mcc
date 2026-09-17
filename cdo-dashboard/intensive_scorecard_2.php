@@ -776,10 +776,10 @@ include 'sidebar.php';
                         <!-- Signatures Section -->
                         <div class="cts-sig-row">
                             <div class="cts-sig-box">
-                                <div class="cts-sig-title">Signature of Contractor's Supervisor</div>
+                                <div class="cts-sig-title">Contractor's Representative</div>
                             </div>
                             <div class="cts-sig-box">
-                                <div class="cts-sig-title">Signature of SSE/JE/C&W</div>
+                                <div class="cts-sig-title">Authorized Railway personnel</div>
                             </div>
                         </div>
 

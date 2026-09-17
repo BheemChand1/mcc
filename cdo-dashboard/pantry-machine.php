@@ -251,7 +251,7 @@ include 'sidebar.php';
                             <div class="signature-line">Contractor's Representative</div>
                         </div>
                         <div class="signature-box">
-                            <div class="signature-line">Authorized Railway Officer</div>
+                            <div class="signature-line">Authorized Railway personnel</div>
                         </div>
                     </div>
                 </div>

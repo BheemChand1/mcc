@@ -84,7 +84,44 @@
                 link.classList.remove("active");
             }
         });
-    });
+    // Global Report Approval Handler
+    function approveReport(btn, table, tokenId, extra) {
+        if (!confirm('Are you sure you want to approve this report?')) return;
+        
+        btn.disabled = true;
+        const origHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Approving...';
+        
+        const formData = new FormData();
+        formData.append('table', table);
+        if (tokenId) formData.append('token_id', tokenId);
+        if (extra) {
+            if (extra.report_date) formData.append('report_date', extra.report_date);
+            if (extra.shift_id) formData.append('shift_id', extra.shift_id);
+            if (extra.category_id) formData.append('category_id', extra.category_id);
+            if (extra.report_id) formData.append('report_id', extra.report_id);
+        }
+        
+        fetch('ajax-approve-report.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                btn.outerHTML = '<span class="badge bg-success px-3 py-2 text-white" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px; box-shadow: 0 2px 5px rgba(21,128,61,0.2);"><i class="bi bi-patch-check-fill me-1"></i> Approved</span>';
+            } else {
+                alert(data.message || 'Failed to approve report.');
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            }
+        })
+        .catch(err => {
+            alert('Error connecting to server.');
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        });
+    }
     </script>
     <?php if (isset($extraScripts)): ?>
     <script>

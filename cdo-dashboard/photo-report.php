@@ -130,6 +130,15 @@ include 'sidebar.php';
                   <i class="bi bi-geo-alt-fill text-indigo me-1"></i>
                   Area: <span class="text-indigo ms-1"><?= htmlspecialchars($rep['area'] ?: 'Not Specified'); ?></span>
                 </span>
+                <div class="d-flex align-items-center gap-2">
+                  <?php if (!empty($rep['isApproved'])): ?>
+                    <span class="badge bg-success px-3 py-2 text-white" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px; box-shadow: 0 2px 5px rgba(21,128,61,0.2);"><i class="bi bi-patch-check-fill me-1"></i> Approved</span>
+                  <?php elseif (!empty($isCDO)): ?>
+                    <button type="button" class="btn btn-sm btn-success no-print" onclick="approveReport(this, 'mcc_photo_report', '', {id: <?= intval($rep['id']) ?>})" style="font-weight: 600; padding: 5px 14px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 2px 6px rgba(16,185,129,0.25);">
+                      <i class="bi bi-check2-circle"></i> <span>Approve</span>
+                    </button>
+                  <?php endif; ?>
+                </div>
               </div>
               <div class="card-body p-4">
                 <div class="row g-4">

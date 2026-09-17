@@ -64,7 +64,7 @@ if ($isFallback) {
 } else {
     // Fetch reports for each token
     $reportStmt = $pdo->prepare("
-        SELECT parameter_id, shift_id, rating 
+        SELECT parameter_id, shift_id, rating, isApproved 
         FROM dc_mcc_report 
         WHERE station_id = :station_id AND token_id = :token_id
     ");
@@ -104,7 +104,8 @@ if ($isFallback) {
             'report_date' => $reportDate,
             'reports_map' => $reportsMap,
             'average_score' => $averageScore,
-            'is_fallback' => false
+            'is_fallback' => false,
+            'isApproved' => !empty($reportRows) ? (int)($reportRows[0]['isApproved'] ?? 0) : 0
         ];
     }
 }
@@ -226,9 +227,18 @@ include 'sidebar.php';
                         <!-- Header matching intensive-chemical-report.php -->
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;">
                             <h2 style="font-size: 18px; font-weight: 700; color: #1e293b; margin: 0;">Score Card for Pit Line & Depot Cleaning</h2>
-                            <?php if (!$sheet['is_fallback']): ?>
-                                <span style="font-family: monospace; font-weight: 700; font-size: 12px; background: #e2e8f0; color: #475569; padding: 3px 8px; border-radius: 4px; border: 1px solid #cbd5e1;">Token: <?= htmlspecialchars($sheet['token_id']) ?></span>
-                            <?php endif; ?>
+                            <div class="d-flex align-items-center gap-2">
+                                <?php if (!$sheet['is_fallback'] && !empty($sheet['token_id'])): ?>
+                                    <span style="font-family: monospace; font-weight: 700; font-size: 12px; background: #e2e8f0; color: #475569; padding: 3px 8px; border-radius: 4px; border: 1px solid #cbd5e1;">Token: <?= htmlspecialchars($sheet['token_id']) ?></span>
+                                <?php endif; ?>
+                                <?php if (!empty($sheet['isApproved'])): ?>
+                                    <span class="badge bg-success px-3 py-2 text-white" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px; box-shadow: 0 2px 5px rgba(21,128,61,0.2);"><i class="bi bi-patch-check-fill me-1"></i> Approved</span>
+                                <?php elseif (!empty($isCDO) && empty($sheet['is_fallback'])): ?>
+                                    <button type="button" class="btn btn-sm btn-success no-print" onclick="approveReport(this, 'dc_mcc_report', '<?= htmlspecialchars($sheet['token_id']) ?>')" style="font-weight: 600; padding: 5px 14px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 2px 6px rgba(16,185,129,0.25);">
+                                        <i class="bi bi-check2-circle"></i> <span>Approve</span>
+                                    </button>
+                                <?php endif; ?>
+                            </div>
                         </div>
 
                         <!-- Meta details matching intensive-chemical-report.php -->

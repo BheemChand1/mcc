@@ -42,7 +42,7 @@ $targetsRows = $targetsStmt->fetchAll();
 
 // Fetch all daily reports in the range, keeping each day's shift values separate - Pantry
 $reportStmt = $pdo->prepare("
-    SELECT report_date, parameter_id AS machine_id, shift_id, used_status, auditor_name
+    SELECT report_date, parameter_id AS machine_id, shift_id, used_status, auditor_name, isApproved
     FROM mcc_intensive_pantry_machine_report 
     WHERE station_id = :station_id AND report_date BETWEEN :from_date AND :to_date
     ORDER BY report_date DESC, id ASC
@@ -106,7 +106,7 @@ foreach ($reportsByDate as $reportDate => $dailyRows) {
         $mId = $mach['machine_id'];
         foreach ($shiftsList as $shift) {
             $sId = $shift['shift_id'];
-            $nomArea = $targetsMap[$mId][$sId] ?? 'N';
+            $nomArea = $targetsMap[$mId][$sId] ?? '';
             $isNominated = !empty($nomArea) && strtoupper($nomArea) !== 'N' && $nomArea !== '-';
             if ($isNominated) {
                 $totalNominated++;
@@ -122,7 +122,8 @@ foreach ($reportsByDate as $reportDate => $dailyRows) {
         'targets' => $targetsMap,
         'reports' => $reportsMap,
         'auditor_name' => implode(', ', $auditors),
-        'total_score' => $totalNominated > 0 ? round(($totalOperated / $totalNominated) * 100, 1) . '%' : '100%'
+        'total_score' => $totalNominated > 0 ? round(($totalOperated / $totalNominated) * 100, 1) . '%' : '100%',
+        'isApproved' => !empty($dailyRows) ? (int)($dailyRows[0]['isApproved'] ?? 0) : 0
     ];
 }
 
@@ -158,8 +159,17 @@ include 'sidebar.php';
                     $reportsMap = $sheet['reports'];
                 ?>
                 <div class="report-frame">
-                    <div class="report-header">
-                        <h2>Daily Machine Report (Pantry Car)</h2>
+                    <div class="report-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #999; padding-bottom: 10px; margin-bottom: 15px;">
+                        <h2 style="margin: 0;">Daily Machine Report (Pantry Car)</h2>
+                        <div class="d-flex align-items-center gap-2">
+                            <?php if (!empty($sheet['isApproved'])): ?>
+                                <span class="badge bg-success px-3 py-2 text-white" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px; box-shadow: 0 2px 5px rgba(21,128,61,0.2);"><i class="bi bi-patch-check-fill me-1"></i> Approved</span>
+                            <?php elseif (!empty($isCDO)): ?>
+                                <button type="button" class="btn btn-sm btn-success no-print" onclick="approveReport(this, 'mcc_intensive_pantry_machine_report', '', {report_date: '<?= htmlspecialchars($sheet['report_date']) ?>'})" style="font-weight: 600; padding: 5px 14px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 2px 6px rgba(16,185,129,0.25);">
+                                    <i class="bi bi-check2-circle"></i> <span>Approve</span>
+                                </button>
+                            <?php endif; ?>
+                        </div>
                     </div>
 
                     <div class="report-meta-section">

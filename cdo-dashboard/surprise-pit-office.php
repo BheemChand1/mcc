@@ -48,7 +48,7 @@ $guidelinesText = implode(', ', $guidelineStrings);
 
 // 3. Fetch reports in date range
 $reportsStmt = $pdo->prepare("
-    SELECT r.token_id, r.report_date, r.auditor_name, r.parameter_id, r.value
+    SELECT r.token_id, r.report_date, r.auditor_name, r.parameter_id, r.value, r.isApproved
     FROM mcc_surprise_reports r
     WHERE r.station_id = :station_id AND r.category = 'pit_office' AND r.report_date BETWEEN :from_date AND :to_date
     ORDER BY r.report_date DESC, r.token_id DESC, r.id ASC
@@ -70,7 +70,8 @@ foreach ($reportRows as $row) {
             'report_date' => $row['report_date'],
             'auditor_name' => $row['auditor_name'] ?? 'CDO',
             'scores' => [],
-            'total_score' => 0
+            'total_score' => 0,
+            'isApproved' => intval($row['isApproved'] ?? 0)
         ];
     }
     $val = intval($row['value']);
@@ -177,7 +178,18 @@ include 'sidebar.php';
                     <div class="report-frame">
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;">
                             <h2 style="font-size: 18px; font-weight: 700; color: #1e293b; margin: 0;">Surprise Visit Score Card - Pit & Office Cleaning</h2>
-                            <span style="font-family: monospace; font-weight: 700; font-size: 12px; background: #e2e8f0; color: #475569; padding: 3px 8px; border-radius: 4px; border: 1px solid #cbd5e1;">Token: <?= htmlspecialchars($sheet['token_id']); ?></span>
+                            <div class="d-flex align-items-center gap-2">
+                                <?php if (!empty($sheet['token_id'])): ?>
+                                    <span style="font-family: monospace; font-weight: 700; font-size: 12px; background: #e2e8f0; color: #475569; padding: 3px 8px; border-radius: 4px; border: 1px solid #cbd5e1;">Token: <?= htmlspecialchars($sheet['token_id']); ?></span>
+                                <?php endif; ?>
+                                <?php if (!empty($sheet['isApproved'])): ?>
+                                    <span class="badge bg-success px-3 py-2 text-white" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px; box-shadow: 0 2px 5px rgba(21,128,61,0.2);"><i class="bi bi-patch-check-fill me-1"></i> Approved</span>
+                                <?php elseif (!empty($isCDO) && !empty($sheet['token_id'])): ?>
+                                    <button type="button" class="btn btn-sm btn-success no-print" onclick="approveReport(this, 'mcc_surprise_reports', '<?= htmlspecialchars($sheet['token_id']) ?>')" style="font-weight: 600; padding: 5px 14px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 2px 6px rgba(16,185,129,0.25);">
+                                        <i class="bi bi-check2-circle"></i> <span>Approve</span>
+                                    </button>
+                                <?php endif; ?>
+                            </div>
                         </div>
 
                         <div style="font-size: 13px; color: #334155; margin-bottom: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; line-height: 1.6;">

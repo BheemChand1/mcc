@@ -187,7 +187,9 @@ CREATE TABLE `dc_mcc_chemical_report` (
   `token_id` varchar(100) NOT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -323,7 +325,9 @@ CREATE TABLE `dc_mcc_machine_report` (
   `station_id` int(11) NOT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -480,7 +484,9 @@ CREATE TABLE `dc_mcc_report` (
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `auditor_name` varchar(255) DEFAULT NULL
+  `auditor_name` varchar(255) DEFAULT NULL,
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -816,7 +822,9 @@ CREATE TABLE `mcc_cleanliness_report` (
   `report_date` date NOT NULL,
   `score` decimal(10,2) DEFAULT 0.00,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -1115,7 +1123,9 @@ CREATE TABLE `mcc_intensive_chemical_report` (
   `train_no` varchar(50) DEFAULT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -1336,7 +1346,9 @@ CREATE TABLE `mcc_intensive_machine_report` (
   `station_id` int(11) NOT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -1645,7 +1657,9 @@ CREATE TABLE `mcc_intensive_pantry_chemical_report` (
   `coach_no` varchar(20) DEFAULT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -1786,7 +1800,9 @@ CREATE TABLE `mcc_intensive_pantry_machine_report` (
   `station_id` int(11) NOT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -2117,7 +2133,9 @@ CREATE TABLE `mcc_intensive_pantry_report` (
   `auditor_name` varchar(150) NOT NULL DEFAULT 'prabhunath',
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -2646,7 +2664,9 @@ CREATE TABLE `mcc_intensive_scorecard_2_report` (
   `submitted_by` varchar(150) NOT NULL DEFAULT 'prabhunath',
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -3941,7 +3961,9 @@ CREATE TABLE `mcc_intensive_scorecard_report` (
   `submitted_by` int(11) DEFAULT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -4284,7 +4306,9 @@ CREATE TABLE `mcc_manpower_log` (
   `no_dress_qty` int(11) DEFAULT NULL,
   `no_ppe_qty` int(11) DEFAULT NULL,
   `auditor_name` varchar(255) DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -4514,7 +4538,9 @@ CREATE TABLE `mcc_normal_chemical_report` (
   `train_no` varchar(50) NOT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -4895,7 +4921,9 @@ CREATE TABLE `mcc_normal_machine_report` (
   `station_id` int(11) NOT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -5295,7 +5323,9 @@ CREATE TABLE `mcc_normal_scorecard_report` (
   `auditor_name` varchar(255) DEFAULT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -5607,7 +5637,9 @@ CREATE TABLE `mcc_photo_report` (
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `area` varchar(255) DEFAULT NULL,
   `before_remark` text DEFAULT NULL,
-  `after_remark` text DEFAULT NULL
+  `after_remark` text DEFAULT NULL,
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -5670,7 +5702,9 @@ CREATE TABLE `mcc_prt_chemical_report` (
   `train_no` varchar(50) NOT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -6086,7 +6120,9 @@ CREATE TABLE `mcc_prt_machine_report` (
   `station_id` int(11) NOT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -6469,7 +6505,9 @@ CREATE TABLE `mcc_prt_scorecard_report` (
   `auditor_name` varchar(255) DEFAULT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -7117,7 +7155,9 @@ CREATE TABLE `mcc_surprise_reports` (
   `parameter_id` int(11) NOT NULL,
   `value` tinyint(4) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -7267,7 +7307,9 @@ CREATE TABLE `mcc_vb_chemical_report` (
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `train_no` varchar(50) DEFAULT NULL
+  `train_no` varchar(50) DEFAULT NULL,
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -7535,7 +7577,9 @@ CREATE TABLE `mcc_vb_machine_report` (
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `auditor_name` varchar(150) DEFAULT NULL
+  `auditor_name` varchar(150) DEFAULT NULL,
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -7754,7 +7798,9 @@ CREATE TABLE `mcc_vb_scorecard_report` (
   `auditor_name` varchar(255) DEFAULT NULL,
   `report_date` date NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `isApproved` tinyint(1) NOT NULL DEFAULT 0,
+  `audit_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --

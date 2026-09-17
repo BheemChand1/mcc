@@ -88,6 +88,7 @@ foreach ($targetsRows as $row) {
 
 // Fetch submitted daily logs in date range
 $logsMap = [];
+$dateApprovedMap = [];
 $hasLogs = false; // globally whether there are ANY logs in the range
 $logStmt = $pdo->prepare("
     SELECT 
@@ -98,7 +99,8 @@ $logStmt = $pdo->prepare("
         absent_qty,
         no_dress_qty,
         no_ppe_qty,
-        auditor_name
+        auditor_name,
+        isApproved
     FROM mcc_manpower_log
     WHERE station_id = :station_id AND report_date BETWEEN :from_date AND :to_date
 ");
@@ -112,6 +114,7 @@ $logRows = $logStmt->fetchAll();
 foreach ($logRows as $row) {
     $hasLogs = true;
     $date = $row['report_date'];
+    $dateApprovedMap[$date] = intval($row['isApproved'] ?? 0);
     $logsMap[$date][$row['shift_id']][$row['manpower_type_id']] = [
         'provided' => $row['provided_qty'],
         'absent' => $row['absent_qty'],
@@ -407,8 +410,17 @@ include 'sidebar.php';
                             </div>
                         <?php endif; ?>
 
-                        <div class="report-header">
-                            <h2>Manpower Log</h2>
+                        <div class="report-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #999; padding-bottom: 10px; margin-bottom: 15px;">
+                            <h2 style="margin: 0;">Manpower Log</h2>
+                            <div class="d-flex align-items-center gap-2">
+                                <?php if (!empty($dateApprovedMap[$date])): ?>
+                                    <span class="badge bg-success px-3 py-2 text-white" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px; box-shadow: 0 2px 5px rgba(21,128,61,0.2);"><i class="bi bi-patch-check-fill me-1"></i> Approved</span>
+                                <?php elseif (!empty($isCDO) && $hasLogsForDate): ?>
+                                    <button type="button" class="btn btn-sm btn-success no-print" onclick="approveReport(this, 'mcc_manpower_log', '', {report_date: '<?= htmlspecialchars($date) ?>'})" style="font-weight: 600; padding: 5px 14px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 2px 6px rgba(16,185,129,0.25);">
+                                        <i class="bi bi-check2-circle"></i> <span>Approve</span>
+                                    </button>
+                                <?php endif; ?>
+                            </div>
                         </div>
 
                         <div class="report-meta-section">

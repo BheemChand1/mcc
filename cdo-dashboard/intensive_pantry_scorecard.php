@@ -96,7 +96,7 @@ $sheetsData = [];
 if (!empty($inspectionTokens)) {
     // Populate sheets from mcc_intensive_pantry_report
     $reportStmt = $pdo->prepare("
-        SELECT r.sub_parameter_id, r.coach_no, r.score_value, r.auditor_name 
+        SELECT r.sub_parameter_id, r.coach_no, r.score_value, r.auditor_name, r.isApproved 
         FROM mcc_intensive_pantry_report r
         WHERE r.station_id = :station_id AND r.token_id = :token_id
         ORDER BY r.id ASC
@@ -214,7 +214,8 @@ if (!empty($inspectionTokens)) {
             'station' => $stationName,
             'contractor' => $contractorName,
             'rows' => $sheetRows,
-            'summary' => $coachSummary
+            'summary' => $coachSummary,
+            'isApproved' => !empty($scoreEntries) ? (int)($scoreEntries[0]['isApproved'] ?? 0) : 0
         ];
     }
 } else {
@@ -787,12 +788,19 @@ include 'sidebar.php';
                 ?>
                     <div class="pantry-frame">
 
-                        <!-- Token on the Side -->
-                        <?php if (!empty($sheet['token_id'])): ?>
-                            <div class="pantry-token-side">
-                                <strong>Token:</strong> <?= htmlspecialchars($sheet['token_id']) ?>
-                            </div>
-                        <?php endif; ?>
+                        <!-- Token & Approval on the Side -->
+                        <div class="pantry-token-side d-flex align-items-center gap-2" style="position: absolute; top: 22px; right: 25px;">
+                            <?php if (!empty($sheet['token_id'])): ?>
+                                <span style="font-size: 12.5px; font-weight: 700; color: #0f172a; background: #f8fafc; border: 1px solid #94a3b8; padding: 4px 12px; border-radius: 4px; letter-spacing: 0.3px;"><strong>Token:</strong> <?= htmlspecialchars($sheet['token_id']) ?></span>
+                            <?php endif; ?>
+                            <?php if (!empty($sheet['isApproved'])): ?>
+                                <span class="badge bg-success px-3 py-2 text-white" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px; box-shadow: 0 2px 5px rgba(21,128,61,0.2);"><i class="bi bi-patch-check-fill me-1"></i> Approved</span>
+                            <?php elseif (!empty($isCDO) && !empty($sheet['token_id'])): ?>
+                                <button type="button" class="btn btn-sm btn-success no-print" onclick="approveReport(this, 'mcc_intensive_pantry_report', '<?= htmlspecialchars($sheet['token_id']) ?>')" style="font-weight: 600; padding: 5px 14px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 2px 6px rgba(16,185,129,0.25);">
+                                    <i class="bi bi-check2-circle"></i> <span>Approve</span>
+                                </button>
+                            <?php endif; ?>
+                        </div>
 
                         <!-- Main Titles -->
                         <h2 class="scorecard-main-title">SCORECARD FOR INTENSIVE CLEANING OF PANTRY CAR</h2>

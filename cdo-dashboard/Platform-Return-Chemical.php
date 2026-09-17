@@ -144,7 +144,8 @@ if (!empty($tokensList)) {
             'chemical_score' => $chemicalScore,
             'total_penalty' => $totalPenalty,
             'targets' => $targets,
-            'is_fallback' => false
+            'is_fallback' => false,
+            'isApproved' => !empty($rows) ? (int)($rows[0]['isApproved'] ?? 0) : 0
         ];
     }
 } else {
@@ -301,9 +302,18 @@ include 'sidebar.php';
 
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;">
                             <h2 style="font-size: 18px; font-weight: 700; color: #1e293b; margin: 0;">Daily Chemical Report (Platform Return Trains)</h2>
-                            <?php if (!$sheet['is_fallback']): ?>
-                                <span style="font-family: monospace; font-weight: 700; font-size: 12px; background: #e2e8f0; color: #475569; padding: 3px 8px; border-radius: 4px; border: 1px solid #cbd5e1;">Token: <?= htmlspecialchars($sheet['token_id']) ?></span>
-                            <?php endif; ?>
+                            <div class="d-flex align-items-center gap-2">
+                                <?php if (!$sheet['is_fallback'] && !empty($sheet['token_id'])): ?>
+                                    <span style="font-family: monospace; font-weight: 700; font-size: 12px; background: #e2e8f0; color: #475569; padding: 3px 8px; border-radius: 4px; border: 1px solid #cbd5e1;">Token: <?= htmlspecialchars($sheet['token_id']) ?></span>
+                                <?php endif; ?>
+                                <?php if (!empty($sheet['isApproved'])): ?>
+                                    <span class="badge bg-success px-3 py-2 text-white" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px; box-shadow: 0 2px 5px rgba(21,128,61,0.2);"><i class="bi bi-patch-check-fill me-1"></i> Approved</span>
+                                <?php elseif (!empty($isCDO) && empty($sheet['is_fallback'])): ?>
+                                    <button type="button" class="btn btn-sm btn-success no-print" onclick="approveReport(this, 'mcc_prt_chemical_report', '<?= htmlspecialchars($sheet['token_id']) ?>')" style="font-weight: 600; padding: 5px 14px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 2px 6px rgba(16,185,129,0.25);">
+                                        <i class="bi bi-check2-circle"></i> <span>Approve</span>
+                                    </button>
+                                <?php endif; ?>
+                            </div>
                         </div>
 
                         <div style="font-size: 13px; color: #334155; margin-bottom: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; line-height: 1.6;">

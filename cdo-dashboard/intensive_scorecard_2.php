@@ -86,7 +86,7 @@ $sheetsData = [];
 if (!empty($inspectionTokens)) {
     // Populate sheets from mcc_intensive_scorecard_2_report
     $reportStmt = $pdo->prepare("
-        SELECT r.sub_parameter_id, r.coach_no, r.score_value, r.submitted_by 
+        SELECT r.sub_parameter_id, r.coach_no, r.score_value, r.submitted_by, r.isApproved 
         FROM mcc_intensive_scorecard_2_report r
         WHERE r.station_id = :station_id AND r.token_id = :token_id
         ORDER BY r.id ASC
@@ -184,7 +184,8 @@ if (!empty($inspectionTokens)) {
             'station' => $stationName,
             'contractor' => $contractorName,
             'coach_numbers' => $coachNos,
-            'rows' => $sheetRows
+            'rows' => $sheetRows,
+            'isApproved' => !empty($scoreEntries) ? (int)($scoreEntries[0]['isApproved'] ?? 0) : 0
         ];
     }
 } else {
@@ -676,12 +677,19 @@ include 'sidebar.php';
                 <?php foreach ($sheetsData as $sheet): ?>
                     <div class="cts-frame">
 
-                        <!-- Token on the Side -->
-                        <?php if (!empty($sheet['token_id'])): ?>
-                            <div class="cts-token-side">
-                                <strong>Token:</strong> <?= htmlspecialchars($sheet['token_id']) ?>
-                            </div>
-                        <?php endif; ?>
+                        <!-- Token & Approval on the Side -->
+                        <div class="cts-token-side d-flex align-items-center gap-2">
+                            <?php if (!empty($sheet['token_id'])): ?>
+                                <span><strong>Token:</strong> <?= htmlspecialchars($sheet['token_id']) ?></span>
+                            <?php endif; ?>
+                            <?php if (!empty($sheet['isApproved'])): ?>
+                                <span class="badge bg-success px-3 py-1 text-white" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px;"><i class="bi bi-patch-check-fill me-1"></i> Approved</span>
+                            <?php elseif (!empty($isCDO) && !empty($sheet['token_id'])): ?>
+                                <button type="button" class="btn btn-sm btn-success no-print" onclick="approveReport(this, 'mcc_intensive_scorecard_2_report', '<?= htmlspecialchars($sheet['token_id']) ?>')" style="font-weight: 600; padding: 4px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+                                    <i class="bi bi-check2-circle"></i> <span>Approve</span>
+                                </button>
+                            <?php endif; ?>
+                        </div>
 
                         <!-- Main Titles -->
                         <h2 class="scorecard-main-title"><?= htmlspecialchars($sheet['title']) ?></h2>

@@ -33,4 +33,6 @@ $contractorName = $stationDetails['contractor_name'] ?? 'Kingson Services';
 
 $userRole = strtoupper($_SESSION['role'] ?? 'CDO');
 $isViewer = ($userRole === 'VIEWER');
+$isCDO = in_array($userRole, ['CDO', 'ADMIN']);
+$currentUserId = $_SESSION['user_id'] ?? null;
 ?>

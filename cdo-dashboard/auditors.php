@@ -65,35 +65,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = "Email address '$email' is already in use.";
                     $messageType = 'danger';
                 } else {
-                    // Process digital signature if uploaded or drawn
-                    $savedSignatureName = null;
-                    $removeSignature = !empty($_POST['remove_signature']) && $_POST['remove_signature'] === '1';
-
-                    // 1. Uploaded signature file
-                    if (isset($_FILES['signature_file']) && $_FILES['signature_file']['error'] === UPLOAD_ERR_OK) {
-                        $fileTmp = $_FILES['signature_file']['tmp_name'];
-                        $origName = $_FILES['signature_file']['name'];
-                        $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-                        $allowed = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
-                        if (in_array($ext, $allowed)) {
-                            $savedSignatureName = 'sig_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-                            move_uploaded_file($fileTmp, $uploadSigDir . '/' . $savedSignatureName);
-                        }
-                    }
-                    // 2. Drawn signature base64 data
-                    elseif (!empty($_POST['signature_data']) && strpos($_POST['signature_data'], 'data:image') === 0) {
-                        $dataUri = $_POST['signature_data'];
-                        if (preg_match('/^data:image\/(\w+);base64,/', $dataUri)) {
-                            $dataBase64 = substr($dataUri, strpos($dataUri, ',') + 1);
-                            $decoded = base64_decode($dataBase64);
-                            if ($decoded !== false) {
-                                $savedSignatureName = 'sig_' . time() . '_' . bin2hex(random_bytes(4)) . '.png';
-                                file_put_contents($uploadSigDir . '/' . $savedSignatureName, $decoded);
+                    if ($action === 'add_auditor' || $action === 'add_user') {
+                        // Handle signature upload on auditor creation
+                        $savedSignatureName = null;
+                        if (isset($_FILES['signature_file']) && $_FILES['signature_file']['error'] === UPLOAD_ERR_OK) {
+                            $fileTmp = $_FILES['signature_file']['tmp_name'];
+                            $origName = $_FILES['signature_file']['name'];
+                            $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+                            $allowed = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
+                            if (in_array($ext, $allowed)) {
+                                $savedSignatureName = 'sig_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+                                move_uploaded_file($fileTmp, $uploadSigDir . '/' . $savedSignatureName);
                             }
                         }
-                    }
 
-                    if ($action === 'add_auditor' || $action === 'add_user') {
                         $hash = password_hash($password, PASSWORD_BCRYPT);
                         $ins = $pdo->prepare("
                             INSERT INTO mcc_users (user_name, full_name, username, email, password_hash, role, station_id, status, digital_signature)
@@ -112,23 +97,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $message = "User account for '$fullName' ($role) created successfully!";
                         $messageType = 'success';
                     } else {
-                        $sigClause = "";
-                        $sigParams = [];
-                        if ($savedSignatureName !== null) {
-                            $sigClause = ", digital_signature = :digital_sig";
-                            $sigParams['digital_sig'] = $savedSignatureName;
-                        } elseif ($removeSignature) {
-                            $sigClause = ", digital_signature = NULL";
-                        }
-
                         if (!empty($password)) {
                             $hash = password_hash($password, PASSWORD_BCRYPT);
                             $upd = $pdo->prepare("
                                 UPDATE mcc_users 
-                                SET user_name = :user_name, full_name = :full_name, username = :username, email = :email, role = :role, password_hash = :password_hash $sigClause
+                                SET user_name = :user_name, full_name = :full_name, username = :username, email = :email, role = :role, password_hash = :password_hash
                                 WHERE user_id = :id AND station_id = :station_id AND $manageableRolesClause
                             ");
-                            $params = array_merge([
+                            $upd->execute([
                                 'user_name'      => $fullName,
                                 'full_name'      => $fullName,
                                 'username'       => $username,
@@ -137,15 +113,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'password_hash'  => $hash,
                                 'id'             => $userId,
                                 'station_id'     => $stationId
-                            ], $sigParams);
-                            $upd->execute($params);
+                            ]);
                         } else {
                             $upd = $pdo->prepare("
                                 UPDATE mcc_users 
-                                SET user_name = :user_name, full_name = :full_name, username = :username, email = :email, role = :role $sigClause
+                                SET user_name = :user_name, full_name = :full_name, username = :username, email = :email, role = :role
                                 WHERE user_id = :id AND station_id = :station_id AND $manageableRolesClause
                             ");
-                            $params = array_merge([
+                            $upd->execute([
                                 'user_name'  => $fullName,
                                 'full_name'  => $fullName,
                                 'username'   => $username,
@@ -153,8 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'role'       => $role,
                                 'id'         => $userId,
                                 'station_id' => $stationId
-                            ], $sigParams);
-                            $upd->execute($params);
+                            ]);
                         }
                         $message = "User details for '$fullName' updated successfully!";
                         $messageType = 'success';
@@ -315,36 +289,6 @@ $extraStyles = '
         max-width: 100px;
         object-fit: contain;
     }
-    .sig-pad-box {
-        border: 2px dashed #cbd5e1;
-        border-radius: 8px;
-        background: #ffffff;
-        position: relative;
-        text-align: center;
-        user-select: none;
-    }
-    .sig-pad-box canvas {
-        width: 100%;
-        height: 140px;
-        display: block;
-        cursor: crosshair;
-        border-radius: 6px;
-        touch-action: none;
-    }
-    .sig-nav-tabs .nav-link {
-        font-size: 0.84rem;
-        font-weight: 600;
-        color: #64748b;
-        border: 1px solid transparent;
-        border-bottom: 2px solid transparent;
-        border-radius: 6px 6px 0 0;
-        padding: 6px 14px;
-    }
-    .sig-nav-tabs .nav-link.active {
-        color: #07203a;
-        background-color: #f1f5f9;
-        border-bottom: 2px solid #07203a;
-    }
 </style>
 ';
 
@@ -478,50 +422,44 @@ include 'sidebar.php';
 
 <!-- Add / Edit User Modal -->
 <div class="modal fade" id="auditorModal" tabindex="-1" aria-labelledby="auditorModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
-            <form method="POST" id="auditorForm" enctype="multipart/form-data" onsubmit="return prepareSubmitForm()">
+            <form method="POST" id="auditorForm" enctype="multipart/form-data">
                 <input type="hidden" name="action" id="formAction" value="add_user">
                 <input type="hidden" name="user_id" id="userId" value="0">
-                <input type="hidden" name="signature_data" id="signatureData" value="">
-                <input type="hidden" name="remove_signature" id="removeSignatureInput" value="0">
 
                 <div class="modal-header text-white" style="background: linear-gradient(135deg, #07203a 0%, #0c3b6d 100%); border-radius: 12px 12px 0 0;">
                     <h5 class="modal-title font-weight-bold" id="auditorModalLabel"><i class="bi bi-person-plus-fill me-2"></i> Add New User</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body p-4">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label font-weight-bold text-secondary small text-uppercase">Full Name <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="full_name" id="fullName" placeholder="e.g. Prabhunath Sharma" required>
-                        </div>
-
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label font-weight-bold text-secondary small text-uppercase">Username / Login ID <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="username" id="username" placeholder="e.g. prabhunath" required>
-                            <small class="text-muted">This username will be used to log in.</small>
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label font-weight-bold text-secondary small text-uppercase">Full Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="full_name" id="fullName" placeholder="e.g. Prabhunath Sharma" required>
                     </div>
 
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label font-weight-bold text-secondary small text-uppercase">Role <span class="text-danger">*</span></label>
-                            <select class="form-select" name="role" id="userRoleSelect" required>
-                                <option value="AUDITOR">AUDITOR</option>
-                                <?php if (empty($isViewer)): ?>
-                                <option value="VIEWER">VIEWER</option>
-                                <?php endif; ?>
-                            </select>
-                            <?php if (!empty($isViewer)): ?>
-                            <small class="text-muted">Note: Viewers can only create and manage Auditor accounts.</small>
-                            <?php endif; ?>
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label font-weight-bold text-secondary small text-uppercase">Username / Login ID <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="username" id="username" placeholder="e.g. prabhunath" required>
+                        <small class="text-muted">This username will be used to log in.</small>
+                    </div>
 
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label font-weight-bold text-secondary small text-uppercase">Email Address <span class="text-danger">*</span></label>
-                            <input type="email" class="form-control" name="email" id="email" placeholder="e.g. user@mcc.in" required>
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label font-weight-bold text-secondary small text-uppercase">Role <span class="text-danger">*</span></label>
+                        <select class="form-select" name="role" id="userRoleSelect" required>
+                            <option value="AUDITOR">AUDITOR</option>
+                            <?php if (empty($isViewer)): ?>
+                            <option value="VIEWER">VIEWER</option>
+                            <?php endif; ?>
+                        </select>
+                        <?php if (!empty($isViewer)): ?>
+                        <small class="text-muted">Note: Viewers can only create and manage Auditor accounts.</small>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label font-weight-bold text-secondary small text-uppercase">Email Address <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" name="email" id="email" placeholder="e.g. user@mcc.in" required>
                     </div>
 
                     <div class="mb-3">
@@ -530,77 +468,25 @@ include 'sidebar.php';
                         <small class="text-muted" id="pwdHelp">Must be at least 6 characters.</small>
                     </div>
 
-                    <!-- Digital Signature Section -->
-                    <div class="mt-4 pt-3 border-top">
+                    <!-- Digital Signature Upload Section (Only shown when creating an Auditor) -->
+                    <div id="signatureUploadSection" class="mt-4 pt-3 border-top">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <label class="form-label font-weight-bold text-dark small text-uppercase mb-0">
-                                <i class="bi bi-pen-fill text-primary me-1"></i> Digital Signature
+                                <i class="bi bi-pen-fill text-primary me-1"></i> Upload Digital Signature
                             </label>
                             <span class="badge bg-light text-muted border">Optional</span>
                         </div>
 
-                        <!-- Existing signature display (Edit mode) -->
-                        <div id="existingSignatureContainer" class="p-3 mb-3 bg-light rounded border d-none">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <div class="small fw-bold text-secondary mb-1">Current Signature:</div>
-                                    <div class="bg-white p-2 border rounded d-inline-block">
-                                        <img id="existingSigImg" src="" alt="Current Signature" style="max-height: 50px; max-width: 200px; object-fit: contain;">
-                                    </div>
-                                </div>
-                                <div>
-                                    <button type="button" class="btn btn-sm btn-outline-danger" id="removeSigBtn" onclick="markRemoveSignature()">
-                                        <i class="bi bi-trash3 me-1"></i> Remove Signature
-                                    </button>
-                                </div>
-                            </div>
-                            <div id="sigRemovedNotice" class="alert alert-warning py-1 px-2 mt-2 mb-0 small d-none">
-                                <i class="bi bi-info-circle me-1"></i> Signature will be removed on saving unless you provide a new one below.
-                            </div>
+                        <div class="input-group">
+                            <input type="file" class="form-control" name="signature_file" id="signatureFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" onchange="previewUploadedSig(this)">
+                            <button class="btn btn-outline-secondary" type="button" onclick="clearUploadedFile()">Clear</button>
                         </div>
-
-                        <!-- Signature Input Tabs -->
-                        <ul class="nav sig-nav-tabs mb-3" id="sigTab" role="tablist">
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="draw-tab" data-bs-toggle="tab" data-bs-target="#draw-tab-pane" type="button" role="tab">
-                                    <i class="bi bi-brush me-1"></i> Draw On Screen
-                                </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload-tab-pane" type="button" role="tab">
-                                    <i class="bi bi-upload me-1"></i> Upload Image
-                                </button>
-                            </li>
-                        </ul>
-
-                        <div class="tab-content" id="sigTabContent">
-                            <!-- Draw Pad Pane -->
-                            <div class="tab-pane fade show active" id="draw-tab-pane" role="tabpanel">
-                                <div class="sig-pad-box">
-                                    <canvas id="sigCanvas"></canvas>
-                                </div>
-                                <div class="d-flex justify-content-between align-items-center mt-2">
-                                    <small class="text-muted"><i class="bi bi-hand-index-thumb me-1"></i> Sign using mouse, stylus, or fingertip on touch screen</small>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary px-3" onclick="clearSignatureCanvas()">
-                                        <i class="bi bi-eraser me-1"></i> Clear Pad
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Upload Image Pane -->
-                            <div class="tab-pane fade" id="upload-tab-pane" role="tabpanel">
-                                <div class="input-group">
-                                    <input type="file" class="form-control" name="signature_file" id="signatureFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" onchange="previewUploadedSig(this)">
-                                    <button class="btn btn-outline-secondary" type="button" onclick="clearUploadedFile()">Clear</button>
-                                </div>
-                                <small class="text-muted d-block mt-1">Accepted formats: PNG, JPG, JPEG, WEBP, SVG (Max 2MB). Transparent PNG recommended.</small>
-                                <div id="uploadPreviewBox" class="mt-2 text-center p-2 bg-light border rounded d-none">
-                                    <img id="uploadPreviewImg" src="" alt="Upload Preview" style="max-height: 60px; max-width: 250px; object-fit: contain;">
-                                </div>
-                            </div>
+                        <small class="text-muted d-block mt-1">Accepted formats: PNG, JPG, JPEG, WEBP, SVG (Max 2MB).</small>
+                        <div id="uploadPreviewBox" class="mt-2 text-center p-2 bg-light border rounded d-none">
+                            <img id="uploadPreviewImg" src="" alt="Signature Preview" style="max-height: 60px; max-width: 250px; object-fit: contain;">
                         </div>
-
                     </div>
+
                 </div>
                 <div class="modal-footer bg-light" style="border-radius: 0 0 12px 12px;">
                     <button type="button" class="btn btn-secondary px-3" data-bs-dismiss="modal">Cancel</button>
@@ -629,96 +515,6 @@ include 'sidebar.php';
 </div>
 
 <script>
-let canvas, ctx;
-let isDrawing = false;
-let hasDrawn = false;
-
-function initCanvas() {
-    canvas = document.getElementById('sigCanvas');
-    if (!canvas) return;
-    ctx = canvas.getContext('2d');
-
-    // Resize canvas to display size
-    const rect = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = (rect.width || 400) * dpr;
-    canvas.height = 140 * dpr;
-    ctx.scale(dpr, dpr);
-    ctx.lineWidth = 2.2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#07203a';
-
-    // Mouse events
-    canvas.onmousedown = function(e) {
-        isDrawing = true;
-        hasDrawn = true;
-        const pos = getPos(e);
-        ctx.beginPath();
-        ctx.moveTo(pos.x, pos.y);
-    };
-    canvas.onmousemove = function(e) {
-        if (!isDrawing) return;
-        const pos = getPos(e);
-        ctx.lineTo(pos.x, pos.y);
-        ctx.stroke();
-    };
-    window.addEventListener('mouseup', function() {
-        if (isDrawing) {
-            isDrawing = false;
-        }
-    });
-
-    // Touch events for mobile/tablet
-    canvas.addEventListener('touchstart', function(e) {
-        if (e.target === canvas) e.preventDefault();
-        isDrawing = true;
-        hasDrawn = true;
-        const pos = getTouchPos(e);
-        ctx.beginPath();
-        ctx.moveTo(pos.x, pos.y);
-    }, { passive: false });
-
-    canvas.addEventListener('touchmove', function(e) {
-        if (e.target === canvas) e.preventDefault();
-        if (!isDrawing) return;
-        const pos = getTouchPos(e);
-        ctx.lineTo(pos.x, pos.y);
-        ctx.stroke();
-    }, { passive: false });
-
-    canvas.addEventListener('touchend', function(e) {
-        if (isDrawing) {
-            isDrawing = false;
-        }
-    }, { passive: false });
-}
-
-function getPos(e) {
-    const rect = canvas.getBoundingClientRect();
-    return {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
-    };
-}
-
-function getTouchPos(e) {
-    const rect = canvas.getBoundingClientRect();
-    const touch = e.touches[0];
-    return {
-        x: touch.clientX - rect.left,
-        y: touch.clientY - rect.top
-    };
-}
-
-function clearSignatureCanvas() {
-    if (!ctx || !canvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-    hasDrawn = false;
-    document.getElementById('signatureData').value = '';
-}
-
 function previewUploadedSig(input) {
     const previewBox = document.getElementById('uploadPreviewBox');
     const previewImg = document.getElementById('uploadPreviewImg');
@@ -739,26 +535,6 @@ function clearUploadedFile() {
     if (input) input.value = '';
     const previewBox = document.getElementById('uploadPreviewBox');
     if (previewBox) previewBox.classList.add('d-none');
-}
-
-function markRemoveSignature() {
-    document.getElementById('removeSignatureInput').value = '1';
-    document.getElementById('sigRemovedNotice').classList.remove('d-none');
-    document.getElementById('removeSigBtn').classList.add('d-none');
-}
-
-function prepareSubmitForm() {
-    const activeTab = document.querySelector('#sigTab .nav-link.active');
-    if (activeTab && activeTab.id === 'draw-tab') {
-        if (hasDrawn && canvas) {
-            document.getElementById('signatureData').value = canvas.toDataURL('image/png');
-        } else {
-            document.getElementById('signatureData').value = '';
-        }
-    } else {
-        document.getElementById('signatureData').value = '';
-    }
-    return true;
 }
 
 function previewSignature(src, userName) {
@@ -782,19 +558,9 @@ function openAddModal() {
     document.getElementById('pwdHelp').innerText = 'Must be at least 6 characters.';
     document.getElementById('submitBtn').innerHTML = '<i class="bi bi-check-circle me-1"></i> Create User';
 
-    // Reset signature fields
-    document.getElementById('removeSignatureInput').value = '0';
-    document.getElementById('existingSignatureContainer').classList.add('d-none');
-    document.getElementById('sigRemovedNotice').classList.add('d-none');
-    document.getElementById('removeSigBtn').classList.remove('d-none');
+    // Show upload signature only when creating
+    document.getElementById('signatureUploadSection').classList.remove('d-none');
     clearUploadedFile();
-    clearSignatureCanvas();
-
-    // Default to draw tab
-    const drawTabTrigger = new bootstrap.Tab(document.getElementById('draw-tab'));
-    drawTabTrigger.show();
-
-    setTimeout(initCanvas, 200);
 }
 
 function openEditModal(user) {
@@ -811,41 +577,13 @@ function openEditModal(user) {
     document.getElementById('pwdHelp').innerText = 'Leave empty if you do not want to reset password.';
     document.getElementById('submitBtn').innerHTML = '<i class="bi bi-check-circle me-1"></i> Update User';
     
-    // Setup existing signature if present
-    document.getElementById('removeSignatureInput').value = '0';
-    document.getElementById('sigRemovedNotice').classList.add('d-none');
-    document.getElementById('removeSigBtn').classList.remove('d-none');
+    // Hide upload signature section when editing
+    document.getElementById('signatureUploadSection').classList.add('d-none');
     clearUploadedFile();
-    clearSignatureCanvas();
-
-    if (user.digital_signature) {
-        document.getElementById('existingSigImg').src = 'uploads/signatures/' + user.digital_signature;
-        document.getElementById('existingSignatureContainer').classList.remove('d-none');
-    } else {
-        document.getElementById('existingSignatureContainer').classList.add('d-none');
-    }
 
     var modal = new bootstrap.Modal(document.getElementById('auditorModal'));
     modal.show();
-
-    setTimeout(initCanvas, 300);
 }
-
-document.addEventListener('DOMContentLoaded', function() {
-    var auditorModalEl = document.getElementById('auditorModal');
-    if (auditorModalEl) {
-        auditorModalEl.addEventListener('shown.bs.modal', function() {
-            initCanvas();
-        });
-    }
-
-    var drawTabEl = document.getElementById('draw-tab');
-    if (drawTabEl) {
-        drawTabEl.addEventListener('shown.bs.tab', function() {
-            initCanvas();
-        });
-    }
-});
 </script>
 
 <?php include 'footer.php'; ?>

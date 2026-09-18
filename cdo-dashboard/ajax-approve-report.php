@@ -61,19 +61,15 @@ if (!in_array($table, $allowedTables)) {
 }
 
 try {
-    $auditBy = $currentUserId ?: ($_SESSION['user_id'] ?? null);
-
     if (!empty($tokenId)) {
         // Simple and robust: update all rows matching this token_id
-        $stmt = $pdo->prepare("UPDATE `$table` SET isApproved = 1, audit_by = :audit_by WHERE token_id = :token_id");
+        $stmt = $pdo->prepare("UPDATE `$table` SET isApproved = 1 WHERE token_id = :token_id");
         $stmt->execute([
-            'audit_by' => $auditBy,
             'token_id' => $tokenId
         ]);
     } elseif (!empty($reportDate)) {
         $where = "report_date = :report_date";
         $params = [
-            'audit_by'    => $auditBy,
             'report_date' => $reportDate
         ];
         if ($stationId) {
@@ -88,13 +84,12 @@ try {
             $where .= " AND shift_id = :shift_id";
             $params['shift_id'] = $shiftId;
         }
-        $stmt = $pdo->prepare("UPDATE `$table` SET isApproved = 1, audit_by = :audit_by WHERE $where");
+        $stmt = $pdo->prepare("UPDATE `$table` SET isApproved = 1 WHERE $where");
         $stmt->execute($params);
     } elseif ($reportId > 0) {
-        $stmt = $pdo->prepare("UPDATE `$table` SET isApproved = 1, audit_by = :audit_by WHERE id = :id");
+        $stmt = $pdo->prepare("UPDATE `$table` SET isApproved = 1 WHERE id = :id");
         $stmt->execute([
-            'audit_by' => $auditBy,
-            'id'       => $reportId
+            'id' => $reportId
         ]);
     } else {
         echo json_encode([

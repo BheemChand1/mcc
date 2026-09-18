@@ -18,6 +18,7 @@ if (empty($data)) {
 }
 
 $auditorName = $data['auditor_name'] ?? null;
+$auditorId = isset($data['auditor_id']) && !empty($data['auditor_id']) ? intval($data['auditor_id']) : null;
 $trainNo = $data['train_no'] ?? null;
 $stationId = isset($data['station_id']) ? intval($data['station_id']) : 1;
 $explicitDate = $data['report_date'] ?? ($data['date'] ?? null);
@@ -45,7 +46,7 @@ try {
         FROM mcc_intensive_scorecard_param p
         JOIN mcc_intensive_scorecard_sub_param sp ON p.id = sp.parameter_id
         WHERE p.station_id = ? AND sp.station_id = ? 
-          AND p.status = 'Active' AND sp.status = 'Active'
+        AND p.status = 'Active' AND sp.status = 'Active'
         ORDER BY p.id ASC, sp.id ASC
     ");
     $paramsStmt->execute([$stationId, $stationId]);
@@ -84,8 +85,8 @@ try {
 
     $insertStmt = $pdo->prepare("
         INSERT INTO mcc_intensive_scorecard_report 
-        (sub_parameter_id, station_id, token_id, train_no, coach_no, score_value, auditor_name, report_date)
-        VALUES (:sub_parameter_id, :station_id, :token_id, :train_no, :coach_no, '', :auditor_name, :report_date)
+        (sub_parameter_id, station_id, token_id, train_no, coach_no, score_value, auditor_name, audit_by, report_date)
+        VALUES (:sub_parameter_id, :station_id, :token_id, :train_no, :coach_no, '', :auditor_name, :audit_by, :report_date)
     ");
 
     foreach ($coachNos as $coachNo) {
@@ -97,6 +98,7 @@ try {
                 'train_no' => $trainNo,
                 'coach_no' => trim($coachNo),
                 'auditor_name' => $auditorName,
+                'audit_by' => $auditorId,
                 'report_date' => $reportDate
             ]);
         }
@@ -106,8 +108,8 @@ try {
     if (!empty($chemParams)) {
         $insertChemStmt = $pdo->prepare("
             INSERT INTO mcc_intensive_chemical_report 
-            (parameter_id, coach_no, qty_used, auditor_name, station_id, token_id, train_no, report_date)
-            VALUES (:parameter_id, :coach_no, NULL, :auditor_name, :station_id, :token_id, :train_no, :report_date)
+            (parameter_id, coach_no, qty_used, auditor_name, station_id, token_id, train_no, audit_by, report_date)
+            VALUES (:parameter_id, :coach_no, NULL, :auditor_name, :station_id, :token_id, :train_no, :audit_by, :report_date)
         ");
 
         foreach ($coachNos as $coachNo) {
@@ -119,6 +121,7 @@ try {
                     'station_id' => $stationId,
                     'token_id' => $tokenId,
                     'train_no' => $trainNo,
+                    'audit_by' => $auditorId,
                     'report_date' => $reportDate
                 ]);
             }

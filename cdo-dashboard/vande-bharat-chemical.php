@@ -144,7 +144,7 @@ if (!empty($tokensList)) {
                 break;
             }
         }
-        $auditorSig = resolveAuditorSignature($pdo, $auditById, $auditorNameStr);
+        $auditorSig = resolveAuditorSignature($pdo, $auditById);
 
         $sheetsData[] = [
             'token_id' => $tokenId,

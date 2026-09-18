@@ -71,7 +71,7 @@ foreach ($reportRows as $row) {
             'token_id' => $row['token_id'],
             'report_date' => $row['report_date'],
             'auditor_name' => $auditorName,
-            'auditor_signature' => resolveAuditorSignature($pdo, $auditById, $auditorName),
+            'auditor_signature' => resolveAuditorSignature($pdo, $auditById),
             'scores' => [],
             'total_score' => 0,
             'isApproved' => intval($row['isApproved'] ?? 0)
@@ -250,13 +250,13 @@ include 'sidebar.php';
 
                         <div class="signature-row" style="display: flex; justify-content: space-between; margin-top: 30px; padding: 0 15px;">
                             <div class="signature-box" style="text-align: center; width: 200px; display: flex; flex-direction: column; align-items: center;">
-                                <div class="signature-img-wrap" style="height: 40px;"></div>
+                                <div class="signature-img-wrap" style="height: 24px;"></div>
                                 <div class="signature-line" style="border-top: 1px solid #94a3b8; width: 200px; padding-top: 5px; color: #475569; font-weight: 600; font-size: 13px;">Contractor's Representative</div>
                             </div>
                             <div class="signature-box" style="text-align: center; width: 200px; display: flex; flex-direction: column; align-items: center;">
-                                <div class="signature-img-wrap" style="height: 40px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 4px;">
+                                <div class="signature-img-wrap" style="height: 24px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 2px;">
                                     <?php if (!empty($sheet['auditor_signature']) && file_exists(__DIR__ . '/uploads/signatures/' . $sheet['auditor_signature'])): ?>
-                                        <img src="uploads/signatures/<?= htmlspecialchars($sheet['auditor_signature']) ?>" alt="Authorized Sign" style="max-height: 40px; max-width: 180px; object-fit: contain;">
+                                        <img src="uploads/signatures/<?= htmlspecialchars($sheet['auditor_signature']) ?>" alt="Authorized Sign" style="max-height: 24px; max-width: 95px; object-fit: contain;">
                                     <?php endif; ?>
                                 </div>
                                 <div class="signature-line" style="border-top: 1px solid #94a3b8; width: 200px; padding-top: 5px; color: #475569; font-weight: 600; font-size: 13px;">Authorized Railway personnel</div>

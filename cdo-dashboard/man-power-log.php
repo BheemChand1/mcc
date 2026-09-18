@@ -527,7 +527,7 @@ include 'sidebar.php';
                         <?php 
                         $audName = isset($dateAuditorsMap[$date]) ? implode(', ', array_unique($dateAuditorsMap[$date])) : null;
                         $audId = $dateAuditByIdMap[$date] ?? null;
-                        $dayAuditorSig = resolveAuditorSignature($pdo, $audId, $audName);
+                        $dayAuditorSig = resolveAuditorSignature($pdo, $audId);
                         ?>
                         <div class="signature-row">
                             <div class="signature-box">

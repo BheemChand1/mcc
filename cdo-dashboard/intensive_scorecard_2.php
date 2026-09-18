@@ -112,7 +112,7 @@ if (!empty($inspectionTokens)) {
                 $auditById = $sc['audit_by'];
             }
         }
-        $auditorSig = resolveAuditorSignature($pdo, $auditById, $auditorName);
+        $auditorSig = resolveAuditorSignature($pdo, $auditById);
 
         // Build 24-slot coach array
         $coachNos = array_fill(0, 24, '');
@@ -451,12 +451,31 @@ $extraStyles = "
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    margin-top: 45px;
+    margin-top: 30px;
     padding: 0 40px;
 }
 
 .cts-sig-box {
     text-align: center;
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.cts-sig-box .signature-img-wrap {
+    height: 24px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    margin-bottom: 2px;
+}
+
+.cts-sig-box .signature-img-wrap img {
+    max-height: 24px;
+    max-width: 95px;
+    object-fit: contain;
+    display: block;
 }
 
 .cts-sig-title {
@@ -465,6 +484,7 @@ $extraStyles = "
     color: #000000;
     text-decoration: underline;
     text-underline-offset: 4px;
+    white-space: nowrap;
 }
 
 /* Filter controls */

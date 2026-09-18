@@ -91,7 +91,7 @@ if ($isFallback) {
                 $auditorName = $row['auditor_name'];
             }
         }
-        $auditorSig = resolveAuditorSignature($pdo, $auditById, $auditorName);
+        $auditorSig = resolveAuditorSignature($pdo, $auditById);
 
         // Calculate average score
         $totalScoreSum = 0;

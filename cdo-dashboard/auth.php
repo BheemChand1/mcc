@@ -37,51 +37,29 @@ $isCDO = ($userRole !== 'VIEWER');
 $currentUserId = $_SESSION['user_id'] ?? null;
 
 /**
- * Helper to fetch digital signatures map or auditor signature by audit_by / name
+ * Helper to fetch digital signatures map by user_id
  */
 function getAuditorSignatureMap($pdo) {
     static $map = null;
     if ($map !== null) {
         return $map;
     }
-    $map = [
-        'by_id'   => [],
-        'by_name' => []
-    ];
+    $map = [];
     try {
-        $stmt = $pdo->query("SELECT user_id, user_name, full_name, digital_signature FROM mcc_users WHERE digital_signature IS NOT NULL AND digital_signature != ''");
+        $stmt = $pdo->query("SELECT user_id, digital_signature FROM mcc_users WHERE digital_signature IS NOT NULL AND digital_signature != ''");
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $sig = $row['digital_signature'];
-            $map['by_id'][$row['user_id']] = $sig;
-            if (!empty($row['user_name'])) {
-                $map['by_name'][strtolower(trim($row['user_name']))] = $sig;
-            }
-            if (!empty($row['full_name'])) {
-                $map['by_name'][strtolower(trim($row['full_name']))] = $sig;
-            }
+            $map[intval($row['user_id'])] = $row['digital_signature'];
         }
     } catch (Exception $e) {}
     return $map;
 }
 
 function resolveAuditorSignature($pdo, $auditBy = null, $auditorName = null) {
-    if (empty($pdo)) {
+    if (empty($pdo) || empty($auditBy) || !is_numeric($auditBy) || intval($auditBy) <= 0) {
         return null;
     }
     $map = getAuditorSignatureMap($pdo);
-    if (!empty($auditBy) && isset($map['by_id'][$auditBy])) {
-        return $map['by_id'][$auditBy];
-    }
-    if (!empty($auditorName)) {
-        // Handle comma-separated auditor names if any
-        $names = explode(',', (string)$auditorName);
-        foreach ($names as $name) {
-            $clean = strtolower(trim($name));
-            if (!empty($clean) && isset($map['by_name'][$clean])) {
-                return $map['by_name'][$clean];
-            }
-        }
-    }
-    return null;
+    $uid = intval($auditBy);
+    return $map[$uid] ?? null;
 }
 ?>

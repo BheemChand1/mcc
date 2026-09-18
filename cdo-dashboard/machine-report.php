@@ -123,7 +123,7 @@ foreach ($reportsByDate as $reportDate => $dailyRows) {
         }
     }
     $auditorNameStr = implode(', ', $auditors);
-    $auditorSig = resolveAuditorSignature($pdo, $auditById, $auditorNameStr);
+    $auditorSig = resolveAuditorSignature($pdo, $auditById);
 
     $sheets[] = [
         'report_date' => $reportDate,

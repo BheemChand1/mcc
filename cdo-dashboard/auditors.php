@@ -32,11 +32,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email    = trim($_POST['email'] ?? '');
         $password = $_POST['password'] ?? '';
         $role     = strtoupper(trim($_POST['role'] ?? 'AUDITOR'));
-        if (!in_array($role, ['AUDITOR', 'VIEWER']) || !empty($isViewer)) {
+        $allowedRoles = !empty($isViewer) ? ['AUDITOR'] : ['AUDITOR', 'VIEWER', 'CDO'];
+        if (!in_array($role, $allowedRoles)) {
             $role = 'AUDITOR';
         }
 
-        $manageableRolesClause = !empty($isViewer) ? "role = 'AUDITOR'" : "role IN ('AUDITOR', 'VIEWER')";
+        $manageableRolesClause = !empty($isViewer) ? "role = 'AUDITOR'" : "role IN ('CDO', 'AUDITOR', 'VIEWER')";
 
         if (empty($fullName) || empty($username) || empty($email)) {
             $message = 'Full name, username, and email are required.';
@@ -65,11 +66,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = "Email address '$email' is already in use.";
                     $messageType = 'danger';
                 } else {
-                    // Process signature file upload if provided (only for AUDITOR)
+                    // Process signature file upload if provided (for AUDITOR / CDO)
                     $savedSignatureName = null;
                     $removeSignature = !empty($_POST['remove_signature']) && $_POST['remove_signature'] === '1';
 
-                    if ($role === 'AUDITOR' && isset($_FILES['signature_file']) && $_FILES['signature_file']['error'] === UPLOAD_ERR_OK) {
+                    if (in_array($role, ['AUDITOR', 'CDO']) && isset($_FILES['signature_file']) && $_FILES['signature_file']['error'] === UPLOAD_ERR_OK) {
                         $fileTmp = $_FILES['signature_file']['tmp_name'];
                         $origName = $_FILES['signature_file']['name'];
                         $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
@@ -180,8 +181,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch users assigned to this station (if logged in as VIEWER, only show AUDITOR accounts)
-$viewableRolesClause = !empty($isViewer) ? "role = 'AUDITOR'" : "role IN ('AUDITOR', 'VIEWER')";
+// Fetch users assigned to this station (if logged in as VIEWER, only show AUDITOR accounts; if CDO, show CDO, AUDITOR, VIEWER)
+$viewableRolesClause = !empty($isViewer) ? "role = 'AUDITOR'" : "role IN ('CDO', 'AUDITOR', 'VIEWER')";
 $stmt = $pdo->prepare("
     SELECT user_id, user_name, username, email, role, digital_signature, status, created_at
     FROM mcc_users
@@ -316,11 +317,20 @@ include 'sidebar.php';
             <div class="auditor-header-card">
                 <div>
                     <h3 class="mb-1 font-weight-bold" style="font-size: 1.35rem;"><i class="bi bi-people-fill me-2"></i> User Management</h3>
-                    <p class="mb-0 text-white-50" style="font-size: 0.85rem;">Manage application user accounts (<?= !empty($isViewer) ? 'Auditors' : 'Auditors & Viewers' ?>) and login credentials for <?= htmlspecialchars($stationName) ?> Station</p>
+                    <p class="mb-0 text-white-50" style="font-size: 0.85rem;">Manage application user accounts (<?= !empty($isViewer) ? 'Auditors' : 'CDO, Auditors & Viewers' ?>) and login credentials for <?= htmlspecialchars($stationName) ?> Station</p>
                 </div>
-                <button type="button" class="btn btn-create-auditor" data-bs-toggle="modal" data-bs-target="#auditorModal" onclick="openAddModal()">
-                    <i class="bi bi-person-plus-fill me-1" style="font-size: 1rem;"></i> <span>Add User</span>
-                </button>
+                <div class="d-flex align-items-center gap-3">
+                    <?php if (!empty($currentUserId)): ?>
+                        <div class="bg-white bg-opacity-10 border border-white border-opacity-25 rounded px-3 py-2 text-white d-none d-sm-flex align-items-center" style="font-size: 0.85rem;">
+                            <span class="text-white-50"><i class="bi bi-person-badge me-1"></i> Your Login:</span>
+                            <span class="badge bg-warning text-dark font-monospace fs-6 ms-1 fw-bold">ID #<?= htmlspecialchars($currentUserId) ?></span>
+                            <span class="text-white-50 ms-1">(<?= htmlspecialchars($_SESSION['username'] ?? '') ?>)</span>
+                        </div>
+                    <?php endif; ?>
+                    <button type="button" class="btn btn-create-auditor" data-bs-toggle="modal" data-bs-target="#auditorModal" onclick="openAddModal()">
+                        <i class="bi bi-person-plus-fill me-1" style="font-size: 1rem;"></i> <span>Add User</span>
+                    </button>
+                </div>
             </div>
 
             <?php if (!empty($message)): ?>
@@ -341,7 +351,8 @@ include 'sidebar.php';
                     <table class="table auditor-table mb-0">
                         <thead>
                             <tr>
-                                <th style="width: 50px; text-align: center;">#</th>
+                                <th style="width: 45px; text-align: center;">#</th>
+                                <th style="width: 85px; text-align: center;">User ID</th>
                                 <th>User Name</th>
                                 <th>Username / Login ID</th>
                                 <th>Email Address</th>
@@ -355,24 +366,37 @@ include 'sidebar.php';
                         <tbody>
                             <?php if (empty($users)): ?>
                                 <tr>
-                                    <td colspan="9" class="text-center py-4 text-muted">
+                                    <td colspan="10" class="text-center py-4 text-muted">
                                         <i class="bi bi-person-x fs-3 d-block mb-2 text-secondary"></i>
                                         No user accounts registered for this station yet. Click "Add User" above to create one.
                                     </td>
                                 </tr>
                             <?php else: ?>
-                                <?php foreach ($users as $idx => $a): ?>
-                                    <tr>
+                                <?php foreach ($users as $idx => $a): 
+                                    $isMe = (!empty($currentUserId) && intval($a['user_id']) === intval($currentUserId));
+                                ?>
+                                    <tr class="<?= $isMe ? 'table-light' : '' ?>" <?= $isMe ? 'style="background-color: #f0f7ff;"' : '' ?>>
                                         <td class="text-center font-weight-bold text-muted"><?= $idx + 1 ?></td>
+                                        <td class="text-center">
+                                            <span class="badge bg-dark bg-opacity-75 font-monospace px-2 py-1" style="font-size: 0.82rem; letter-spacing: 0.5px;">#<?= htmlspecialchars($a['user_id']) ?></span>
+                                        </td>
                                         <td>
                                             <strong class="text-dark"><?= htmlspecialchars($a['user_name']) ?></strong>
+                                            <?php if ($isMe): ?>
+                                                <span class="badge bg-success ms-1" style="font-size: 0.68rem;"><i class="bi bi-person-check-fill me-1"></i>You (Active Session)</span>
+                                            <?php endif; ?>
                                         </td>
                                         <td>
                                             <code><?= htmlspecialchars($a['username']) ?></code>
                                         </td>
                                         <td><?= htmlspecialchars($a['email']) ?></td>
                                         <td class="text-center">
-                                            <span class="badge <?= ($a['role'] === 'VIEWER') ? 'bg-info text-dark' : 'bg-primary' ?> px-2 py-1" style="font-size: 0.75rem;">
+                                            <?php
+                                            $roleBadgeClass = 'bg-primary';
+                                            if ($a['role'] === 'CDO') $roleBadgeClass = 'bg-danger';
+                                            elseif ($a['role'] === 'VIEWER') $roleBadgeClass = 'bg-info text-dark';
+                                            ?>
+                                            <span class="badge <?= $roleBadgeClass ?> px-2 py-1" style="font-size: 0.75rem;">
                                                 <?= htmlspecialchars($a['role']) ?>
                                             </span>
                                         </td>
@@ -409,16 +433,6 @@ include 'sidebar.php';
                                                         <i class="bi <?= ($a['status'] === 'Active') ? 'bi-pause-fill' : 'bi-play-fill' ?>"></i>
                                                     </button>
                                                 </form>
-
-                                                <!-- Delete button commented out for now
-                                                <form method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to permanently delete this user?');">
-                                                    <input type="hidden" name="action" value="delete_user">
-                                                    <input type="hidden" name="user_id" value="<?= $a['user_id'] ?>">
-                                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
-                                                        <i class="bi bi-trash3"></i>
-                                                    </button>
-                                                </form>
-                                                -->
                                             </div>
                                         </td>
                                     </tr>
@@ -464,6 +478,7 @@ include 'sidebar.php';
                             <option value="AUDITOR">AUDITOR</option>
                             <?php if (empty($isViewer)): ?>
                             <option value="VIEWER">VIEWER</option>
+                            <option value="CDO">CDO</option>
                             <?php endif; ?>
                         </select>
                         <?php if (!empty($isViewer)): ?>
@@ -482,7 +497,7 @@ include 'sidebar.php';
                         <small class="text-muted" id="pwdHelp">Must be at least 6 characters.</small>
                     </div>
 
-                    <!-- Digital Signature Upload / Update Section (Visible only when Role is AUDITOR) -->
+                    <!-- Digital Signature Upload / Update Section (Visible only when Role is AUDITOR or CDO) -->
                     <div id="signatureUploadSection" class="mt-4 pt-3 border-top d-none">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <label class="form-label font-weight-bold text-dark small text-uppercase mb-0" id="sigSectionTitle">
@@ -491,7 +506,7 @@ include 'sidebar.php';
                             <span class="badge bg-light text-muted border">Optional</span>
                         </div>
 
-                        <!-- Current signature preview when editing an Auditor -->
+                        <!-- Current signature preview when editing an Auditor/CDO -->
                         <div id="existingSignatureBox" class="p-2 mb-2 bg-light rounded border d-none">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div class="d-flex align-items-center gap-2">
@@ -581,7 +596,7 @@ function markRemoveSignature() {
 function toggleSignatureSection() {
     const role = document.getElementById('userRoleSelect').value;
     const sigSection = document.getElementById('signatureUploadSection');
-    if (role === 'AUDITOR') {
+    if (role === 'AUDITOR' || role === 'CDO') {
         sigSection.classList.remove('d-none');
     } else {
         sigSection.classList.add('d-none');
@@ -624,7 +639,7 @@ function openAddModal() {
 function openEditModal(user) {
     document.getElementById('formAction').value = 'edit_user';
     document.getElementById('userId').value = user.user_id;
-    document.getElementById('auditorModalLabel').innerHTML = '<i class="bi bi-pencil-square me-2"></i> Edit User Details';
+    document.getElementById('auditorModalLabel').innerHTML = '<i class="bi bi-pencil-square me-2"></i> Edit User Details <span class="badge bg-warning text-dark ms-2 font-monospace" style="font-size: 0.8rem;">ID #' + user.user_id + '</span>';
     document.getElementById('fullName').value = user.user_name;
     document.getElementById('username').value = user.username;
     document.getElementById('userRoleSelect').value = user.role || 'AUDITOR';

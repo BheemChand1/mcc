@@ -699,6 +699,14 @@ if (isset($page_report_mapping[$currentPage])) {
               <span><?= htmlspecialchars($stationName) ?> Station</span>
             </span>
           </li>
+          <?php if (!empty($currentUserId)): ?>
+          <li class="nav-item d-none d-sm-block ms-1">
+            <span class="navbar-station-badge" style="background: rgba(255, 193, 7, 0.15); border-color: rgba(255, 193, 7, 0.4); color: #ffe066;">
+              <i class="bi bi-person-badge-fill text-warning"></i>
+              <span><?= htmlspecialchars($userRole) ?> (ID: #<?= htmlspecialchars($currentUserId) ?>)</span>
+            </span>
+          </li>
+          <?php endif; ?>
         </ul>
         <!--end::Start Navbar Links-->
 

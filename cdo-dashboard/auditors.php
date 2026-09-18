@@ -31,10 +31,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $username = trim($_POST['username'] ?? '');
         $email    = trim($_POST['email'] ?? '');
         $password = $_POST['password'] ?? '';
-        $role     = strtoupper(trim($_POST['role'] ?? 'AUDITOR'));
-        $allowedRoles = !empty($isViewer) ? ['AUDITOR'] : ['AUDITOR', 'VIEWER', 'CDO'];
-        if (!in_array($role, $allowedRoles)) {
-            $role = 'AUDITOR';
+        $postedRole = strtoupper(trim($_POST['role'] ?? 'AUDITOR'));
+
+        // Determine effective role securely
+        if ($action === 'edit_auditor' || $action === 'edit_user') {
+            $chkRoleStmt = $pdo->prepare("SELECT role FROM mcc_users WHERE user_id = :id AND station_id = :station_id");
+            $chkRoleStmt->execute(['id' => $userId, 'station_id' => $stationId]);
+            $currentDbRole = $chkRoleStmt->fetchColumn();
+
+            if ($currentDbRole === 'CDO') {
+                // CDO user cannot have their role changed
+                $role = 'CDO';
+            } else {
+                // Non-CDO users can only be AUDITOR or VIEWER
+                $role = in_array($postedRole, ['AUDITOR', 'VIEWER']) ? $postedRole : 'AUDITOR';
+            }
+        } else {
+            // New users can only be AUDITOR or VIEWER
+            $role = (!empty($isViewer) || $postedRole !== 'VIEWER') ? 'AUDITOR' : 'VIEWER';
         }
 
         $manageableRolesClause = !empty($isViewer) ? "role = 'AUDITOR'" : "role IN ('CDO', 'AUDITOR', 'VIEWER')";
@@ -156,15 +170,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'toggle_status') {
         $userId = intval($_POST['user_id'] ?? 0);
         $newStatus = ($_POST['current_status'] ?? 'Active') === 'Active' ? 'Inactive' : 'Active';
-        $manageableRolesClause = !empty($isViewer) ? "role = 'AUDITOR'" : "role IN ('AUDITOR', 'VIEWER')";
-        try {
-            $upd = $pdo->prepare("UPDATE mcc_users SET status = :status WHERE user_id = :id AND station_id = :station_id AND $manageableRolesClause");
-            $upd->execute(['status' => $newStatus, 'id' => $userId, 'station_id' => $stationId]);
-            $message = "User status updated to '$newStatus'.";
-            $messageType = 'success';
-        } catch (Exception $e) {
-            $message = 'Error updating status: ' . $e->getMessage();
-            $messageType = 'danger';
+        
+        // Security check: Verify user is not CDO or current active session user
+        $chkRoleStmt = $pdo->prepare("SELECT role FROM mcc_users WHERE user_id = :id AND station_id = :station_id");
+        $chkRoleStmt->execute(['id' => $userId, 'station_id' => $stationId]);
+        $targetRole = $chkRoleStmt->fetchColumn();
+
+        if ($targetRole === 'CDO' || $userId === intval($currentUserId)) {
+            $message = 'CDO / active session user account status cannot be deactivated.';
+            $messageType = 'warning';
+        } else {
+            $manageableRolesClause = !empty($isViewer) ? "role = 'AUDITOR'" : "role IN ('AUDITOR', 'VIEWER')";
+            try {
+                $upd = $pdo->prepare("UPDATE mcc_users SET status = :status WHERE user_id = :id AND station_id = :station_id AND $manageableRolesClause");
+                $upd->execute(['status' => $newStatus, 'id' => $userId, 'station_id' => $stationId]);
+                $message = "User status updated to '$newStatus'.";
+                $messageType = 'success';
+            } catch (Exception $e) {
+                $message = 'Error updating status: ' . $e->getMessage();
+                $messageType = 'danger';
+            }
         }
     } elseif ($action === 'delete_auditor' || $action === 'delete_user') {
         $userId = intval($_POST['user_id'] ?? 0);
@@ -425,14 +450,20 @@ include 'sidebar.php';
                                                     <i class="bi bi-pencil-square"></i>
                                                 </button>
 
-                                                <form method="POST" class="d-inline" onsubmit="return confirm('Toggle status for this user?');">
-                                                    <input type="hidden" name="action" value="toggle_status">
-                                                    <input type="hidden" name="user_id" value="<?= $a['user_id'] ?>">
-                                                    <input type="hidden" name="current_status" value="<?= $a['status'] ?>">
-                                                    <button type="submit" class="btn btn-sm <?= ($a['status'] === 'Active') ? 'btn-outline-warning' : 'btn-outline-success' ?>" title="<?= ($a['status'] === 'Active') ? 'Deactivate' : 'Activate' ?>">
-                                                        <i class="bi <?= ($a['status'] === 'Active') ? 'bi-pause-fill' : 'bi-play-fill' ?>"></i>
+                                                <?php if ($a['role'] !== 'CDO' && intval($a['user_id']) !== intval($currentUserId)): ?>
+                                                    <form method="POST" class="d-inline" onsubmit="return confirm('Toggle status for this user?');">
+                                                        <input type="hidden" name="action" value="toggle_status">
+                                                        <input type="hidden" name="user_id" value="<?= $a['user_id'] ?>">
+                                                        <input type="hidden" name="current_status" value="<?= $a['status'] ?>">
+                                                        <button type="submit" class="btn btn-sm <?= ($a['status'] === 'Active') ? 'btn-outline-warning' : 'btn-outline-success' ?>" title="<?= ($a['status'] === 'Active') ? 'Deactivate' : 'Activate' ?>">
+                                                            <i class="bi <?= ($a['status'] === 'Active') ? 'bi-pause-fill' : 'bi-play-fill' ?>"></i>
+                                                        </button>
+                                                    </form>
+                                                <?php else: ?>
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary opacity-50" disabled title="CDO / Active session user status cannot be changed">
+                                                        <i class="bi bi-lock-fill"></i>
                                                     </button>
-                                                </form>
+                                                <?php endif; ?>
                                             </div>
                                         </td>
                                     </tr>
@@ -481,6 +512,8 @@ include 'sidebar.php';
                             <option value="CDO">CDO</option>
                             <?php endif; ?>
                         </select>
+                        <input type="hidden" name="role" id="cdoRoleHidden" value="CDO" disabled>
+                        <small id="cdoRoleNotice" class="text-danger fw-bold d-none mt-1 d-block"><i class="bi bi-lock-fill me-1"></i>CDO role is locked and cannot be changed.</small>
                         <?php if (!empty($isViewer)): ?>
                         <small class="text-muted">Note: Viewers can only create and manage Auditor accounts.</small>
                         <?php endif; ?>
@@ -616,7 +649,14 @@ function openAddModal() {
     document.getElementById('auditorModalLabel').innerHTML = '<i class="bi bi-person-plus-fill me-2"></i> Add New User';
     document.getElementById('fullName').value = '';
     document.getElementById('username').value = '';
-    document.getElementById('userRoleSelect').value = 'AUDITOR';
+    
+    // Reset role select
+    const roleSelect = document.getElementById('userRoleSelect');
+    roleSelect.value = 'AUDITOR';
+    roleSelect.disabled = false;
+    document.getElementById('cdoRoleHidden').disabled = true;
+    document.getElementById('cdoRoleNotice').classList.add('d-none');
+
     document.getElementById('email').value = '';
     document.getElementById('password').value = '';
     document.getElementById('password').required = true;
@@ -642,7 +682,24 @@ function openEditModal(user) {
     document.getElementById('auditorModalLabel').innerHTML = '<i class="bi bi-pencil-square me-2"></i> Edit User Details <span class="badge bg-warning text-dark ms-2 font-monospace" style="font-size: 0.8rem;">ID #' + user.user_id + '</span>';
     document.getElementById('fullName').value = user.user_name;
     document.getElementById('username').value = user.username;
-    document.getElementById('userRoleSelect').value = user.role || 'AUDITOR';
+    
+    // Role handling: If user is CDO, lock the role select
+    const roleSelect = document.getElementById('userRoleSelect');
+    const cdoRoleHidden = document.getElementById('cdoRoleHidden');
+    const cdoRoleNotice = document.getElementById('cdoRoleNotice');
+
+    if (user.role === 'CDO') {
+        roleSelect.value = 'CDO';
+        roleSelect.disabled = true;
+        cdoRoleHidden.disabled = false;
+        cdoRoleNotice.classList.remove('d-none');
+    } else {
+        roleSelect.value = user.role || 'AUDITOR';
+        roleSelect.disabled = false;
+        cdoRoleHidden.disabled = true;
+        cdoRoleNotice.classList.add('d-none');
+    }
+
     document.getElementById('email').value = user.email;
     document.getElementById('password').value = '';
     document.getElementById('password').required = false;

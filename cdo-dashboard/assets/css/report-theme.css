@@ -1643,7 +1643,7 @@ input[type="submit"]:active {
 }
 
 .signature-img-wrap img {
-  max-height: 24px;
+  max-height: 80px;
   max-width: 95px;
   object-fit: contain;
   display: block;

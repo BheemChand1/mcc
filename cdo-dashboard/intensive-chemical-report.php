@@ -134,13 +134,18 @@ if (!empty($tokensList)) {
         }
         
         $auditById = null;
+        $auditorName = null;
         foreach ($rows as $row) {
             if (!empty($row['audit_by'])) {
                 $auditById = $row['audit_by'];
-                break;
+            }
+            if (!empty($row['auditor_name'])) {
+                $auditorName = $row['auditor_name'];
+            } elseif (!empty($row['submitted_by'])) {
+                $auditorName = $row['submitted_by'];
             }
         }
-        $auditorSig = resolveAuditorSignature($pdo, $auditById);
+        $auditorSig = resolveAuditorSignature($pdo, $auditById, $auditorName);
 
         $sheetsData[] = [
             'token_id' => $tokenId,

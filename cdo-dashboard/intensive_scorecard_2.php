@@ -112,7 +112,7 @@ if (!empty($inspectionTokens)) {
                 $auditById = $sc['audit_by'];
             }
         }
-        $auditorSig = resolveAuditorSignature($pdo, $auditById);
+        $auditorSig = resolveAuditorSignature($pdo, $auditById, $auditorName);
 
         // Build 24-slot coach array
         $coachNos = array_fill(0, 24, '');

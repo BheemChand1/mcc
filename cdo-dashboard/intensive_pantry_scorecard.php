@@ -124,7 +124,7 @@ if (!empty($inspectionTokens)) {
                 $auditById = $sc['audit_by'];
             }
         }
-        $auditorSig = resolveAuditorSignature($pdo, $auditById);
+        $auditorSig = resolveAuditorSignature($pdo, $auditById, $auditorName);
 
         if (empty($uniqueCoaches)) {
             $uniqueCoaches = ['WGACCW 19208'];

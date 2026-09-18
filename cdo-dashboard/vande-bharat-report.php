@@ -164,7 +164,7 @@ if ($isFallback) {
         $wateringPercentage = $wateringMaxCount > 0 ? round(($wateringYes / $wateringMaxCount) * 100, 1) : 0;
 
         $auditById = !empty($rows) ? ($rows[0]['audit_by'] ?? null) : null;
-        $auditorSig = resolveAuditorSignature($pdo, $auditById);
+        $auditorSig = resolveAuditorSignature($pdo, $auditById, $supervisorName);
 
         $sheets[] = [
             'token_id' => $tokenId,

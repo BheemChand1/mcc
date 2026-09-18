@@ -64,7 +64,7 @@ if ($isFallback) {
 } else {
     // Fetch reports for each token
     $reportStmt = $pdo->prepare("
-        SELECT parameter_id, shift_id, rating, isApproved 
+        SELECT * 
         FROM dc_mcc_report 
         WHERE station_id = :station_id AND token_id = :token_id
     ");
@@ -80,9 +80,18 @@ if ($isFallback) {
         $reportRows = $reportStmt->fetchAll();
 
         $reportsMap = [];
+        $auditById = null;
+        $auditorName = null;
         foreach ($reportRows as $row) {
             $reportsMap[$row['parameter_id']][$row['shift_id']] = $row['rating'];
+            if (!empty($row['audit_by'])) {
+                $auditById = $row['audit_by'];
+            }
+            if (!empty($row['auditor_name'])) {
+                $auditorName = $row['auditor_name'];
+            }
         }
+        $auditorSig = resolveAuditorSignature($pdo, $auditById, $auditorName);
 
         // Calculate average score
         $totalScoreSum = 0;
@@ -104,6 +113,7 @@ if ($isFallback) {
             'report_date' => $reportDate,
             'reports_map' => $reportsMap,
             'average_score' => $averageScore,
+            'auditor_signature' => $auditorSig,
             'is_fallback' => false,
             'isApproved' => !empty($reportRows) ? (int)($reportRows[0]['isApproved'] ?? 0) : 0
         ];
@@ -316,9 +326,15 @@ include 'sidebar.php';
 
                         <div class="signature-row">
                             <div class="signature-box">
+                                <div class="signature-img-wrap"></div>
                                 <div class="signature-line">Contractor's Representative</div>
                             </div>
                             <div class="signature-box">
+                                <div class="signature-img-wrap">
+                                    <?php if (!empty($sheet['auditor_signature']) && file_exists(__DIR__ . '/uploads/signatures/' . $sheet['auditor_signature'])): ?>
+                                        <img src="uploads/signatures/<?= htmlspecialchars($sheet['auditor_signature']) ?>" alt="Authorized Sign">
+                                    <?php endif; ?>
+                                </div>
                                 <div class="signature-line">Authorized Railway personnel</div>
                             </div>
                         </div>

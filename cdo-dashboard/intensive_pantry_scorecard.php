@@ -96,7 +96,7 @@ $sheetsData = [];
 if (!empty($inspectionTokens)) {
     // Populate sheets from mcc_intensive_pantry_report
     $reportStmt = $pdo->prepare("
-        SELECT r.sub_parameter_id, r.coach_no, r.score_value, r.auditor_name, r.isApproved 
+        SELECT r.sub_parameter_id, r.coach_no, r.score_value, r.auditor_name, r.audit_by, r.isApproved 
         FROM mcc_intensive_pantry_report r
         WHERE r.station_id = :station_id AND r.token_id = :token_id
         ORDER BY r.id ASC
@@ -110,14 +110,21 @@ if (!empty($inspectionTokens)) {
         // Determine unique dynamic coaches present for this token
         $uniqueCoaches = [];
         $auditorName = 'prabhunath';
+        $auditById = null;
         foreach ($scoreEntries as $sc) {
             if (!in_array($sc['coach_no'], $uniqueCoaches) && !empty($sc['coach_no'])) {
                 $uniqueCoaches[] = $sc['coach_no'];
             }
-            if (!empty($sc['submitted_by'])) {
+            if (!empty($sc['auditor_name'])) {
+                $auditorName = $sc['auditor_name'];
+            } elseif (!empty($sc['submitted_by'])) {
                 $auditorName = $sc['submitted_by'];
             }
+            if (!empty($sc['audit_by'])) {
+                $auditById = $sc['audit_by'];
+            }
         }
+        $auditorSig = resolveAuditorSignature($pdo, $auditById, $auditorName);
 
         if (empty($uniqueCoaches)) {
             $uniqueCoaches = ['WGACCW 19208'];
@@ -140,60 +147,56 @@ if (!empty($inspectionTokens)) {
             $itemPossibleSums = array_fill_keys($uniqueCoaches, 0);
 
             foreach ($p['subparts'] as $sp) {
-                $coachVals = [];
+                $coachScores = [];
                 foreach ($uniqueCoaches as $cNo) {
-                    $val = $scoreMatrix[$sp['id']][$cNo] ?? '3';
-                    $coachVals[$cNo] = $val;
+                    $val = $scoreMatrix[$sp['id']][$cNo] ?? '';
+                    $coachScores[$cNo] = $val;
 
-                    if (is_numeric($val)) {
-                        $numVal = floatval($val);
-                        $itemObtainedSums[$cNo] += $numVal;
-                        $itemPossibleSums[$cNo] += 3;
-                        $coachObtainedTotals[$cNo] += $numVal;
-                        $coachPossibleTotals[$cNo] += 3;
+                    if ($val !== '' && $val !== 'X' && $val !== '-') {
+                        if (is_numeric($val)) {
+                            $itemObtainedSums[$cNo] += intval($val);
+                            $itemPossibleSums[$cNo] += 3;
+                            $coachObtainedTotals[$cNo] += intval($val);
+                            $coachPossibleTotals[$cNo] += 3;
+                        } elseif (strtoupper($val) === 'Y') {
+                            $itemObtainedSums[$cNo] += 3;
+                            $itemPossibleSums[$cNo] += 3;
+                            $coachObtainedTotals[$cNo] += 3;
+                            $coachPossibleTotals[$cNo] += 3;
+                        } elseif (strtoupper($val) === 'N') {
+                            $itemPossibleSums[$cNo] += 3;
+                            $coachPossibleTotals[$cNo] += 3;
+                        }
                     }
                 }
 
                 $subData[] = [
                     'id' => $sp['id'],
                     'slot' => $sp['slot'],
-                    'coach_vals' => $coachVals
+                    'scores' => $coachScores
                 ];
-            }
-
-            // Calculate item-level marks awarded out of 3 for each coach
-            $itemMarks = [];
-            foreach ($uniqueCoaches as $cNo) {
-                $subCount = count($p['subparts']);
-                if ($subCount > 1 && $itemPossibleSums[$cNo] > 0) {
-                    $itemMarks[$cNo] = round(($itemObtainedSums[$cNo] / $itemPossibleSums[$cNo]) * 3.0, 1);
-                } else {
-                    $itemMarks[$cNo] = isset($subData[0]['coach_vals'][$cNo]) && is_numeric($subData[0]['coach_vals'][$cNo]) ? floatval($subData[0]['coach_vals'][$cNo]) : 3.0;
-                }
             }
 
             $sheetRows[] = [
                 'sn' => $p['sn'],
                 'desc' => $p['desc'],
                 'subparts' => $subData,
-                'item_marks' => $itemMarks
+                'coach_totals' => $itemObtainedSums,
+                'coach_possibles' => $itemPossibleSums
             ];
         }
 
-        // Summary calculations per coach
+        // Calculate summary for each coach
         $coachSummary = [];
         foreach ($uniqueCoaches as $cNo) {
-            $eligible = $coachPossibleTotals[$cNo] > 0 ? (count($dbParameters) * 3) : 54;
-            $obtained = 0;
-            foreach ($sheetRows as $r) {
-                $obtained += $r['item_marks'][$cNo] ?? 0;
-            }
-            $pct = $eligible > 0 ? round(($obtained / $eligible) * 100, 2) : 0;
-
-            $coachSummary[$cNo] = [
-                'eligible' => $eligible,
-                'obtained' => round($obtained, 1),
-                'percent'  => $pct . '%'
+            $obt = $coachObtainedTotals[$cNo];
+            $poss = $coachPossibleTotals[$cNo] ?: (count($dbParameters) * 3);
+            $pct = $poss > 0 ? round(($obt / $poss) * 100, 2) : 100;
+            $coachSummary[] = [
+                'coach' => $cNo,
+                'obtained' => $obt,
+                'possible' => $poss,
+                'percent' => $pct . '%'
             ];
         }
 
@@ -209,6 +212,7 @@ if (!empty($inspectionTokens)) {
             'coaches' => $uniqueCoaches,
             'total_score_percent' => $overallPercent,
             'supervisor_name' => $auditorName,
+            'auditor_signature' => $auditorSig,
             'technician_name' => 'Sr. Technician',
             'division' => $divisionName,
             'station' => $stationName,
@@ -944,9 +948,15 @@ include 'sidebar.php';
                         <!-- Signatures Section (Matching Photo 2) -->
                         <div class="pantry-sig-row">
                             <div class="pantry-sig-box">
+                                <div class="signature-img-wrap"></div>
                                 <div class="pantry-sig-title">Contractor's Representative</div>
                             </div>
                             <div class="pantry-sig-box">
+                                <div class="signature-img-wrap">
+                                    <?php if (!empty($sheet['auditor_signature']) && file_exists(__DIR__ . '/uploads/signatures/' . $sheet['auditor_signature'])): ?>
+                                        <img src="uploads/signatures/<?= htmlspecialchars($sheet['auditor_signature']) ?>" alt="Authorized Sign">
+                                    <?php endif; ?>
+                                </div>
                                 <div class="pantry-sig-title">Authorized Railway personnel</div>
                             </div>
                         </div>

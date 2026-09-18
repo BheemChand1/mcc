@@ -117,11 +117,22 @@ if (!empty($tokensList)) {
             $chemicalScore = 100;
         }
         
+        $auditById = null;
+        foreach ($rows as $row) {
+            if (!empty($row['audit_by'])) {
+                $auditById = $row['audit_by'];
+                break;
+            }
+        }
+        $auditorNameStr = implode(', ', array_unique($auditorsByShift));
+        $auditorSig = resolveAuditorSignature($pdo, $auditById, $auditorNameStr);
+
         $sheetsData[] = [
             'token_id' => $tokenId,
             'report_date' => $t['report_date'],
             'report_data' => $reportData,
             'auditors_by_shift' => $auditorsByShift,
+            'auditor_signature' => $auditorSig,
             'chemical_score' => $chemicalScore,
             'total_penalty' => $totalPenalty,
             'parameters_list' => $sheetParameters,
@@ -373,9 +384,15 @@ include 'sidebar.php';
 
                         <div class="signature-row">
                             <div class="signature-box">
+                                <div class="signature-img-wrap"></div>
                                 <div class="signature-line">Contractor's Representative</div>
                             </div>
                             <div class="signature-box">
+                                <div class="signature-img-wrap">
+                                    <?php if (!empty($sheet['auditor_signature']) && file_exists(__DIR__ . '/uploads/signatures/' . $sheet['auditor_signature'])): ?>
+                                        <img src="uploads/signatures/<?= htmlspecialchars($sheet['auditor_signature']) ?>" alt="Authorized Sign">
+                                    <?php endif; ?>
+                                </div>
                                 <div class="signature-line">Authorized Railway personnel</div>
                             </div>
                         </div>

@@ -48,7 +48,7 @@ $guidelinesText = implode(', ', $guidelineStrings);
 
 // 3. Fetch reports in date range
 $reportsStmt = $pdo->prepare("
-    SELECT r.token_id, r.report_date, r.auditor_name, r.parameter_id, r.value, r.isApproved
+    SELECT r.*
     FROM mcc_surprise_reports r
     WHERE r.station_id = :station_id AND r.category = 'pit_office' AND r.report_date BETWEEN :from_date AND :to_date
     ORDER BY r.report_date DESC, r.token_id DESC, r.id ASC
@@ -65,10 +65,13 @@ $groupedSheets = [];
 foreach ($reportRows as $row) {
     $key = $row['token_id'] . '_' . $row['report_date'];
     if (!isset($groupedSheets[$key])) {
+        $auditById = $row['audit_by'] ?? ($row['auditor_id'] ?? null);
+        $auditorName = $row['auditor_name'] ?? 'CDO';
         $groupedSheets[$key] = [
             'token_id' => $row['token_id'],
             'report_date' => $row['report_date'],
-            'auditor_name' => $row['auditor_name'] ?? 'CDO',
+            'auditor_name' => $auditorName,
+            'auditor_signature' => resolveAuditorSignature($pdo, $auditById, $auditorName),
             'scores' => [],
             'total_score' => 0,
             'isApproved' => intval($row['isApproved'] ?? 0)
@@ -245,11 +248,17 @@ include 'sidebar.php';
                             <strong>Scoring Guidelines:</strong> <?= htmlspecialchars($guidelinesText); ?>.
                         </div>
 
-                        <div class="signature-row" style="display: flex; justify-content: space-between; margin-top: 40px; padding: 0 15px;">
-                            <div class="signature-box" style="text-align: center;">
+                        <div class="signature-row" style="display: flex; justify-content: space-between; margin-top: 30px; padding: 0 15px;">
+                            <div class="signature-box" style="text-align: center; width: 200px; display: flex; flex-direction: column; align-items: center;">
+                                <div class="signature-img-wrap" style="height: 40px;"></div>
                                 <div class="signature-line" style="border-top: 1px solid #94a3b8; width: 200px; padding-top: 5px; color: #475569; font-weight: 600; font-size: 13px;">Contractor's Representative</div>
                             </div>
-                            <div class="signature-box" style="text-align: center;">
+                            <div class="signature-box" style="text-align: center; width: 200px; display: flex; flex-direction: column; align-items: center;">
+                                <div class="signature-img-wrap" style="height: 40px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 4px;">
+                                    <?php if (!empty($sheet['auditor_signature']) && file_exists(__DIR__ . '/uploads/signatures/' . $sheet['auditor_signature'])): ?>
+                                        <img src="uploads/signatures/<?= htmlspecialchars($sheet['auditor_signature']) ?>" alt="Authorized Sign" style="max-height: 40px; max-width: 180px; object-fit: contain;">
+                                    <?php endif; ?>
+                                </div>
                                 <div class="signature-line" style="border-top: 1px solid #94a3b8; width: 200px; padding-top: 5px; color: #475569; font-weight: 600; font-size: 13px;">Authorized Railway personnel</div>
                             </div>
                         </div>

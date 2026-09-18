@@ -1620,7 +1620,7 @@ input[type="submit"]:active {
 .signature-row {
   display: flex;
   justify-content: space-between;
-  margin-top: 60px;
+  margin-top: 40px;
   padding: 0 30px;
 }
 
@@ -1628,6 +1628,25 @@ input[type="submit"]:active {
   text-align: center;
   font-size: 13px;
   font-weight: 700;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.signature-img-wrap {
+  height: 45px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.signature-img-wrap img {
+  max-height: 45px;
+  max-width: 180px;
+  object-fit: contain;
+  display: block;
 }
 
 .signature-line {

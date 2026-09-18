@@ -115,11 +115,22 @@ foreach ($reportsByDate as $reportDate => $dailyRows) {
         }
     }
 
+    $auditById = null;
+    foreach ($dailyRows as $row) {
+        if (!empty($row['audit_by'])) {
+            $auditById = $row['audit_by'];
+            break;
+        }
+    }
+    $auditorNameStr = implode(', ', $auditors);
+    $auditorSig = resolveAuditorSignature($pdo, $auditById, $auditorNameStr);
+
     $sheets[] = [
         'report_date' => $reportDate,
         'targets' => $targetsMap,
         'reports' => $reportsMap,
-        'auditor_name' => implode(', ', $auditors),
+        'auditor_name' => $auditorNameStr,
+        'auditor_signature' => $auditorSig,
         'total_score' => $totalNominated > 0 ? round(($totalOperated / $totalNominated) * 100, 1) . '%' : '100%',
         'isApproved' => !empty($dailyRows) ? (int)($dailyRows[0]['isApproved'] ?? 0) : 0
     ];
@@ -256,9 +267,15 @@ include 'sidebar.php';
 
                     <div class="signature-row">
                         <div class="signature-box">
+                            <div class="signature-img-wrap"></div>
                             <div class="signature-line">Contractor's Representative</div>
                         </div>
                         <div class="signature-box">
+                            <div class="signature-img-wrap">
+                                <?php if (!empty($sheet['auditor_signature']) && file_exists(__DIR__ . '/uploads/signatures/' . $sheet['auditor_signature'])): ?>
+                                    <img src="uploads/signatures/<?= htmlspecialchars($sheet['auditor_signature']) ?>" alt="Authorized Sign">
+                                <?php endif; ?>
+                            </div>
                             <div class="signature-line">Authorized Railway personnel</div>
                         </div>
                     </div>

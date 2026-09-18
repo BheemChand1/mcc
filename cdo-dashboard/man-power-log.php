@@ -89,18 +89,11 @@ foreach ($targetsRows as $row) {
 // Fetch submitted daily logs in date range
 $logsMap = [];
 $dateApprovedMap = [];
+$dateAuditorsMap = [];
+$dateAuditByIdMap = [];
 $hasLogs = false; // globally whether there are ANY logs in the range
 $logStmt = $pdo->prepare("
-    SELECT 
-        report_date,
-        shift_id,
-        manpower_type_id,
-        provided_qty,
-        absent_qty,
-        no_dress_qty,
-        no_ppe_qty,
-        auditor_name,
-        isApproved
+    SELECT *
     FROM mcc_manpower_log
     WHERE station_id = :station_id AND report_date BETWEEN :from_date AND :to_date
 ");
@@ -115,6 +108,12 @@ foreach ($logRows as $row) {
     $hasLogs = true;
     $date = $row['report_date'];
     $dateApprovedMap[$date] = intval($row['isApproved'] ?? 0);
+    if (!empty($row['audit_by'])) {
+        $dateAuditByIdMap[$date] = $row['audit_by'];
+    }
+    if (!empty($row['auditor_name'])) {
+        $dateAuditorsMap[$date][] = $row['auditor_name'];
+    }
     $logsMap[$date][$row['shift_id']][$row['manpower_type_id']] = [
         'provided' => $row['provided_qty'],
         'absent' => $row['absent_qty'],
@@ -525,11 +524,22 @@ include 'sidebar.php';
                             </table>
                         </div>
 
+                        <?php 
+                        $audName = isset($dateAuditorsMap[$date]) ? implode(', ', array_unique($dateAuditorsMap[$date])) : null;
+                        $audId = $dateAuditByIdMap[$date] ?? null;
+                        $dayAuditorSig = resolveAuditorSignature($pdo, $audId, $audName);
+                        ?>
                         <div class="signature-row">
                             <div class="signature-box">
+                                <div class="signature-img-wrap"></div>
                                 <div class="signature-line">Contractor's Representative</div>
                             </div>
                             <div class="signature-box">
+                                <div class="signature-img-wrap">
+                                    <?php if (!empty($dayAuditorSig) && file_exists(__DIR__ . '/uploads/signatures/' . $dayAuditorSig)): ?>
+                                        <img src="uploads/signatures/<?= htmlspecialchars($dayAuditorSig) ?>" alt="Authorized Sign">
+                                    <?php endif; ?>
+                                </div>
                                 <div class="signature-line">Authorized Railway personnel</div>
                             </div>
                         </div>

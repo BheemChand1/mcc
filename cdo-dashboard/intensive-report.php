@@ -188,11 +188,15 @@ if ($isFallback) {
         $wateringMaxCount = $attendedCount * $wateringSubParamCount;
         $wateringPercentage = $wateringMaxCount > 0 ? round(($wateringYes / $wateringMaxCount) * 100, 1) : 0;
 
+        $auditById = $firstRow['audit_by'] ?? null;
+        $auditorSig = resolveAuditorSignature($pdo, $auditById, $supervisorName);
+
         $sheets[] = [
             'token_id' => $tokenId,
             'train_no' => $trainNo,
             'report_date' => $reportDate,
             'supervisor_name' => $supervisorName,
+            'auditor_signature' => $auditorSig,
             'coaches' => $coaches,
             'scores_data' => $scoresData,
             'internal_percentage' => $internalPercentage,
@@ -583,9 +587,15 @@ include 'sidebar.php';
 
                         <div class="signature-row">
                             <div class="signature-box">
+                                <div class="signature-img-wrap"></div>
                                 <div class="signature-line">Contractor's Representative</div>
                             </div>
                             <div class="signature-box">
+                                <div class="signature-img-wrap">
+                                    <?php if (!empty($sheet['auditor_signature']) && file_exists(__DIR__ . '/uploads/signatures/' . $sheet['auditor_signature'])): ?>
+                                        <img src="uploads/signatures/<?= htmlspecialchars($sheet['auditor_signature']) ?>" alt="Authorized Sign">
+                                    <?php endif; ?>
+                                </div>
                                 <div class="signature-line">Authorized Railway personnel</div>
                             </div>
                         </div>

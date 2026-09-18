@@ -86,7 +86,7 @@ $sheetsData = [];
 if (!empty($inspectionTokens)) {
     // Populate sheets from mcc_intensive_scorecard_2_report
     $reportStmt = $pdo->prepare("
-        SELECT r.sub_parameter_id, r.coach_no, r.score_value, r.submitted_by, r.isApproved 
+        SELECT r.sub_parameter_id, r.coach_no, r.score_value, r.submitted_by, r.audit_by, r.isApproved 
         FROM mcc_intensive_scorecard_2_report r
         WHERE r.station_id = :station_id AND r.token_id = :token_id
         ORDER BY r.id ASC
@@ -100,6 +100,7 @@ if (!empty($inspectionTokens)) {
         // Determine unique coaches in order of appearance and auditor name
         $uniqueCoaches = [];
         $auditorName = 'prabhunath';
+        $auditById = null;
         foreach ($scoreEntries as $sc) {
             if (!in_array($sc['coach_no'], $uniqueCoaches) && !empty($sc['coach_no'])) {
                 $uniqueCoaches[] = $sc['coach_no'];
@@ -107,7 +108,11 @@ if (!empty($inspectionTokens)) {
             if (!empty($sc['submitted_by'])) {
                 $auditorName = $sc['submitted_by'];
             }
+            if (!empty($sc['audit_by'])) {
+                $auditById = $sc['audit_by'];
+            }
         }
+        $auditorSig = resolveAuditorSignature($pdo, $auditById, $auditorName);
 
         // Build 24-slot coach array
         $coachNos = array_fill(0, 24, '');
@@ -180,6 +185,7 @@ if (!empty($inspectionTokens)) {
             'attended_coaches' => $attendedCount ?: 19,
             'total_score_percent' => $calculatedScore,
             'supervisor_name' => $auditorName,
+            'auditor_signature' => $auditorSig,
             'division' => $divisionName,
             'station' => $stationName,
             'contractor' => $contractorName,
@@ -784,9 +790,15 @@ include 'sidebar.php';
                         <!-- Signatures Section -->
                         <div class="cts-sig-row">
                             <div class="cts-sig-box">
+                                <div class="signature-img-wrap"></div>
                                 <div class="cts-sig-title">Contractor's Representative</div>
                             </div>
                             <div class="cts-sig-box">
+                                <div class="signature-img-wrap">
+                                    <?php if (!empty($sheet['auditor_signature']) && file_exists(__DIR__ . '/uploads/signatures/' . $sheet['auditor_signature'])): ?>
+                                        <img src="uploads/signatures/<?= htmlspecialchars($sheet['auditor_signature']) ?>" alt="Authorized Sign">
+                                    <?php endif; ?>
+                                </div>
                                 <div class="cts-sig-title">Authorized Railway personnel</div>
                             </div>
                         </div>

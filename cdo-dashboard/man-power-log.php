@@ -528,10 +528,15 @@ include 'sidebar.php';
                         $audName = isset($dateAuditorsMap[$date]) ? implode(', ', array_unique($dateAuditorsMap[$date])) : null;
                         $audId = $dateAuditByIdMap[$date] ?? null;
                         $dayAuditorSig = resolveAuditorSignature($pdo, $audId);
+                        $isDayApproved = !empty($dateApprovedMap[$date]);
                         ?>
                         <div class="signature-row">
                             <div class="signature-box">
-                                <div class="signature-img-wrap"></div>
+                                <div class="signature-img-wrap">
+                                    <?php if ($isDayApproved && !empty($cdoSignature) && file_exists(__DIR__ . '/uploads/signatures/' . $cdoSignature)): ?>
+                                        <img src="uploads/signatures/<?= htmlspecialchars($cdoSignature) ?>" alt="Contractor Sign">
+                                    <?php endif; ?>
+                                </div>
                                 <div class="signature-line">Contractor's Representative</div>
                             </div>
                             <div class="signature-box">

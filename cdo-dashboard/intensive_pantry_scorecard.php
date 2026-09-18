@@ -968,7 +968,11 @@ include 'sidebar.php';
                         <!-- Signatures Section (Matching Photo 2) -->
                         <div class="pantry-sig-row">
                             <div class="pantry-sig-box">
-                                <div class="signature-img-wrap"></div>
+                                <div class="signature-img-wrap">
+                                    <?php if (!empty($sheet['isApproved']) && !empty($cdoSignature) && file_exists(__DIR__ . '/uploads/signatures/' . $cdoSignature)): ?>
+                                        <img src="uploads/signatures/<?= htmlspecialchars($cdoSignature) ?>" alt="Contractor Sign">
+                                    <?php endif; ?>
+                                </div>
                                 <div class="pantry-sig-title">Contractor's Representative</div>
                             </div>
                             <div class="pantry-sig-box">

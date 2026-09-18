@@ -62,4 +62,30 @@ function resolveAuditorSignature($pdo, $auditBy = null, $auditorName = null) {
     $uid = intval($auditBy);
     return $map[$uid] ?? null;
 }
+
+/**
+ * Helper to fetch station CDO's digital signature
+ */
+function getStationCdoSignature($pdo, $stationId) {
+    static $cdoSigMap = [];
+    if (isset($cdoSigMap[$stationId])) {
+        return $cdoSigMap[$stationId];
+    }
+    $sig = null;
+    try {
+        $stmt = $pdo->prepare("
+            SELECT digital_signature 
+            FROM mcc_users 
+            WHERE station_id = :station_id AND role = 'CDO' AND digital_signature IS NOT NULL AND digital_signature != ''
+            ORDER BY user_id ASC
+            LIMIT 1
+        ");
+        $stmt->execute(['station_id' => $stationId]);
+        $sig = $stmt->fetchColumn() ?: null;
+    } catch (Exception $e) {}
+    $cdoSigMap[$stationId] = $sig;
+    return $sig;
+}
+
+$cdoSignature = getStationCdoSignature($pdo, $stationId);
 ?>

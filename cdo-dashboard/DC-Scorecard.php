@@ -326,7 +326,11 @@ include 'sidebar.php';
 
                         <div class="signature-row">
                             <div class="signature-box">
-                                <div class="signature-img-wrap"></div>
+                                <div class="signature-img-wrap">
+                                    <?php if (!empty($sheet['isApproved']) && !empty($cdoSignature) && file_exists(__DIR__ . '/uploads/signatures/' . $cdoSignature)): ?>
+                                        <img src="uploads/signatures/<?= htmlspecialchars($cdoSignature) ?>" alt="Contractor Sign">
+                                    <?php endif; ?>
+                                </div>
                                 <div class="signature-line">Contractor's Representative</div>
                             </div>
                             <div class="signature-box">

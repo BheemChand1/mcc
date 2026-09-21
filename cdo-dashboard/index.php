@@ -52,12 +52,19 @@ $mccPctDelta = function ($cur, $prev): float {
 $activeReportIds = [];
 $activeAppKeys = [];
 $activeSubreportUrls = [];
+$reportNames = [];
 try {
-    $st = $pdo->prepare("SELECT report_id, app_key FROM mcc_reports WHERE station_id = :sid AND status = 'Active'");
+    $st = $pdo->prepare("SELECT report_id, report_name, app_key FROM mcc_reports WHERE station_id = :sid AND status = 'Active'");
     $st->execute([':sid' => $stationId]);
     $repRows = $st->fetchAll(PDO::FETCH_ASSOC);
     $activeReportIds = array_column($repRows, 'report_id');
     $activeAppKeys = array_column($repRows, 'app_key');
+    foreach ($repRows as $r) {
+        $reportNames[$r['report_id']] = $r['report_name'];
+        if (!empty($r['app_key'])) {
+            $reportNames[$r['app_key']] = $r['report_name'];
+        }
+    }
 
     if (!empty($activeReportIds)) {
         $inClause = implode(',', array_map('intval', $activeReportIds));
@@ -82,30 +89,53 @@ $intensiveTable = (in_array('intensive-report.php', $activeSubreportUrls) && !in
 $categories = [];
 
 if ($hasNormal) {
-    $categories['normal'] = ['label' => 'Normal Cleaning', 'short' => 'Normal', 'table' => 'mcc_normal_scorecard_report', 'color' => '#2f8bff', 'icon' => 'bi-bus-front-fill'];
+    // 1. Normal Cleaning (Interior / general)
+    $categories['normal'] = [
+        'label'      => 'Normal Cleaning',
+        'short'      => 'Normal',
+        'table'      => 'mcc_normal_scorecard_report',
+        'filter_sql' => "sub_parameter_id IN (SELECT id FROM mcc_normal_scorecard_sub_param WHERE parameter_id IN (SELECT id FROM mcc_normal_scorecard_param WHERE parameter_name LIKE '%Interior%'))",
+        'color'      => '#2f8bff',
+        'icon'       => 'bi-bus-front-fill'
+    ];
+
+    // 2. Normal Exterior Cleaning (Exterior Washing / Cleaning)
+    $categories['normal_ext'] = [
+        'label'      => 'Normal Exterior Cleaning',
+        'short'      => 'Normal Ext',
+        'table'      => 'mcc_normal_scorecard_report',
+        'filter_sql' => "sub_parameter_id IN (SELECT id FROM mcc_normal_scorecard_sub_param WHERE parameter_id IN (SELECT id FROM mcc_normal_scorecard_param WHERE parameter_name LIKE '%Exterior%'))",
+        'color'      => '#00d2d3',
+        'icon'       => 'bi-water'
+    ];
 }
 
 if ($hasIntensive) {
-    $categories['intensive'] = ['label' => 'Intensive Cleaning', 'short' => 'Intensive', 'table' => $intensiveTable, 'color' => '#a55eea', 'icon' => 'bi-droplet-fill'];
+    $intLabel = $reportNames['intensive_cleaning'] ?? $reportNames[2] ?? 'Intensive Cleaning';
+    $categories['intensive'] = ['label' => $intLabel, 'short' => 'Intensive', 'table' => $intensiveTable, 'color' => '#a55eea', 'icon' => 'bi-droplet-fill'];
 }
 
 if ($hasDc) {
-    $categories['dc'] = ['label' => 'Depot Cleaning', 'short' => 'Depot', 'table' => 'dc_mcc_report', 'color' => '#10b981', 'icon' => 'bi-shield-check'];
+    $dcLabel = $reportNames['dc_cleaning'] ?? $reportNames[3] ?? 'Depot Cleaning';
+    $categories['dc'] = ['label' => $dcLabel, 'short' => 'Depot', 'table' => 'dc_mcc_report', 'color' => '#10b981', 'icon' => 'bi-shield-check'];
 }
 
 if ($hasPrt) {
-    $categories['prt'] = ['label' => 'PFTA Trains', 'short' => 'PFTA', 'table' => 'mcc_prt_scorecard_report', 'color' => '#ffaa2b', 'icon' => 'bi-person-workspace'];
+    $prtLabel = $reportNames['prt_cleaning'] ?? $reportNames[4] ?? 'PFTA Trains';
+    $categories['prt'] = ['label' => $prtLabel, 'short' => 'PFTA', 'table' => 'mcc_prt_scorecard_report', 'color' => '#ffaa2b', 'icon' => 'bi-person-workspace'];
 }
 
 if ($hasPantry) {
-    $categories['pantry'] = ['label' => 'Pantry Car', 'short' => 'Pantry Car', 'table' => 'mcc_intensive_pantry_report', 'color' => '#22e07c', 'icon' => 'bi-egg-fried'];
+    $pantryLabel = $reportNames['pantry_car'] ?? $reportNames[5] ?? 'Pantry Car';
+    $categories['pantry'] = ['label' => $pantryLabel, 'short' => 'Pantry Car', 'table' => 'mcc_intensive_pantry_report', 'color' => '#22e07c', 'icon' => 'bi-egg-fried'];
 }
 
 if ($hasVande) {
-    $categories['vande'] = ['label' => 'Vande Bharat', 'short' => 'Vande Bharat', 'table' => 'mcc_vb_scorecard_report', 'color' => '#22d3ee', 'icon' => 'bi-train-front-fill'];
+    $vbLabel = $reportNames['vande_bharat_modules'] ?? $reportNames[7] ?? 'Vande Bharat';
+    $categories['vande'] = ['label' => $vbLabel, 'short' => 'Vande Bharat', 'table' => 'mcc_vb_scorecard_report', 'color' => '#22d3ee', 'icon' => 'bi-train-front-fill'];
 }
 
-$mccAggregate = function (string $table, string $from, string $to) use ($pdo, $stationId, $scoreRe): array {
+$mccAggregate = function (string $table, string $from, string $to, ?string $filterSql = null) use ($pdo, $stationId, $scoreRe): array {
     $out = ['trains' => 0, 'rakes' => 0, 'coaches' => 0, 'score' => 0.0];
     try {
         if ($table === 'dc_mcc_report') {
@@ -126,6 +156,7 @@ $mccAggregate = function (string $table, string $from, string $to) use ($pdo, $s
                 ? round(min(100, max(0, (floatval($r['avg_score']) / 3) * 100)), 1)
                 : 0.0;
         } else {
+            $extraWhere = !empty($filterSql) ? " AND ({$filterSql})" : "";
             $st = $pdo->prepare("
                 SELECT COUNT(DISTINCT train_no)  AS trains,
                        COUNT(DISTINCT token_id)  AS rakes,
@@ -133,7 +164,7 @@ $mccAggregate = function (string $table, string $from, string $to) use ($pdo, $s
                        AVG(CASE WHEN score_value REGEXP '{$scoreRe}'
                            THEN CAST(score_value AS DECIMAL(8,2)) ELSE NULL END) AS avg_score
                 FROM {$table}
-                WHERE station_id = :sid AND report_date BETWEEN :f AND :t
+                WHERE station_id = :sid AND report_date BETWEEN :f AND :t {$extraWhere}
             ");
             $st->execute([':sid' => $stationId, ':f' => $from, ':t' => $to]);
             $r = $st->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -151,8 +182,8 @@ $mccAggregate = function (string $table, string $from, string $to) use ($pdo, $s
 $catStats     = [];
 $catStatsPrev = [];
 foreach ($categories as $key => $cat) {
-    $catStats[$key]     = $mccAggregate($cat['table'], $rangeStart, $rangeEnd);
-    $catStatsPrev[$key] = $mccAggregate($cat['table'], $prevStartF, $prevEndF);
+    $catStats[$key]     = $mccAggregate($cat['table'], $rangeStart, $rangeEnd, $cat['filter_sql'] ?? null);
+    $catStatsPrev[$key] = $mccAggregate($cat['table'], $prevStartF, $prevEndF, $cat['filter_sql'] ?? null);
 }
 
 /* ------------------------------------------------------------------ */
@@ -311,12 +342,13 @@ foreach ($categories as $key => $cat) {
                 GROUP BY report_date
             ");
         } else {
+            $extraWhere = !empty($cat['filter_sql']) ? " AND ({$cat['filter_sql']})" : "";
             $st = $pdo->prepare("
                 SELECT report_date,
                        AVG(CASE WHEN score_value REGEXP '{$scoreRe}'
                            THEN CAST(score_value AS DECIMAL(8,2)) ELSE NULL END) AS avg_score
                 FROM {$cat['table']}
-                WHERE station_id = :sid AND report_date BETWEEN :f AND :t
+                WHERE station_id = :sid AND report_date BETWEEN :f AND :t {$extraWhere}
                 GROUP BY report_date
             ");
         }
@@ -361,15 +393,23 @@ foreach ($trendDates as $i => $d) {
 }
 
 /* ------------------------------------------------------------------ */
-/* 6. COACH TYPE DISTRIBUTION (donut)                                 */
+/* 6. ACTIVITY WISE DISTRIBUTION (donut)                              */
 /* ------------------------------------------------------------------ */
 $totalCoaches = array_sum(array_column($catStats, 'coaches'));
+
+// Exclude Depot Cleaning (dc) from Activity Wise Distribution as depot cleaning doesn't have trains/coaches
+$activityCategories = array_filter($categories, fn($k) => $k !== 'dc', ARRAY_FILTER_USE_KEY);
+$totalActivityCoaches = 0;
+foreach ($activityCategories as $key => $cat) {
+    $totalActivityCoaches += intval($catStats[$key]['coaches'] ?? 0);
+}
+
 $donutLegends = [];
 $donutCum = 0;
-foreach ($categories as $key => $cat) {
-    $count = $catStats[$key]['coaches'];
-    $pct = $totalCoaches > 0 ? round(($count / $totalCoaches) * 100, 1) : 0.0;
-    $deg = $totalCoaches > 0 ? ($count / $totalCoaches) * 360 : 0;
+foreach ($activityCategories as $key => $cat) {
+    $count = intval($catStats[$key]['coaches'] ?? 0);
+    $pct = $totalActivityCoaches > 0 ? round(($count / $totalActivityCoaches) * 100, 1) : 0.0;
+    $deg = $totalActivityCoaches > 0 ? ($count / $totalActivityCoaches) * 360 : 0;
     $from = $donutCum;
     $donutCum += $deg;
     $donutLegends[] = [
@@ -380,7 +420,9 @@ foreach ($categories as $key => $cat) {
         'gradient'=> "{$from}deg {$donutCum}deg",
     ];
 }
-$donutGradient = 'conic-gradient(' . implode(', ', array_map(fn($l) => "{$l['color']} {$l['gradient']}", $donutLegends)) . ')';
+$donutGradient = (!empty($donutLegends) && $totalActivityCoaches > 0)
+    ? 'conic-gradient(' . implode(', ', array_map(fn($l) => "{$l['color']} {$l['gradient']}", $donutLegends)) . ')'
+    : 'conic-gradient(rgba(20, 65, 107, 0.4) 0deg 360deg)';
 
 /* ------------------------------------------------------------------ */
 /* 7. TOP PERFORMING TRAINS                                           */
@@ -389,13 +431,14 @@ $topTrains = [];
 foreach ($categories as $key => $cat) {
     if ($cat['table'] === 'dc_mcc_report') continue;
     try {
+        $extraWhere = !empty($cat['filter_sql']) ? " AND ({$cat['filter_sql']})" : "";
         $st = $pdo->prepare("
             SELECT train_no,
                    COUNT(DISTINCT coach_no) AS coaches,
                    AVG(CASE WHEN score_value REGEXP '{$scoreRe}'
                        THEN CAST(score_value AS DECIMAL(8,2)) ELSE NULL END) AS avg_score
             FROM {$cat['table']}
-            WHERE station_id = :sid AND report_date BETWEEN :f AND :t
+            WHERE station_id = :sid AND report_date BETWEEN :f AND :t {$extraWhere}
             GROUP BY train_no
             HAVING avg_score IS NOT NULL
             ORDER BY avg_score DESC
@@ -565,7 +608,7 @@ include 'header.php';
 include 'sidebar.php';
 ?>
 
-<link rel="stylesheet" href="css/dashboard.css">
+<link rel="stylesheet" href="css/dashboard.css?v=<?= filemtime(__DIR__ . '/css/dashboard.css') ?>">
 
 <main class="app-main">
   <div class="mccx-shell">
@@ -591,8 +634,8 @@ include 'sidebar.php';
         </form>
       </section>
 
-      <!-- 1. KPI Row : Normal / Intensive / Pantry / PRT / Vande Bharat -->
-      <section class="mccx-kpi-row" style="grid-area:kpi; grid-template-columns: repeat(<?= max(1, count($categories)) ?>, minmax(0, 1fr)) !important;">
+      <!-- 1. KPI Row : Normal / Normal Exterior / Intensive / Depot / PFTA / Pantry / Vande Bharat -->
+      <section class="mccx-kpi-row" style="grid-area:kpi">
         <?php foreach ($categories as $key => $cat):
             $stat = $catStats[$key];
             $coachDelta = $mccPctDelta($stat['coaches'], $catStatsPrev[$key]['coaches']);
@@ -601,8 +644,8 @@ include 'sidebar.php';
         <article class="mccx-kpi mccx-card" style="--ac:<?= $cat['color'] ?>">
           <div class="mccx-kpi-icon"><i class="bi <?= $cat['icon'] ?>"></i></div>
           <div class="mccx-kpi-body">
-            <h3><?= strtoupper($cat['label']) ?></h3>
-            <small>(<?= $key === 'dc' ? 'Checks' : 'Coaches' ?>)</small>
+            <h3><?= $cat['label'] ?></h3>
+            <small>Coaches Cleaned</small>
             <div class="mccx-kpi-value"><?= $stat['coaches'] ?></div>
           </div>
           <div class="mccx-kpi-delta">
@@ -616,13 +659,34 @@ include 'sidebar.php';
       <!-- 2. Overall Score Row : Chemical / Machine / Manpower -->
       <section class="mccx-score-row" style="grid-area:score">
         <?php
-        $scoreCards = [
-            ['label' => 'OVERALL CHEMICAL SCORE',  'value' => $chemicalScore,  'prev' => $chemicalScorePrev,  'icon' => 'bi-eyedropper',           'cls' => 'chem',    'bar' => 'linear-gradient(90deg,#0fd68b,#22e07c)'],
-            ['label' => 'OVERALL MACHINE SCORE',   'value' => $machineScore,   'prev' => $machineScorePrev,   'icon' => 'bi-gear-fill',            'cls' => 'machine', 'bar' => 'linear-gradient(90deg,#8e5cf6,#a55eea)'],
-            ['label' => 'OVERALL MANPOWER SCORE',  'value' => $manpowerScore,  'prev' => $manpowerScorePrev,  'icon' => 'bi-people-fill',          'cls' => 'man',     'bar' => 'linear-gradient(90deg,#ff8a3d,#ffaa2b)'],
+        $scores = [
+            [
+                'label' => 'Overall Chemical Score',
+                'value' => $chemicalScore,
+                'prev'  => $chemicalScorePrev,
+                'icon'  => 'bi-droplet-half',
+                'bar'   => 'linear-gradient(90deg,#0fd68b,#22e07c)',
+                'cls'   => 'chem',
+            ],
+            [
+                'label' => 'Overall Machine Score',
+                'value' => $machineScore,
+                'prev'  => $machineScorePrev,
+                'icon'  => 'bi-gear-wide-connected',
+                'bar'   => 'linear-gradient(90deg,#845ec2,#a55eea)',
+                'cls'   => 'machine',
+            ],
+            [
+                'label' => 'Overall Manpower Score',
+                'value' => $manpowerScore,
+                'prev'  => $manpowerScorePrev,
+                'icon'  => 'bi-people-fill',
+                'bar'   => 'linear-gradient(90deg,#ff9642,#ffaa2b)',
+                'cls'   => 'man',
+            ],
         ];
-        foreach ($scoreCards as $sc):
-            $d = $mccPctDelta($sc['value'], $sc['prev']);
+        foreach ($scores as $sc):
+            $d  = $mccPctDelta($sc['value'], $sc['prev']);
             $up = $d >= 0;
         ?>
         <article class="mccx-scorecard mccx-card mccx-<?= $sc['cls'] ?>">
@@ -646,38 +710,50 @@ include 'sidebar.php';
           <span class="mccx-panel-ico"><i class="bi bi-bar-chart-fill"></i></span>
           <h2>DEPOT WORK SUMMARY</h2>
         </div>
-        <table class="mccx-depot-table">
-          <thead>
-            <tr><th>Operation Type</th><th>Trains</th><th>Rakes</th><th>Coaches</th><th>Performance</th></tr>
-          </thead>
-          <tbody>
-            <?php foreach ($categories as $key => $cat):
-                $s = $catStats[$key];
-            ?>
-            <tr>
-              <td><span class="mccx-type-dot" style="background:<?= $cat['color'] ?>"></span><?= $cat['label'] ?></td>
-              <td><?= $s['trains'] ?></td>
-              <td><?= $s['rakes'] ?></td>
-              <td><?= $s['coaches'] ?></td>
-              <td class="mccx-perf">
-                <span class="mccx-perf-bar"><i style="width:<?= max(2, $s['score']) ?>%;background:<?= $cat['color'] ?>"></i></span>
-                <b><?= number_format($s['score'], 1) ?>%</b>
-              </td>
-            </tr>
-            <?php endforeach; ?>
-            <tr class="mccx-total-row">
-              <?php $tt = array_sum(array_column($catStats, 'trains')); $tr = array_sum(array_column($catStats, 'rakes')); ?>
-              <td><span class="mccx-type-dot" style="background:#2f8bff"></span>Total</td>
-              <td><?= $tt ?></td>
-              <td><?= $tr ?></td>
-              <td><?= $totalCoaches ?></td>
-              <td class="mccx-perf">
-                <span class="mccx-perf-bar"><i style="width:<?= max(2, $avgCleaningScore) ?>%;background:linear-gradient(90deg,#0fd68b,#22e07c)"></i></span>
-                <b><?= number_format($avgCleaningScore, 1) ?>%</b>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="mccx-table-wrap">
+          <table class="mccx-depot-table">
+            <thead>
+              <tr>
+                <th class="col-type">Operation Type</th>
+                <th class="col-stat">Trains</th>
+                <th class="col-stat">Rakes</th>
+                <th class="col-stat">Coaches</th>
+                <th class="col-perf">Performance</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($categories as $key => $cat):
+                  $s = $catStats[$key];
+              ?>
+              <tr>
+                <td class="col-type"><span class="mccx-type-dot" style="background:<?= $cat['color'] ?>"></span><?= $cat['label'] ?></td>
+                <td class="col-stat"><?= $s['trains'] ?></td>
+                <td class="col-stat"><?= $s['rakes'] ?></td>
+                <td class="col-stat"><?= $s['coaches'] ?></td>
+                <td class="col-perf mccx-perf">
+                  <div class="mccx-perf-flex">
+                    <span class="mccx-perf-bar"><i style="width:<?= max(2, $s['score']) ?>%;background:<?= $cat['color'] ?>"></i></span>
+                    <b><?= number_format($s['score'], 1) ?>%</b>
+                  </div>
+                </td>
+              </tr>
+              <?php endforeach; ?>
+              <tr class="mccx-total-row">
+                <?php $tt = array_sum(array_column($catStats, 'trains')); $tr = array_sum(array_column($catStats, 'rakes')); ?>
+                <td class="col-type"><span class="mccx-type-dot" style="background:#2f8bff"></span>Total</td>
+                <td class="col-stat"><?= $tt ?></td>
+                <td class="col-stat"><?= $tr ?></td>
+                <td class="col-stat"><?= $totalCoaches ?></td>
+                <td class="col-perf mccx-perf">
+                  <div class="mccx-perf-flex">
+                    <span class="mccx-perf-bar"><i style="width:<?= max(2, $avgCleaningScore) ?>%;background:linear-gradient(90deg,#0fd68b,#22e07c)"></i></span>
+                    <b><?= number_format($avgCleaningScore, 1) ?>%</b>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <!-- 4. Cleaning Score Trend -->
@@ -724,16 +800,16 @@ include 'sidebar.php';
         </div>
       </section>
 
-      <!-- 5. Coach Type Distribution (Donut) -->
+      <!-- 5. Activity Wise Distribution (Donut) -->
       <section class="mccx-panel mccx-card" style="grid-area:donut">
         <div class="mccx-panel-head">
           <span class="mccx-panel-ico"><i class="bi bi-pie-chart-fill"></i></span>
-          <h2>COACH TYPE DISTRIBUTION</h2>
+          <h2>ACTIVITY WISE DISTRIBUTION</h2>
         </div>
         <div class="mccx-donut-wrap">
           <div class="mccx-donut" style="background:<?= htmlspecialchars($donutGradient) ?>">
             <div class="mccx-donut-center">
-              <strong><?= $totalCoaches ?></strong>
+              <strong><?= $totalActivityCoaches ?></strong>
               <span>Coaches</span>
             </div>
           </div>
@@ -755,24 +831,26 @@ include 'sidebar.php';
           <span class="mccx-panel-ico"><i class="bi bi-trophy-fill"></i></span>
           <h2>TOP PERFORMING TRAINS <small>(By Cleaning Score)</small></h2>
         </div>
-        <table class="mccx-mini-table">
-          <thead>
-            <tr><th>#</th><th>Train No.</th><th>Operation Type</th><th>Coaches</th><th>Score</th></tr>
-          </thead>
-          <tbody>
-            <?php if (empty($topTrains)): ?>
-            <tr><td colspan="5" class="mccx-empty-row">No train scores recorded for this period.</td></tr>
-            <?php else: $rank = 0; foreach ($topTrains as $tr): $rank++; ?>
-            <tr>
-              <td><?= $rank ?></td>
-              <td><strong><?= htmlspecialchars($tr['train_no']) ?></strong></td>
-              <td><span class="mccx-type-dot" style="background:<?= $tr['color'] ?>"></span><?= htmlspecialchars($tr['type']) ?></td>
-              <td><?= $tr['coaches'] ?></td>
-              <td class="mccx-score-cell"><?= number_format($tr['score'], 1) ?>%</td>
-            </tr>
-            <?php endforeach; endif; ?>
-          </tbody>
-        </table>
+        <div class="mccx-table-wrap">
+          <table class="mccx-mini-table">
+            <thead>
+              <tr><th>#</th><th>Train No.</th><th>Operation Type</th><th>Coaches</th><th>Score</th></tr>
+            </thead>
+            <tbody>
+              <?php if (empty($topTrains)): ?>
+              <tr><td colspan="5" class="mccx-empty-row">No train scores recorded for this period.</td></tr>
+              <?php else: $rank = 0; foreach ($topTrains as $tr): $rank++; ?>
+              <tr>
+                <td><?= $rank ?></td>
+                <td><strong><?= htmlspecialchars($tr['train_no']) ?></strong></td>
+                <td><span class="mccx-type-dot" style="background:<?= $tr['color'] ?>"></span><?= htmlspecialchars($tr['type']) ?></td>
+                <td><?= $tr['coaches'] ?></td>
+                <td class="mccx-score-cell"><?= number_format($tr['score'], 1) ?>%</td>
+              </tr>
+              <?php endforeach; endif; ?>
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <!-- 7. Quality Parameter Scores -->

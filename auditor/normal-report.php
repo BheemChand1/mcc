@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_sheet_changes'])
 }
 
 // Fetch normal rating values from database
-$ratingStmt = $pdo->query("SELECT rating_name, rating_value FROM mcc_normal_rating ORDER BY rating_value DESC");
+$ratingStmt = $pdo->query("SELECT rating_name, rating_value, rating_group FROM mcc_normal_rating ORDER BY rating_value DESC");
 $ratings = $ratingStmt->fetchAll(PDO::FETCH_ASSOC);
 $ratingStrings = [];
 foreach ($ratings as $r) {
@@ -676,15 +676,48 @@ include 'sidebar.php';
                                     </td>
 
                                     <?php
-                                    foreach ($sheet['coaches'] as $coach) {
-                                        $s = $sheet['scores_data'][$sp['id']][$coach] ?? '-';
-                                        if ($isEditingThisSheet) {
-                                            $val = ($s === '-' ? '' : $s);
-                                            echo "<td style='padding: 2px !important;'>";
-                                            echo "<input type='text' name='scores[" . $sp['id'] . "][" . htmlspecialchars($coach) . "]' value='" . htmlspecialchars($val) . "' class='form-control form-control-sm text-center fw-bold' style='width: 48px; margin: 0 auto; background: #ffffff !important; color: #000000 !important; border: 1.5px solid #0284c7; padding: 2px 4px; font-size: 13px;'>";
-                                            echo "</td>";
+                                    $isWatering = (stripos($pData['name'] ?? '', 'water') !== false || stripos($sp['name'] ?? '', 'water') !== false);
+                                    $optRatings = array_filter($ratings, function($r) use ($isWatering) {
+                                        $grp = $r['rating_group'] ?? '';
+                                        $val = strtoupper(trim((string)$r['rating_value']));
+                                        if ($isWatering) {
+                                            return ($grp === 'watering' || in_array($val, ['Y', 'N']));
                                         } else {
-                                            echo "<td>" . htmlspecialchars($s) . "</td>";
+                                            return ($grp !== 'watering' && !in_array($val, ['Y', 'N']));
+                                        }
+                                    });
+                                    if (empty($optRatings)) {
+                                        $optRatings = $isWatering 
+                                            ? [['rating_value' => 'Y'], ['rating_value' => 'N']]
+                                            : [['rating_value' => '3'], ['rating_value' => '2'], ['rating_value' => '1'], ['rating_value' => '0']];
+                                    }
+
+                                    foreach ($sheet['coaches'] as $coach) {
+                                        $hasCoach = (trim((string)$coach) !== '');
+                                        $s = $hasCoach ? ($sheet['scores_data'][$sp['id']][$coach] ?? '-') : '';
+                                        if ($isEditingThisSheet) {
+                                            if ($hasCoach) {
+                                                $val = ($s === '-' ? '' : (string)$s);
+                                                echo "<td style='padding: 2px !important;'>";
+                                                echo "<select name='scores[" . $sp['id'] . "][" . htmlspecialchars($coach) . "]' class='form-select form-select-sm text-center fw-bold' style='width: 52px; margin: 0 auto; background: #ffffff !important; color: #000000 !important; border: 1.5px solid #0284c7; padding: 2px 2px; font-size: 12px; font-weight: 700; height: 28px;'>";
+                                                echo "<option value=''>-</option>";
+                                                $matched = false;
+                                                foreach ($optRatings as $r) {
+                                                    $rv = (string)$r['rating_value'];
+                                                    $isSelected = ($val !== '' && $val === $rv);
+                                                    if ($isSelected) $matched = true;
+                                                    echo "<option value='" . htmlspecialchars($rv) . "'" . ($isSelected ? " selected" : "") . ">" . htmlspecialchars($rv) . "</option>";
+                                                }
+                                                if ($val !== '' && !$matched) {
+                                                    echo "<option value='" . htmlspecialchars($val) . "' selected>" . htmlspecialchars($val) . "</option>";
+                                                }
+                                                echo "</select>";
+                                                echo "</td>";
+                                            } else {
+                                                echo "<td style='background: #f8fafc;'></td>";
+                                            }
+                                        } else {
+                                            echo "<td>" . ($hasCoach ? htmlspecialchars($s) : "") . "</td>";
                                         }
                                     }
                                     ?>

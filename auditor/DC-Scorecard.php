@@ -93,6 +93,22 @@ $shiftsStmt = $pdo->prepare("
 $shiftsStmt->execute(['station_id' => $stationId]);
 $shiftsList = $shiftsStmt->fetchAll();
 
+// Fetch DC rating values from database
+try {
+    $ratingStmt = $pdo->query("SELECT rating_name, rating_value FROM dc_mcc_rating ORDER BY rating_value DESC");
+    $dcRatings = $ratingStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $dcRatings = [];
+}
+if (empty($dcRatings)) {
+    $dcRatings = [
+        ['rating_name' => 'Very Good', 'rating_value' => '3'],
+        ['rating_name' => 'Satisfactory', 'rating_value' => '2'],
+        ['rating_name' => 'Poor', 'rating_value' => '1'],
+        ['rating_name' => 'Not attended', 'rating_value' => '0']
+    ];
+}
+
 $isFallback = empty($tokens) || empty($paramsList) || empty($shiftsList);
 
 $sheets = [];
@@ -406,8 +422,23 @@ include 'sidebar.php';
                                                 $rating = $sheet['reports_map'][$pId][$sId] ?? '-';
                                             ?>
                                                 <td>
-                                                    <?php if ($isEditingThisSheet): ?>
-                                                        <input type="text" name="ratings[<?= $pId ?>][<?= $sId ?>]" value="<?= htmlspecialchars($rating === '-' ? '' : $rating) ?>" class="form-control form-control-sm text-center fw-bold" style="width: 60px; margin: 0 auto; background: #fff !important; color: #000 !important; border: 1.5px solid #0284c7; padding: 2px 4px; font-size: 13px;">
+                                                    <?php if ($isEditingThisSheet): 
+                                                        $val = ($rating === '-' ? '' : (string)$rating);
+                                                        $matched = false;
+                                                    ?>
+                                                        <select name="ratings[<?= $pId ?>][<?= $sId ?>]" class="form-select form-select-sm text-center fw-bold" style="width: 58px; margin: 0 auto; background: #fff !important; color: #000 !important; border: 1.5px solid #0284c7; padding: 2px 2px; font-size: 12px; font-weight: 700; height: 28px;">
+                                                            <option value="">-</option>
+                                                            <?php foreach ($dcRatings as $r): 
+                                                                $rv = (string)$r['rating_value'];
+                                                                $isSelected = ($val !== '' && $val === $rv);
+                                                                if ($isSelected) $matched = true;
+                                                            ?>
+                                                                <option value="<?= htmlspecialchars($rv) ?>" <?= $isSelected ? 'selected' : '' ?>><?= htmlspecialchars($rv) ?></option>
+                                                            <?php endforeach; ?>
+                                                            <?php if ($val !== '' && !$matched): ?>
+                                                                <option value="<?= htmlspecialchars($val) ?>" selected><?= htmlspecialchars($val) ?></option>
+                                                            <?php endif; ?>
+                                                        </select>
                                                     <?php else: ?>
                                                         <?= htmlspecialchars($rating) ?>
                                                     <?php endif; ?>

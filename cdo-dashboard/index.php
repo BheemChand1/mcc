@@ -98,8 +98,15 @@ if ($hasNormal) {
         'color'      => '#2f8bff',
         'icon'       => 'bi-bus-front-fill'
     ];
+}
 
-    // 2. Normal Exterior Cleaning (Exterior Washing / Cleaning)
+if ($hasIntensive) {
+    $intLabel = $reportNames['intensive_cleaning'] ?? $reportNames[2] ?? 'Intensive Cleaning';
+    $categories['intensive'] = ['label' => $intLabel, 'short' => 'Intensive', 'table' => $intensiveTable, 'color' => '#a55eea', 'icon' => 'bi-droplet-fill'];
+}
+
+if ($hasNormal) {
+    // 2. Normal Exterior Cleaning (Exterior Washing / Cleaning) - displayed after Intensive Cleaning
     $categories['normal_ext'] = [
         'label'      => 'Normal Exterior Cleaning',
         'short'      => 'Normal Ext',
@@ -108,11 +115,6 @@ if ($hasNormal) {
         'color'      => '#00d2d3',
         'icon'       => 'bi-water'
     ];
-}
-
-if ($hasIntensive) {
-    $intLabel = $reportNames['intensive_cleaning'] ?? $reportNames[2] ?? 'Intensive Cleaning';
-    $categories['intensive'] = ['label' => $intLabel, 'short' => 'Intensive', 'table' => $intensiveTable, 'color' => '#a55eea', 'icon' => 'bi-droplet-fill'];
 }
 
 if ($hasDc) {
@@ -634,7 +636,7 @@ include 'sidebar.php';
         </form>
       </section>
 
-      <!-- 1. KPI Row : Normal / Normal Exterior / Intensive / Depot / PFTA / Pantry / Vande Bharat -->
+      <!-- 1. KPI Row : Normal / Intensive / Normal Exterior / Depot / PFTA / Pantry / Vande Bharat / Toiletries / ACWP -->
       <section class="mccx-kpi-row" style="grid-area:kpi">
         <?php foreach ($categories as $key => $cat):
             $stat = $catStats[$key];
@@ -654,6 +656,32 @@ include 'sidebar.php';
           </div>
         </article>
         <?php endforeach; ?>
+        <?php if ((int)$stationId === 1): ?>
+        <article class="mccx-kpi mccx-card" style="--ac:#ec4899">
+          <div class="mccx-kpi-icon"><i class="bi bi-box-seam-fill"></i></div>
+          <div class="mccx-kpi-body">
+            <h3>Toiletries</h3>
+            <small>Total Count</small>
+            <div class="mccx-kpi-value">0</div>
+          </div>
+          <div class="mccx-kpi-delta">
+            <span class="mccx-delta up"><i class="bi bi-caret-up-fill"></i> 0%</span>
+            <span class="mccx-vs">vs previous period</span>
+          </div>
+        </article>
+        <article class="mccx-kpi mccx-card" style="--ac:#f59e0b">
+          <div class="mccx-kpi-icon"><i class="bi bi-people-fill"></i></div>
+          <div class="mccx-kpi-body">
+            <h3>ACWP Manpower Count</h3>
+            <small>Total Manpower</small>
+            <div class="mccx-kpi-value">0</div>
+          </div>
+          <div class="mccx-kpi-delta">
+            <span class="mccx-delta up"><i class="bi bi-caret-up-fill"></i> 0%</span>
+            <span class="mccx-vs">vs previous period</span>
+          </div>
+        </article>
+        <?php endif; ?>
       </section>
 
       <!-- 2. Overall Score Row : Chemical / Machine / Manpower -->

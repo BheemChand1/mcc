@@ -106,10 +106,10 @@ if ($hasIntensive) {
 }
 
 if ($hasNormal) {
-    // 2. Normal Exterior Cleaning (Exterior Washing / Cleaning) - displayed after Intensive Cleaning
+    // 2. Exterior washing without acwp (Exterior Washing / Cleaning) - displayed after Intensive Cleaning
     $categories['normal_ext'] = [
-        'label'      => 'Normal Exterior Cleaning',
-        'short'      => 'Normal Ext',
+        'label'      => 'Exterior washing without acwp',
+        'short'      => 'Ext Washing',
         'table'      => 'mcc_normal_scorecard_report',
         'filter_sql' => "sub_parameter_id IN (SELECT id FROM mcc_normal_scorecard_sub_param WHERE parameter_id IN (SELECT id FROM mcc_normal_scorecard_param WHERE parameter_name LIKE '%Exterior%'))",
         'color'      => '#00d2d3',

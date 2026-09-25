@@ -26,25 +26,41 @@ function formatChemicalQty($qtyInBase, $unitType) {
 }
 
 // Fetch all active chemical parameters for this station
-// 1. Total Added Inward Stock (from mcc_chemical_stock)
-// 2. Prior Used before $selectedDate (from mcc_chemical_report where report_date < $selectedDate)
-// 3. Used Today on $selectedDate (from mcc_chemical_report where report_date = $selectedDate)
+// 1. Stock received prior to $selectedDate (from mcc_chemical_stock_log)
+// 2. Stock received today on $selectedDate (from mcc_chemical_stock_log)
+// 3. Fallback static stock (from mcc_chemical_stock)
+// 4. Prior Used before $selectedDate (from mcc_chemical_report where report_date < $selectedDate)
+// 5. Used Today on $selectedDate (from mcc_chemical_report where report_date = $selectedDate)
 $query = "
     SELECT 
         p.id AS parameter_id,
         p.name AS chemical_name,
         COALESCE(p.unit_type, 'volume') AS unit_type,
         COALESCE(u.unit_symbol, 'ml') AS base_unit_symbol,
-        COALESCE(s.stock_quantity, 0) AS total_added_stock,
+        COALESCE(s.stock_quantity, 0) AS total_static_stock,
+        COALESCE(log_prior.stock_received_prior, 0) AS stock_received_prior,
+        COALESCE(log_today.stock_received_today, 0) AS stock_received_today,
         COALESCE(prior.total_prior_used, 0) AS total_prior_used,
         COALESCE(day_rep.qty_used_day, 0) AS qty_used_today
     FROM mcc_chemical_param p
     LEFT JOIN mcc_chemical_units u ON p.base_unit_id = u.id
     LEFT JOIN mcc_chemical_stock s ON p.id = s.parameter_id AND s.station_id = :stn1
     LEFT JOIN (
+        SELECT parameter_id, SUM(quantity) AS stock_received_prior
+        FROM mcc_chemical_stock_log
+        WHERE station_id = :stn_log_prior AND action_type = 'ADD' AND DATE(created_at) < :rep_date_prior1
+        GROUP BY parameter_id
+    ) log_prior ON p.id = log_prior.parameter_id
+    LEFT JOIN (
+        SELECT parameter_id, SUM(quantity) AS stock_received_today
+        FROM mcc_chemical_stock_log
+        WHERE station_id = :stn_log_today AND action_type = 'ADD' AND DATE(created_at) = :rep_date_today1
+        GROUP BY parameter_id
+    ) log_today ON p.id = log_today.parameter_id
+    LEFT JOIN (
         SELECT parameter_id, SUM(qty_used) AS total_prior_used
         FROM mcc_chemical_report
-        WHERE station_id = :stn2 AND report_date < :rep_date_prior
+        WHERE station_id = :stn2 AND report_date < :rep_date_prior2
         GROUP BY parameter_id
     ) prior ON p.id = prior.parameter_id
     LEFT JOIN (
@@ -62,8 +78,12 @@ $query = "
 $stmt = $pdo->prepare($query);
 $stmt->execute([
     'stn1' => $stationId,
+    'stn_log_prior' => $stationId,
+    'rep_date_prior1' => $selectedDate,
+    'stn_log_today' => $stationId,
+    'rep_date_today1' => $selectedDate,
     'stn2' => $stationId,
-    'rep_date_prior' => $selectedDate,
+    'rep_date_prior2' => $selectedDate,
     'stn3' => $stationId,
     'rep_date_day' => $selectedDate,
     'stn4' => $stationId
@@ -72,9 +92,13 @@ $dailyReport = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Totals for top stat summary
 $totalChemicals = count($dailyReport);
+$receivedTodayCount = 0;
 $activeUsedCount = 0;
 
 foreach ($dailyReport as $row) {
+    if (floatval($row['stock_received_today']) > 0) {
+        $receivedTodayCount++;
+    }
     if (floatval($row['qty_used_today']) > 0) {
         $activeUsedCount++;
     }
@@ -182,7 +206,7 @@ include 'sidebar.php';
                 
                 <!-- KPI Stat Cards -->
                 <div class="row g-3 mb-4 no-print">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="summary-kpi-box">
                             <div>
                                 <div class="text-muted small fw-bold text-uppercase">Total Chemicals</div>
@@ -193,10 +217,21 @@ include 'sidebar.php';
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="summary-kpi-box">
                             <div>
-                                <div class="text-muted small fw-bold text-uppercase">Chemicals Used on <?= date('d M', strtotime($selectedDate)) ?></div>
+                                <div class="text-muted small fw-bold text-uppercase">Stock Received Today</div>
+                                <div class="fs-4 fw-bold text-success"><?= $receivedTodayCount ?></div>
+                            </div>
+                            <div class="bg-light text-success p-3 rounded-circle fs-4">
+                                <i class="bi bi-box-arrow-in-down"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="summary-kpi-box">
+                            <div>
+                                <div class="text-muted small fw-bold text-uppercase">Chemicals Used Today</div>
                                 <div class="fs-4 fw-bold text-info"><?= $activeUsedCount ?></div>
                             </div>
                             <div class="bg-light text-info p-3 rounded-circle fs-4">
@@ -204,13 +239,13 @@ include 'sidebar.php';
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="summary-kpi-box">
                             <div>
                                 <div class="text-muted small fw-bold text-uppercase">Report Date</div>
                                 <div class="fs-5 fw-bold text-dark"><?= date('d-m-Y', strtotime($selectedDate)) ?></div>
                             </div>
-                            <div class="bg-light text-success p-3 rounded-circle fs-4">
+                            <div class="bg-light text-secondary p-3 rounded-circle fs-4">
                                 <i class="bi bi-calendar-check"></i>
                             </div>
                         </div>
@@ -222,7 +257,7 @@ include 'sidebar.php';
                     
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 16px;">
                         <h2 style="font-size: 18px; font-weight: 700; color: #1e293b; margin: 0;">
-                            <i class="bi bi-journal-text me-2 text-primary"></i> Daily Chemical Balance Sheet (Opening vs Used vs Remaining)
+                            <i class="bi bi-journal-text me-2 text-primary"></i> Daily Chemical Balance Sheet (Opening + Received vs Used vs Remaining)
                         </h2>
                         <span class="badge bg-primary px-3 py-2 text-white" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px;">
                             Date: <?= date('d-m-Y', strtotime($selectedDate)) ?>
@@ -246,32 +281,45 @@ include 'sidebar.php';
                         <table class="table table-bordered report-custom-table mb-0 align-middle">
                             <thead>
                                 <tr>
-                                    <th style="width: 50px;" class="text-center">#</th>
+                                    <th style="width: 45px;" class="text-center">#</th>
                                     <th>Chemical Name</th>
-                                    <th class="text-center" style="width: 100px;">Type</th>
-                                    <th class="text-end" style="width: 200px;">Opening Stock (Start of Day)</th>
-                                    <th class="text-end" style="width: 180px;">Used Today (<?= date('d-m-Y', strtotime($selectedDate)) ?>)</th>
-                                    <th class="text-end" style="width: 200px;">Remaining Stock (End of Day)</th>
+                                    <th class="text-center" style="width: 85px;">Type</th>
+                                    <th class="text-end" style="width: 170px;">Opening Stock<br><small style="font-size: 11px; font-weight: 400; opacity: 0.9;">(Start of Day)</small></th>
+                                    <th class="text-end" style="width: 170px; background: #064e3b !important; border-color: #065f46 !important;">Today Received Stock<br><small style="font-size: 11px; font-weight: 400; opacity: 0.9;">(Added Today)</small></th>
+                                    <th class="text-end" style="width: 170px;">Total Available<br><small style="font-size: 11px; font-weight: 400; opacity: 0.9;">(Opening + Received)</small></th>
+                                    <th class="text-end" style="width: 170px;">Used Today<br><small style="font-size: 11px; font-weight: 400; opacity: 0.9;">(<?= date('d-m-Y', strtotime($selectedDate)) ?>)</small></th>
+                                    <th class="text-end" style="width: 180px;">Remaining Stock<br><small style="font-size: 11px; font-weight: 400; opacity: 0.9;">(End of Day)</small></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if (empty($dailyReport)): ?>
                                     <tr>
-                                        <td colspan="6" class="text-center py-4 text-muted">
+                                        <td colspan="8" class="text-center py-4 text-muted">
                                             <i class="bi bi-inbox fs-3 d-block mb-2"></i> No chemical parameters found for this station.
                                         </td>
                                     </tr>
                                 <?php else: ?>
                                     <?php $i = 1; foreach ($dailyReport as $row): 
-                                        $addedStock = floatval($row['total_added_stock']);
+                                        $staticStock = floatval($row['total_static_stock']);
+                                        $priorReceived = floatval($row['stock_received_prior']);
+                                        $todayReceived = floatval($row['stock_received_today']);
                                         $priorUsed = floatval($row['total_prior_used']);
                                         $usedToday = floatval($row['qty_used_today']);
 
-                                        // Opening Stock = Total Inward Stock - Usage before this date
-                                        $openingStock = max(0, $addedStock - $priorUsed);
+                                        // If no log entries at all (legacy baseline), fallback to static stock
+                                        $totalLogs = $priorReceived + $todayReceived;
+                                        if ($totalLogs == 0 && $staticStock > 0) {
+                                            $priorReceived = $staticStock;
+                                        }
 
-                                        // Remaining Stock = Opening Stock - Usage on this date
-                                        $remainingStock = max(0, $openingStock - $usedToday);
+                                        // Opening Stock = Stock received before this date - Usage before this date
+                                        $openingStock = max(0, $priorReceived - $priorUsed);
+
+                                        // Total Available = Opening Stock + Today's Inward Added Stock
+                                        $totalAvailable = $openingStock + $todayReceived;
+
+                                        // Remaining Stock = Total Available - Usage on this date
+                                        $remainingStock = max(0, $totalAvailable - $usedToday);
 
                                         $unitType = $row['unit_type'];
                                     ?>
@@ -283,13 +331,23 @@ include 'sidebar.php';
                                             <td class="text-center">
                                                 <span class="badge bg-light text-dark border text-capitalize"><?= htmlspecialchars($unitType) ?></span>
                                             </td>
-                                            <td class="text-end text-secondary" style="font-size: 14.5px;">
+                                            <td class="text-end text-secondary" style="font-size: 14px;">
                                                 <?= formatChemicalQty($openingStock, $unitType) ?>
                                             </td>
-                                            <td class="text-end <?= $usedToday > 0 ? 'text-primary' : 'text-muted' ?>" style="font-size: 14.5px;">
+                                            <td class="text-end" style="font-size: 14px; background-color: <?= $todayReceived > 0 ? '#f0fdf4' : 'transparent' ?>;">
+                                                <?php if ($todayReceived > 0): ?>
+                                                    <span class="text-success fw-bold">+ <?= formatChemicalQty($todayReceived, $unitType) ?></span>
+                                                <?php else: ?>
+                                                    <span class="text-muted">0.00</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="text-end text-dark fw-semibold" style="font-size: 14px;">
+                                                <?= formatChemicalQty($totalAvailable, $unitType) ?>
+                                            </td>
+                                            <td class="text-end <?= $usedToday > 0 ? 'text-primary fw-bold' : 'text-muted' ?>" style="font-size: 14px;">
                                                 <?= formatChemicalQty($usedToday, $unitType) ?>
                                             </td>
-                                            <td class="text-end text-success" style="font-size: 15px;">
+                                            <td class="text-end text-success fw-bold" style="font-size: 14.5px;">
                                                 <?= formatChemicalQty($remainingStock, $unitType) ?>
                                             </td>
                                         </tr>

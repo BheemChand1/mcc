@@ -25,26 +25,23 @@ function formatChemicalQty($qtyInBase, $unitType) {
     return '<span class="fw-bold">' . number_format($qty, 0) . ' pcs</span>';
 }
 
-// Fetch all active chemical parameters for this station
+// Fetch all active chemical parameters for this station based strictly on chronological ledger
 // 1. Stock received prior to $selectedDate (from mcc_chemical_stock_log)
 // 2. Stock received today on $selectedDate (from mcc_chemical_stock_log)
-// 3. Fallback static stock (from mcc_chemical_stock)
-// 4. Prior Used before $selectedDate (from mcc_chemical_report where report_date < $selectedDate)
-// 5. Used Today on $selectedDate (from mcc_chemical_report where report_date = $selectedDate)
+// 3. Prior Used before $selectedDate (from mcc_chemical_report where report_date < $selectedDate)
+// 4. Used Today on $selectedDate (from mcc_chemical_report where report_date = $selectedDate)
 $query = "
     SELECT 
         p.id AS parameter_id,
         p.name AS chemical_name,
         COALESCE(p.unit_type, 'volume') AS unit_type,
         COALESCE(u.unit_symbol, 'ml') AS base_unit_symbol,
-        COALESCE(s.stock_quantity, 0) AS total_static_stock,
         COALESCE(log_prior.stock_received_prior, 0) AS stock_received_prior,
         COALESCE(log_today.stock_received_today, 0) AS stock_received_today,
         COALESCE(prior.total_prior_used, 0) AS total_prior_used,
         COALESCE(day_rep.qty_used_day, 0) AS qty_used_today
     FROM mcc_chemical_param p
     LEFT JOIN mcc_chemical_units u ON p.base_unit_id = u.id
-    LEFT JOIN mcc_chemical_stock s ON p.id = s.parameter_id AND s.station_id = :stn1
     LEFT JOIN (
         SELECT parameter_id, SUM(quantity) AS stock_received_prior
         FROM mcc_chemical_stock_log
@@ -77,7 +74,6 @@ $query = "
 
 $stmt = $pdo->prepare($query);
 $stmt->execute([
-    'stn1' => $stationId,
     'stn_log_prior' => $stationId,
     'rep_date_prior1' => $selectedDate,
     'stn_log_today' => $stationId,
@@ -300,17 +296,10 @@ include 'sidebar.php';
                                     </tr>
                                 <?php else: ?>
                                     <?php $i = 1; foreach ($dailyReport as $row): 
-                                        $staticStock = floatval($row['total_static_stock']);
                                         $priorReceived = floatval($row['stock_received_prior']);
                                         $todayReceived = floatval($row['stock_received_today']);
                                         $priorUsed = floatval($row['total_prior_used']);
                                         $usedToday = floatval($row['qty_used_today']);
-
-                                        // If no log entries at all (legacy baseline), fallback to static stock
-                                        $totalLogs = $priorReceived + $todayReceived;
-                                        if ($totalLogs == 0 && $staticStock > 0) {
-                                            $priorReceived = $staticStock;
-                                        }
 
                                         // Opening Stock = Stock received before this date - Usage before this date
                                         $openingStock = max(0, $priorReceived - $priorUsed);

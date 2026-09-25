@@ -30,7 +30,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_targets'])) {
             $pdo->beginTransaction();
             try {
                 // Query active parameters to check update list
-                $pStmt = $pdo->prepare("SELECT id FROM dc_mcc_chemical_param WHERE station_id = :station_id");
+                $pStmt = $pdo->prepare("
+                    SELECT p.id 
+                    FROM mcc_chemical_param p
+                    INNER JOIN mcc_chemical_param_type_map m ON p.id = m.parameter_id
+                    WHERE m.station_id = :station_id AND m.chemical_type_id = 6 AND m.status = 'Active'
+                ");
                 $pStmt->execute(['station_id' => $stationId]);
                 $params = $pStmt->fetchAll(PDO::FETCH_COLUMN);
 
@@ -40,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_targets'])) {
                     $pq = isset($penalty_qtys[$pId]) ? floatval($penalty_qtys[$pId]) : 0;
 
                     // Check if entry exists for this month
-                    $chk = $pdo->prepare("SELECT id FROM dc_mcc_chemical_target WHERE station_id = :station_id AND parameter_id = :parameter_id AND target_month = :target_month");
+                    $chk = $pdo->prepare("SELECT id FROM mcc_chemical_target WHERE station_id = :station_id AND chemical_type_id = 6 AND parameter_id = :parameter_id AND target_month = :target_month");
                     $chk->execute([
                         'station_id' => $stationId,
                         'parameter_id' => $pId,
@@ -49,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_targets'])) {
                     $existingId = $chk->fetchColumn();
 
                     if ($existingId) {
-                        $upd = $pdo->prepare("UPDATE dc_mcc_chemical_target SET `qty(ml)` = :q, penalty = :p, `penalty_qty(ml)` = :pq WHERE id = :id");
+                        $upd = $pdo->prepare("UPDATE mcc_chemical_target SET `qty(ml)` = :q, penalty = :p, `penalty_qty(ml)` = :pq WHERE id = :id");
                         $upd->execute([
                             'q' => $q,
                             'p' => $p,
@@ -57,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_targets'])) {
                             'id' => $existingId
                         ]);
                     } else {
-                        $ins = $pdo->prepare("INSERT INTO dc_mcc_chemical_target (station_id, parameter_id, target_month, `qty(ml)`, penalty, `penalty_qty(ml)`) VALUES (:station_id, :parameter_id, :target_month, :q, :p, :pq)");
+                        $ins = $pdo->prepare("INSERT INTO mcc_chemical_target (station_id, chemical_type_id, parameter_id, target_month, `qty(ml)`, penalty, `penalty_qty(ml)`) VALUES (:station_id, 6, :parameter_id, :target_month, :q, :p, :pq)");
                         $ins->execute([
                             'station_id' => $stationId,
                             'parameter_id' => $pId,
@@ -81,10 +86,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_targets'])) {
 
 // Fetch all active parameters and current targets for the selected month
 $paramsStmt = $pdo->prepare("
-    SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
-    FROM dc_mcc_chemical_param p
-    LEFT JOIN dc_mcc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.target_month = :target_month
-    WHERE p.station_id = :station_id_param
+    SELECT p.id AS parameter_id, p.name AS parameter_name, COALESCE(u.unit_symbol, 'ml') AS units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
+    FROM mcc_chemical_param p
+    LEFT JOIN mcc_chemical_units u ON p.base_unit_id = u.id
+    INNER JOIN mcc_chemical_param_type_map m ON p.id = m.parameter_id
+    LEFT JOIN mcc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.chemical_type_id = 6 AND t.target_month = :target_month
+    WHERE m.station_id = :station_id_param AND m.chemical_type_id = 6 AND m.status = 'Active'
     ORDER BY p.id ASC
 ");
 $paramsStmt->execute([

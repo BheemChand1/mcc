@@ -29,11 +29,11 @@ if ($stationId === null || $stationId <= 0) {
 }
 
 try {
-    // 1. Fetch distinct tokens and trains for the station and date in chemical reports - PRT
+    // 1. Fetch distinct tokens and trains for the station and date in chemical reports - PRT (type_id = 4)
     $stmt = $pdo->prepare("
         SELECT DISTINCT token_id, train_no, report_date 
-        FROM mcc_prt_chemical_report 
-        WHERE station_id = :station_id AND report_date = :report_date
+        FROM mcc_chemical_report 
+        WHERE station_id = :station_id AND chemical_type_id = 4 AND report_date = :report_date
         ORDER BY token_id DESC
     ");
     $stmt->execute([
@@ -45,11 +45,11 @@ try {
     $sheets = [];
 
     if (!empty($tokensList)) {
-        // Prepare statement to fetch distinct coaches for a token - PRT
+        // Prepare statement to fetch distinct coaches for a token - PRT (type_id = 4)
         $coachesStmt = $pdo->prepare("
             SELECT DISTINCT coach_no 
-            FROM mcc_prt_chemical_report 
-            WHERE token_id = :token_id
+            FROM mcc_chemical_report 
+            WHERE token_id = :token_id AND chemical_type_id = 4
             ORDER BY coach_no ASC
         ");
 
@@ -57,8 +57,8 @@ try {
             SELECT 
                 COUNT(*) AS total_rows,
                 SUM(CASE WHEN qty_used IS NULL OR qty_used = '' THEN 1 ELSE 0 END) AS empty_rows
-            FROM mcc_prt_chemical_report
-            WHERE token_id = :token_id
+            FROM mcc_chemical_report
+            WHERE token_id = :token_id AND chemical_type_id = 4
         ");
 
         foreach ($tokensList as $tokenItem) {

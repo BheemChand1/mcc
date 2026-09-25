@@ -52,8 +52,14 @@ try {
     $paramsStmt->execute([$stationId, $stationId]);
     $subParams = $paramsStmt->fetchAll(PDO::FETCH_COLUMN);
 
-    // Fetch chemical parameters for the station
-    $chemParamsStmt = $pdo->prepare("SELECT id FROM mcc_normal_chemical_param WHERE station_id = :station_id");
+    // Fetch chemical parameters for the station (type_id = 1 for normal cleaning)
+    $chemParamsStmt = $pdo->prepare("
+        SELECT p.id 
+        FROM mcc_chemical_param p
+        JOIN mcc_chemical_param_type_map m ON p.id = m.parameter_id AND m.station_id = p.station_id
+        WHERE p.station_id = :station_id AND m.chemical_type_id = 1 AND p.status = 'Active' AND m.status = 'Active'
+        ORDER BY p.id ASC
+    ");
     $chemParamsStmt->execute(['station_id' => $stationId]);
     $chemParams = $chemParamsStmt->fetchAll(PDO::FETCH_COLUMN);
 
@@ -107,9 +113,9 @@ try {
     // 4. Insert initial chemical report records (all quantities set to NULL)
     if (!empty($chemParams)) {
         $insertChemStmt = $pdo->prepare("
-            INSERT INTO mcc_normal_chemical_report 
-            (parameter_id, coach_no, qty_used, auditor_name, station_id, token_id, train_no, audit_by, report_date)
-            VALUES (:parameter_id, :coach_no, NULL, :auditor_name, :station_id, :token_id, :train_no, :audit_by, :report_date)
+            INSERT INTO mcc_chemical_report 
+            (chemical_type_id, parameter_id, coach_no, qty_used, auditor_name, station_id, token_id, train_no, audit_by, report_date)
+            VALUES (1, :parameter_id, :coach_no, NULL, :auditor_name, :station_id, :token_id, :train_no, :audit_by, :report_date)
         ");
 
         foreach ($coachNos as $coachNo) {

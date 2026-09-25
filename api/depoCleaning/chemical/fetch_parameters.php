@@ -29,29 +29,42 @@ if ($stationId === null || $stationId <= 0) {
 try {
     $targetMonth = date('Y-m', strtotime($reportDate));
 
-    // Fetch parameters joined with targets
+    // Fetch parameters joined with targets - DC (type_id = 6)
     $stmt = $pdo->prepare("
         SELECT 
             p.id AS parameter_id, 
             p.name AS parameter_name, 
-            p.units, 
+            COALESCE(u.unit_symbol, 'ml') AS units, 
             t.qty_target, 
             t.penalty, 
             t.penalty_qty
-        FROM dc_mcc_chemical_param p
+        FROM mcc_chemical_param p
+        JOIN mcc_chemical_param_type_map m 
+          ON p.id = m.parameter_id AND m.station_id = p.station_id
+        LEFT JOIN mcc_chemical_units u 
+          ON p.base_unit_id = u.id
         LEFT JOIN (
             SELECT parameter_id, `qty(ml)` AS qty_target, penalty, `penalty_qty(ml)` AS penalty_qty
-            FROM dc_mcc_chemical_target
+            FROM mcc_chemical_target
             WHERE station_id = :station_id_join 
-              AND DATE_FORMAT(target_month, '%Y-%m') = :target_month
+              AND chemical_type_id = 6
+              AND (
+                DATE_FORMAT(target_month, '%Y-%m') = :target_month
+                OR (:report_date_1 >= effective_from AND (effective_to IS NULL OR :report_date_2 <= effective_to))
+              )
         ) t ON p.id = t.parameter_id
         WHERE p.station_id = :station_id_main
+          AND m.chemical_type_id = 6
+          AND p.status = 'Active'
+          AND m.status = 'Active'
         ORDER BY p.id ASC
     ");
     $stmt->execute([
         'station_id_join' => $stationId,
         'station_id_main' => $stationId,
-        'target_month' => $targetMonth
+        'target_month' => $targetMonth,
+        'report_date_1' => $reportDate,
+        'report_date_2' => $reportDate
     ]);
     $parameters = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

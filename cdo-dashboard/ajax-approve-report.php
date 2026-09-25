@@ -27,6 +27,7 @@ $categoryId = intval($_POST['category_id'] ?? 0);
 $reportId = intval($_POST['report_id'] ?? 0);
 
 $allowedTables = [
+    'mcc_chemical_report',
     'dc_mcc_chemical_report',
     'dc_mcc_machine_report',
     'dc_mcc_report',

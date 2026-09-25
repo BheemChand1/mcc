@@ -18,6 +18,7 @@ $table = trim($_POST['table'] ?? '');
 $tokenId = trim($_POST['token_id'] ?? '');
 
 $allowedTables = [
+    'mcc_chemical_report',
     'dc_mcc_chemical_report',
     'dc_mcc_machine_report',
     'dc_mcc_report',
@@ -84,9 +85,8 @@ if ($action === 'fetch_sheet') {
         // Helper maps for parameter names
         $paramMap = [];
         if (strpos($table, 'chemical') !== false) {
-            $pTable = str_replace('_report', '_param', $table);
             try {
-                $pStmt = $pdo->query("SELECT id, name FROM {$pTable}");
+                $pStmt = $pdo->query("SELECT id, name FROM mcc_chemical_param");
                 while ($pRow = $pStmt->fetch(PDO::FETCH_ASSOC)) {
                     $paramMap[$pRow['id']] = $pRow['name'];
                 }

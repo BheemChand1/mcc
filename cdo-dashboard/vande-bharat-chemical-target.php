@@ -30,26 +30,31 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['save_targets'
         $pdo->beginTransaction();
         try {
             // Query active parameters to check update list
-            $pStmt = $pdo->prepare("SELECT id FROM mcc_vb_chemical_param WHERE station_id = :station_id");
+            $pStmt = $pdo->prepare("
+                SELECT p.id 
+                FROM mcc_chemical_param p
+                INNER JOIN mcc_chemical_param_type_map m ON p.id = m.parameter_id
+                WHERE m.station_id = :station_id AND m.chemical_type_id = 5 AND m.status = 'Active'
+            ");
             $pStmt->execute(['station_id' => $stationId]);
             $paramIds = $pStmt->fetchAll(PDO::FETCH_COLUMN);
 
             $findActiveStmt = $pdo->prepare("
-                SELECT * FROM mcc_vb_chemical_target 
-                WHERE station_id = :station_id AND parameter_id = :parameter_id AND effective_to IS NULL
+                SELECT * FROM mcc_chemical_target 
+                WHERE station_id = :station_id AND chemical_type_id = 5 AND parameter_id = :parameter_id AND effective_to IS NULL
                 LIMIT 1
             ");
 
             $closeActiveStmt = $pdo->prepare("
-                UPDATE mcc_vb_chemical_target 
+                UPDATE mcc_chemical_target 
                 SET effective_to = :effective_to 
                 WHERE id = :id
             ");
 
             $insertNewStmt = $pdo->prepare("
-                INSERT INTO mcc_vb_chemical_target 
-                (parameter_id, station_id, `qty(ml)`, penalty, `penalty_qty(ml)`, effective_from, effective_to) 
-                VALUES (:parameter_id, :station_id, :qty, :penalty, :penalty_qty, :effective_from, NULL)
+                INSERT INTO mcc_chemical_target 
+                (parameter_id, chemical_type_id, station_id, `qty(ml)`, penalty, `penalty_qty(ml)`, effective_from, effective_to) 
+                VALUES (:parameter_id, 5, :station_id, :qty, :penalty, :penalty_qty, :effective_from, NULL)
             ");
 
             foreach ($paramIds as $pId) {
@@ -110,10 +115,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['save_targets'
 
 // Fetch active parameters and their active targets (effective_to IS NULL)
 $pStmt = $pdo->prepare("
-    SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
-    FROM mcc_vb_chemical_param p
-    LEFT JOIN mcc_vb_chemical_target t ON p.id = t.parameter_id AND t.station_id = :stn_id_target AND t.effective_to IS NULL
-    WHERE p.station_id = :stn_id_param
+    SELECT p.id AS parameter_id, p.name AS parameter_name, COALESCE(u.unit_symbol, 'ml') AS units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
+    FROM mcc_chemical_param p
+    LEFT JOIN mcc_chemical_units u ON p.base_unit_id = u.id
+    INNER JOIN mcc_chemical_param_type_map m ON p.id = m.parameter_id
+    LEFT JOIN mcc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :stn_id_target AND t.chemical_type_id = 5 AND t.effective_to IS NULL
+    WHERE m.station_id = :stn_id_param AND m.chemical_type_id = 5 AND m.status = 'Active'
     ORDER BY p.id ASC
 ");
 $pStmt->execute([

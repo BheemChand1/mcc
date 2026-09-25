@@ -32,7 +32,7 @@ try {
     if ($meta && (empty($meta['auditor_name']) || !isset($meta['auditor_name']))) {
         // Fallback to chemical report auditor_name if empty
         try {
-            $auditorStmt = $pdo->prepare("SELECT auditor_name FROM mcc_intensive_chemical_report WHERE token_id = ? LIMIT 1");
+            $auditorStmt = $pdo->prepare("SELECT auditor_name FROM mcc_chemical_report WHERE token_id = ? AND chemical_type_id = 2 LIMIT 1");
             $auditorStmt->execute([$tokenId]);
             $meta['auditor_name'] = $auditorStmt->fetchColumn() ?: '';
         } catch (Exception $e) {

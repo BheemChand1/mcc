@@ -22,10 +22,12 @@ $shiftsList = $shiftsStmt->fetchAll();
 // Fetch chemical parameters and target values for this station - DC
 $targetMonthDate = $selectedYear . "-" . $selectedMonth . "-01";
 $paramsStmt = $pdo->prepare("
-    SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
-    FROM dc_mcc_chemical_param p
-    LEFT JOIN dc_mcc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.target_month = :target_month
-    WHERE p.station_id = :station_id_param
+    SELECT p.id AS parameter_id, p.name AS parameter_name, COALESCE(u.unit_symbol, 'ml') AS units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
+    FROM mcc_chemical_param p
+    LEFT JOIN mcc_chemical_units u ON p.base_unit_id = u.id
+    INNER JOIN mcc_chemical_param_type_map m ON p.id = m.parameter_id
+    LEFT JOIN mcc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.chemical_type_id = 6 AND t.target_month = :target_month
+    WHERE m.station_id = :station_id_param AND m.chemical_type_id = 6 AND m.status = 'Active'
     ORDER BY p.id ASC
 ");
 $paramsStmt->execute([
@@ -38,8 +40,8 @@ $parametersList = $paramsStmt->fetchAll();
 // Fetch all reports (distinct tokens) in the selected month - DC
 $tokensStmt = $pdo->prepare("
     SELECT DISTINCT token_id, report_date 
-    FROM dc_mcc_chemical_report 
-    WHERE YEAR(report_date) = :year AND MONTH(report_date) = :month AND station_id = :station_id
+    FROM mcc_chemical_report 
+    WHERE YEAR(report_date) = :year AND MONTH(report_date) = :month AND station_id = :station_id AND chemical_type_id = 6
     ORDER BY report_date ASC, token_id ASC
 ");
 $tokensStmt->execute([
@@ -72,8 +74,8 @@ foreach ($parametersList as $p) {
 // Fetch daily reports details to compute daily scores & penalties - DC
 $dailyReportStmt = $pdo->prepare("
     SELECT parameter_id, shift_id, qty_used 
-    FROM dc_mcc_chemical_report 
-    WHERE token_id = :token_id AND station_id = :station_id
+    FROM mcc_chemical_report 
+    WHERE token_id = :token_id AND station_id = :station_id AND chemical_type_id = 6
 ");
 
 $dailyScores = [];

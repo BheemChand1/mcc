@@ -6,10 +6,12 @@ $toDate = $_GET['to_date'] ?? date('Y-m-d');
 
 // Fetch all active parameters dynamically - PRT
 $paramsStmt = $pdo->prepare("
-    SELECT id AS parameter_id, name AS parameter_name, units 
-    FROM mcc_prt_chemical_param
-    WHERE station_id = :station_id
-    ORDER BY id ASC
+    SELECT p.id AS parameter_id, p.name AS parameter_name, COALESCE(u.unit_symbol, 'ml') AS units 
+    FROM mcc_chemical_param p
+    LEFT JOIN mcc_chemical_units u ON p.base_unit_id = u.id
+    INNER JOIN mcc_chemical_param_type_map m ON p.id = m.parameter_id
+    WHERE m.station_id = :station_id AND m.chemical_type_id = 4 AND m.status = 'Active'
+    ORDER BY p.id ASC
 ");
 $paramsStmt->execute(['station_id' => $stationId]);
 $parametersList = $paramsStmt->fetchAll();
@@ -17,8 +19,8 @@ $parametersList = $paramsStmt->fetchAll();
 // Fetch distinct tokens in this date range and station for PRT chemical report
 $stmt = $pdo->prepare("
     SELECT DISTINCT token_id, train_no, report_date 
-    FROM mcc_prt_chemical_report 
-    WHERE report_date BETWEEN :from_date AND :to_date AND station_id = :station_id AND audit_by = :auditor_id
+    FROM mcc_chemical_report 
+    WHERE report_date BETWEEN :from_date AND :to_date AND station_id = :station_id AND audit_by = :auditor_id AND chemical_type_id = 4
     ORDER BY report_date DESC, token_id DESC
 ");
 $stmt->execute(['from_date' => $fromDate, 'to_date' => $toDate, 'station_id' => $stationId, 'auditor_id' => $auditorId]);
@@ -29,8 +31,9 @@ $sheetsData = [];
 // Target resolving statement - PRT
 $targetStmt = $pdo->prepare("
     SELECT t.parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
-    FROM mcc_prt_chemical_target t
+    FROM mcc_chemical_target t
     WHERE t.station_id = :station_id
+      AND t.chemical_type_id = 4
       AND :report_date_1 >= t.effective_from 
       AND (t.effective_to IS NULL OR :report_date_2 <= t.effective_to)
 ");
@@ -39,14 +42,14 @@ if (!empty($tokensList)) {
     // Prepare queries to run inside the loop
     $coachesStmt = $pdo->prepare("
         SELECT DISTINCT coach_no 
-        FROM mcc_prt_chemical_report 
-        WHERE token_id = :token_id AND station_id = :station_id
+        FROM mcc_chemical_report 
+        WHERE token_id = :token_id AND station_id = :station_id AND chemical_type_id = 4
     ");
 
     $reportStmt = $pdo->prepare("
         SELECT * 
-        FROM mcc_prt_chemical_report 
-        WHERE token_id = :token_id AND station_id = :station_id
+        FROM mcc_chemical_report 
+        WHERE token_id = :token_id AND station_id = :station_id AND chemical_type_id = 4
     ");
 
     foreach ($tokensList as $t) {

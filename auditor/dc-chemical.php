@@ -16,18 +16,20 @@ $shiftsList = $shiftsStmt->fetchAll();
 
 // Fetch all active parameters and their target values/penalties dynamically by month - DC
 $paramsStmt = $pdo->prepare("
-    SELECT p.id AS parameter_id, p.name AS parameter_name, p.units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
-    FROM dc_mcc_chemical_param p
-    LEFT JOIN dc_mcc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.target_month = :target_month
-    WHERE p.station_id = :station_id_param
+    SELECT p.id AS parameter_id, p.name AS parameter_name, COALESCE(u.unit_symbol, 'ml') AS units, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml 
+    FROM mcc_chemical_param p
+    LEFT JOIN mcc_chemical_units u ON p.base_unit_id = u.id
+    INNER JOIN mcc_chemical_param_type_map m ON p.id = m.parameter_id
+    LEFT JOIN mcc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.chemical_type_id = 6 AND t.target_month = :target_month
+    WHERE m.station_id = :station_id_param AND m.chemical_type_id = 6 AND m.status = 'Active'
     ORDER BY p.id ASC
 ");
 
 // Fetch distinct tokens in this date range and station for DC chemical report
 $stmt = $pdo->prepare("
     SELECT DISTINCT token_id, report_date 
-    FROM dc_mcc_chemical_report 
-    WHERE report_date BETWEEN :from_date AND :to_date AND station_id = :station_id AND audit_by = :auditor_id
+    FROM mcc_chemical_report 
+    WHERE report_date BETWEEN :from_date AND :to_date AND station_id = :station_id AND audit_by = :auditor_id AND chemical_type_id = 6
     ORDER BY report_date DESC, token_id DESC
 ");
 $stmt->execute(['from_date' => $fromDate, 'to_date' => $toDate, 'station_id' => $stationId, 'auditor_id' => $auditorId]);
@@ -38,9 +40,9 @@ $sheetsData = [];
 if (!empty($tokensList)) {
     $reportStmt = $pdo->prepare("
         SELECT r.*, s.shift 
-        FROM dc_mcc_chemical_report r
+        FROM mcc_chemical_report r
         JOIN dc_mcc_chemical_shifts s ON r.shift_id = s.id
-        WHERE r.token_id = :token_id AND r.station_id = :station_id
+        WHERE r.token_id = :token_id AND r.station_id = :station_id AND r.chemical_type_id = 6
     ");
 
     foreach ($tokensList as $t) {

@@ -43,11 +43,12 @@ try {
     $startTime = $reportDate . ' 06:00:00';
     $endTime = date('Y-m-d', strtotime($reportDate . ' +1 day')) . ' 07:00:00';
 
-    // 2. Fetch filled count per shift for the given date range (today 6 AM to next day 7 AM)
+    // 2. Fetch filled count per shift for the given date range (today 6 AM to next day 7 AM) - DC (type_id = 6)
     $filledStmt = $pdo->prepare("
         SELECT shift_id, COUNT(*) AS filled_count 
-        FROM dc_mcc_chemical_report 
+        FROM mcc_chemical_report 
         WHERE station_id = :station_id 
+          AND chemical_type_id = 6
           AND created_at >= :start_time 
           AND created_at <= :end_time 
           AND qty_used IS NOT NULL

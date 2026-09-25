@@ -769,15 +769,31 @@ $has_billing      = (in_array('billing_management', $active_app_keys) || in_arra
           </a>
         </li>
 
-        <!-- Inventory Management -->
-        <li class="nav-item">
-          <a href="../inventory" target="_blank" class="nav-link">
+        <!-- Chemical Inventory Management -->
+        <?php 
+        $chemInvPages = ['chemical-inventory.php', 'chemical-daily-report.php'];
+        $isChemInvActive = in_array($currentPage, $chemInvPages);
+        ?>
+        <li class="nav-item <?= $isChemInvActive ? 'menu-open' : '' ?>">
+          <a href="#" class="nav-link <?= $isChemInvActive ? 'active' : '' ?>">
             <i class="nav-icon bi bi-box-seam"></i>
             <p>
-              Inventory
-              <i class="nav-arrow bi bi-box-arrow-up-right"></i>
+              Chemical Inventory
+              <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
+          <ul class="nav nav-treeview ms-3">
+            <li class="nav-item">
+              <a href="chemical-inventory.php" class="nav-link <?= ($currentPage == 'chemical-inventory.php') ? 'active' : '' ?>">
+                <p>Manage Stock</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="chemical-daily-report.php" class="nav-link <?= ($currentPage == 'chemical-daily-report.php') ? 'active' : '' ?>">
+                <p>Daily Usage Report</p>
+              </a>
+            </li>
+          </ul>
         </li>
 
         <?php if ($has_billing): ?>

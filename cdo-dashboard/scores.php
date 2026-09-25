@@ -1151,9 +1151,10 @@ function getIntensiveChemicalSummary($stationId, $year, $month) {
     try {
         $paramsStmt = $pdo->prepare("
             SELECT p.id AS parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
-            FROM mcc_intensive_chemical_param p
-            LEFT JOIN mcc_intensive_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target
-            WHERE p.station_id = :station_id_param
+            FROM mcc_chemical_param p
+            INNER JOIN mcc_chemical_param_type_map m ON p.id = m.parameter_id
+            LEFT JOIN mcc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.chemical_type_id = 2
+            WHERE m.station_id = :station_id_param AND m.chemical_type_id = 2 AND m.status = 'Active'
         ");
         $paramsStmt->execute(['station_id_target' => $stationId, 'station_id_param' => $stationId]);
         $parameters = $paramsStmt->fetchAll();
@@ -1161,8 +1162,8 @@ function getIntensiveChemicalSummary($stationId, $year, $month) {
 
         $tokensStmt = $pdo->prepare("
             SELECT DISTINCT token_id, report_date 
-            FROM mcc_intensive_chemical_report 
-            WHERE YEAR(report_date) = :year AND MONTH(report_date) = :month AND station_id = :station_id
+            FROM mcc_chemical_report 
+            WHERE YEAR(report_date) = :year AND MONTH(report_date) = :month AND station_id = :station_id AND chemical_type_id = 2
         ");
         $tokensStmt->execute(['year' => $year, 'month' => $month, 'station_id' => $stationId]);
         $tokens = $tokensStmt->fetchAll();
@@ -1170,8 +1171,8 @@ function getIntensiveChemicalSummary($stationId, $year, $month) {
 
         $coachesStmt = $pdo->prepare("
             SELECT token_id, COUNT(DISTINCT coach_no) AS coaches_count
-            FROM mcc_intensive_chemical_report
-            WHERE YEAR(report_date) = :year AND MONTH(report_date) = :month AND station_id = :station_id
+            FROM mcc_chemical_report
+            WHERE YEAR(report_date) = :year AND MONTH(report_date) = :month AND station_id = :station_id AND chemical_type_id = 2
             GROUP BY token_id
         ");
         $coachesStmt->execute(['year' => $year, 'month' => $month, 'station_id' => $stationId]);
@@ -1179,8 +1180,8 @@ function getIntensiveChemicalSummary($stationId, $year, $month) {
 
         $logsStmt = $pdo->prepare("
             SELECT token_id, parameter_id, SUM(qty_used) as total_qty
-            FROM mcc_intensive_chemical_report
-            WHERE station_id = :station_id AND MONTH(report_date) = :month AND YEAR(report_date) = :year
+            FROM mcc_chemical_report
+            WHERE station_id = :station_id AND MONTH(report_date) = :month AND YEAR(report_date) = :year AND chemical_type_id = 2
             GROUP BY token_id, parameter_id
         ");
         $logsStmt->execute(['station_id' => $stationId, 'month' => intval($month), 'year' => $year]);
@@ -1272,9 +1273,10 @@ function getPLDCChemicalSummary($stationId, $year, $month) {
     try {
         $paramsStmt = $pdo->prepare("
             SELECT p.id AS parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
-            FROM dc_mcc_chemical_param p
-            LEFT JOIN dc_mcc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.target_month = :target_month
-            WHERE p.station_id = :station_id_param
+            FROM mcc_chemical_param p
+            INNER JOIN mcc_chemical_param_type_map m ON p.id = m.parameter_id
+            LEFT JOIN mcc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.chemical_type_id = 6 AND t.target_month = :target_month
+            WHERE m.station_id = :station_id_param AND m.chemical_type_id = 6 AND m.status = 'Active'
         ");
         $paramsStmt->execute([
             'station_id_target' => $stationId,
@@ -1286,8 +1288,8 @@ function getPLDCChemicalSummary($stationId, $year, $month) {
 
         $tokensStmt = $pdo->prepare("
             SELECT DISTINCT token_id, report_date 
-            FROM dc_mcc_chemical_report 
-            WHERE YEAR(report_date) = :year AND MONTH(report_date) = :month AND station_id = :station_id
+            FROM mcc_chemical_report 
+            WHERE YEAR(report_date) = :year AND MONTH(report_date) = :month AND station_id = :station_id AND chemical_type_id = 6
         ");
         $tokensStmt->execute(['year' => $year, 'month' => $month, 'station_id' => $stationId]);
         $tokens = $tokensStmt->fetchAll();
@@ -1295,8 +1297,8 @@ function getPLDCChemicalSummary($stationId, $year, $month) {
 
         $logsStmt = $pdo->prepare("
             SELECT token_id, parameter_id, SUM(qty_used) as total_qty
-            FROM dc_mcc_chemical_report
-            WHERE station_id = :station_id AND MONTH(report_date) = :month AND YEAR(report_date) = :year
+            FROM mcc_chemical_report
+            WHERE station_id = :station_id AND MONTH(report_date) = :month AND YEAR(report_date) = :year AND chemical_type_id = 6
             GROUP BY token_id, parameter_id
         ");
         $logsStmt->execute(['station_id' => $stationId, 'month' => intval($month), 'year' => $year]);
@@ -1380,22 +1382,22 @@ function getPRTChemicalSummary($stationId, $year, $month) {
     try {
         $paramsStmt = $pdo->prepare("
             SELECT p.id AS parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
-            FROM mcc_prt_chemical_param p
-            LEFT JOIN mcc_prt_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.target_month = :target_month
-            WHERE p.station_id = :station_id_param
+            FROM mcc_chemical_param p
+            INNER JOIN mcc_chemical_param_type_map m ON p.id = m.parameter_id
+            LEFT JOIN mcc_chemical_target t ON p.id = t.parameter_id AND t.station_id = :station_id_target AND t.chemical_type_id = 4 AND t.effective_to IS NULL
+            WHERE m.station_id = :station_id_param AND m.chemical_type_id = 4 AND m.status = 'Active'
         ");
         $paramsStmt->execute([
             'station_id_target' => $stationId,
-            'station_id_param' => $stationId,
-            'target_month' => $targetMonthDate
+            'station_id_param' => $stationId
         ]);
         $parameters = $paramsStmt->fetchAll();
         if (empty($parameters)) return ['score' => 0.0, 'penalty' => 0.0];
 
         $tokensStmt = $pdo->prepare("
             SELECT DISTINCT token_id, report_date 
-            FROM mcc_prt_chemical_report 
-            WHERE YEAR(report_date) = :year AND MONTH(report_date) = :month AND station_id = :station_id
+            FROM mcc_chemical_report 
+            WHERE YEAR(report_date) = :year AND MONTH(report_date) = :month AND station_id = :station_id AND chemical_type_id = 4
         ");
         $tokensStmt->execute(['year' => $year, 'month' => $month, 'station_id' => $stationId]);
         $tokens = $tokensStmt->fetchAll();
@@ -1403,8 +1405,8 @@ function getPRTChemicalSummary($stationId, $year, $month) {
 
         $logsStmt = $pdo->prepare("
             SELECT token_id, parameter_id, SUM(qty_used) as total_qty
-            FROM mcc_prt_chemical_report
-            WHERE station_id = :station_id AND MONTH(report_date) = :month AND YEAR(report_date) = :year
+            FROM mcc_chemical_report
+            WHERE station_id = :station_id AND MONTH(report_date) = :month AND YEAR(report_date) = :year AND chemical_type_id = 4
             GROUP BY token_id, parameter_id
         ");
         $logsStmt->execute(['station_id' => $stationId, 'month' => intval($month), 'year' => $year]);

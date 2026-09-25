@@ -39,22 +39,24 @@ try {
     // Prepare update query
     if ($stationId !== null) {
         $stmt = $pdo->prepare("
-            UPDATE mcc_normal_chemical_report 
+            UPDATE mcc_chemical_report 
             SET qty_used = :qty_used
             WHERE token_id = :token_id 
               AND train_no = :train_no 
               AND coach_no = :coach_no 
               AND parameter_id = :parameter_id
               AND station_id = :station_id
+              AND chemical_type_id = 1
         ");
     } else {
         $stmt = $pdo->prepare("
-            UPDATE mcc_normal_chemical_report 
+            UPDATE mcc_chemical_report 
             SET qty_used = :qty_used
             WHERE token_id = :token_id 
               AND train_no = :train_no 
               AND coach_no = :coach_no 
               AND parameter_id = :parameter_id
+              AND chemical_type_id = 1
         ");
     }
 

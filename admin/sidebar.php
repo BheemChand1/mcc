@@ -108,6 +108,14 @@ $currentPage = basename($_SERVER['PHP_SELF']);
           </a>
         </li>
 
+        <!-- Chemical Master & Mapping Link -->
+        <li class="nav-item mb-1">
+          <a href="chemical-master.php" class="nav-link p-2 d-flex align-items-center rounded-3 <?= ($currentPage == 'chemical-master.php') ? 'active bg-indigo text-white' : 'text-secondary-emphasis' ?>" style="transition: all 0.3s ease;">
+            <i class="bi bi-droplet-half me-3" style="font-size: 1.15rem;"></i>
+            <p class="m-0">Chemical Master</p>
+          </a>
+        </li>
+
         <!-- Setup Billing Link -->
         <li class="nav-item mb-1">
           <a href="setup-billing.php" class="nav-link p-2 d-flex align-items-center rounded-3 <?= ($currentPage == 'setup-billing.php') ? 'active bg-indigo text-white' : 'text-secondary-emphasis' ?>" style="transition: all 0.3s ease;">

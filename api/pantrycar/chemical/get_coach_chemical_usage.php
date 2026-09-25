@@ -28,11 +28,11 @@ if (empty($tokenId) || empty($trainNo) || empty($coachNo)) {
 }
 
 try {
-    // 1. Get token metadata (station_id, report_date, auditor_name)
+    // 1. Get token metadata (station_id, report_date, auditor_name) - Pantry Car (type_id = 3)
     $metaStmt = $pdo->prepare("
         SELECT DISTINCT station_id, report_date, auditor_name 
-        FROM mcc_intensive_pantry_chemical_report
-        WHERE token_id = :token_id AND train_no = :train_no AND coach_no = :coach_no
+        FROM mcc_chemical_report
+        WHERE token_id = :token_id AND train_no = :train_no AND coach_no = :coach_no AND chemical_type_id = 3
         LIMIT 1
     ");
     $metaStmt->execute([
@@ -55,21 +55,27 @@ try {
     $reportDate = $meta['report_date'];
     $auditorName = $meta['auditor_name'];
 
-    // 2. Fetch active chemical parameters for the station
+    // 2. Fetch active chemical parameters for the station - Pantry Car (type_id = 3)
     $paramsStmt = $pdo->prepare("
-        SELECT id AS parameter_id, name AS parameter_name, units 
-        FROM mcc_intensive_pantry_chemical_param
-        WHERE station_id = :station_id
-        ORDER BY id ASC
+        SELECT p.id AS parameter_id, p.name AS parameter_name, COALESCE(u.unit_symbol, 'ml') AS units 
+        FROM mcc_chemical_param p
+        JOIN mcc_chemical_param_type_map m ON p.id = m.parameter_id AND m.station_id = p.station_id
+        LEFT JOIN mcc_chemical_units u ON p.base_unit_id = u.id
+        WHERE p.station_id = :station_id 
+          AND m.chemical_type_id = 3 
+          AND p.status = 'Active' 
+          AND m.status = 'Active'
+        ORDER BY p.id ASC
     ");
     $paramsStmt->execute(['station_id' => $stationId]);
     $parametersList = $paramsStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 3. Fetch targets active on this report date
+    // 3. Fetch targets active on this report date - Pantry Car (type_id = 3)
     $targetStmt = $pdo->prepare("
         SELECT t.parameter_id, t.`qty(ml)` AS qty_ml
-        FROM mcc_intensive_pantry_chemical_target t
+        FROM mcc_chemical_target t
         WHERE t.station_id = :station_id
+          AND t.chemical_type_id = 3
           AND :report_date_1 >= t.effective_from 
           AND (t.effective_to IS NULL OR :report_date_2 <= t.effective_to)
     ");
@@ -84,11 +90,11 @@ try {
         $targets[$tr['parameter_id']] = $tr;
     }
 
-    // 4. Fetch currently saved quantities
+    // 4. Fetch currently saved quantities - Pantry Car (type_id = 3)
     $savedStmt = $pdo->prepare("
         SELECT parameter_id, qty_used 
-        FROM mcc_intensive_pantry_chemical_report
-        WHERE token_id = :token_id AND train_no = :train_no AND coach_no = :coach_no
+        FROM mcc_chemical_report
+        WHERE token_id = :token_id AND train_no = :train_no AND coach_no = :coach_no AND chemical_type_id = 3
     ");
     $savedStmt->execute([
         'token_id' => $tokenId,

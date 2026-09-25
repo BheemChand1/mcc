@@ -76,11 +76,13 @@ try {
         exit();
     }
 
-    // 2. Fetch chemical parameters from mcc_intensive_pantry_chemical_param
+    // 2. Fetch chemical parameters from mcc_chemical_param (type_id = 3 for Pantry Car)
     $chemParamsStmt = $pdo->prepare("
-        SELECT id FROM mcc_intensive_pantry_chemical_param 
-        WHERE station_id = :station_id
-        ORDER BY id ASC
+        SELECT p.id 
+        FROM mcc_chemical_param p
+        JOIN mcc_chemical_param_type_map m ON p.id = m.parameter_id AND m.station_id = p.station_id
+        WHERE p.station_id = :station_id AND m.chemical_type_id = 3 AND p.status = 'Active' AND m.status = 'Active'
+        ORDER BY p.id ASC
     ");
     $chemParamsStmt->execute(['station_id' => $stationId]);
     $chemParams = $chemParamsStmt->fetchAll(PDO::FETCH_COLUMN);
@@ -123,12 +125,12 @@ try {
         }
     }
 
-    // 5. Insert into mcc_intensive_pantry_chemical_report
+    // 5. Insert into mcc_chemical_report (type_id = 3)
     if (!empty($chemParams)) {
         $insertChemStmt = $pdo->prepare("
-            INSERT INTO mcc_intensive_pantry_chemical_report 
-            (parameter_id, qty_used, token_id, auditor_name, station_id, train_no, coach_no, audit_by, report_date)
-            VALUES (:parameter_id, NULL, :token_id, :auditor_name, :station_id, :train_no, :coach_no, :audit_by, :report_date)
+            INSERT INTO mcc_chemical_report 
+            (chemical_type_id, parameter_id, qty_used, token_id, auditor_name, station_id, train_no, coach_no, audit_by, report_date)
+            VALUES (3, :parameter_id, NULL, :token_id, :auditor_name, :station_id, :train_no, :coach_no, :audit_by, :report_date)
         ");
 
         foreach ($coachNos as $coachNo) {

@@ -11,10 +11,12 @@ $selectedYear = intval($selectedYear);
 
 // Fetch chemical parameters for this station dynamically - PRT
 $paramsStmt = $pdo->prepare("
-    SELECT id AS parameter_id, name AS parameter_name, units 
-    FROM mcc_prt_chemical_param
-    WHERE station_id = :station_id
-    ORDER BY id ASC
+    SELECT p.id AS parameter_id, p.name AS parameter_name, COALESCE(u.unit_symbol, 'ml') AS units 
+    FROM mcc_chemical_param p
+    LEFT JOIN mcc_chemical_units u ON p.base_unit_id = u.id
+    INNER JOIN mcc_chemical_param_type_map m ON p.id = m.parameter_id
+    WHERE m.station_id = :station_id AND m.chemical_type_id = 4 AND m.status = 'Active'
+    ORDER BY p.id ASC
 ");
 $paramsStmt->execute(['station_id' => $stationId]);
 $parametersList = $paramsStmt->fetchAll();
@@ -22,8 +24,9 @@ $parametersList = $paramsStmt->fetchAll();
 // Fetch active target values for display/initialization (as of end of month or today) - PRT
 $displayTargetsStmt = $pdo->prepare("
     SELECT t.parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
-    FROM mcc_prt_chemical_target t
+    FROM mcc_chemical_target t
     WHERE t.station_id = :station_id 
+      AND t.chemical_type_id = 4
       AND :date_ref_1 >= t.effective_from
       AND (t.effective_to IS NULL OR :date_ref_2 <= t.effective_to)
 ");
@@ -42,8 +45,8 @@ foreach ($displayTargetsRaw as $dt) {
 // Fetch all reports (distinct tokens) in the selected month - PRT
 $tokensStmt = $pdo->prepare("
     SELECT DISTINCT token_id, report_date 
-    FROM mcc_prt_chemical_report 
-    WHERE YEAR(report_date) = :year AND MONTH(report_date) = :month AND station_id = :station_id
+    FROM mcc_chemical_report 
+    WHERE YEAR(report_date) = :year AND MONTH(report_date) = :month AND station_id = :station_id AND chemical_type_id = 4
     ORDER BY report_date ASC, token_id ASC
 ");
 $tokensStmt->execute([
@@ -56,8 +59,8 @@ $tokensList = $tokensStmt->fetchAll();
 // Get count of distinct coaches for each token in the selected month - PRT
 $coachesStmt = $pdo->prepare("
     SELECT token_id, COUNT(DISTINCT coach_no) AS coaches_count
-    FROM mcc_prt_chemical_report
-    WHERE YEAR(report_date) = :year AND MONTH(report_date) = :month AND station_id = :station_id
+    FROM mcc_chemical_report
+    WHERE YEAR(report_date) = :year AND MONTH(report_date) = :month AND station_id = :station_id AND chemical_type_id = 4
     GROUP BY token_id
 ");
 $coachesStmt->execute([
@@ -93,15 +96,16 @@ foreach ($parametersList as $p) {
 // Fetch daily reports details to compute daily scores & penalties - PRT
 $dailyReportStmt = $pdo->prepare("
     SELECT parameter_id, qty_used 
-    FROM mcc_prt_chemical_report 
-    WHERE token_id = :token_id AND station_id = :station_id
+    FROM mcc_chemical_report 
+    WHERE token_id = :token_id AND station_id = :station_id AND chemical_type_id = 4
 ");
 
 // Target resolving statement - PRT
 $targetStmt = $pdo->prepare("
     SELECT t.parameter_id, t.`qty(ml)` AS qty_ml, t.penalty, t.`penalty_qty(ml)` AS penalty_qty_ml
-    FROM mcc_prt_chemical_target t
+    FROM mcc_chemical_target t
     WHERE t.station_id = :station_id
+      AND t.chemical_type_id = 4
       AND :report_date_1 >= t.effective_from 
       AND (t.effective_to IS NULL OR :report_date_2 <= t.effective_to)
 ");

@@ -32,11 +32,11 @@ if (empty($auditorName) || $shiftId === null || empty($values) || !is_array($val
 }
 
 try {
-    // 1. Check if token already exists for this station and date
+    // 1. Check if token already exists for this station and date - DC (type_id = 6)
     $tokenStmt = $pdo->prepare("
         SELECT DISTINCT token_id 
-        FROM dc_mcc_chemical_report 
-        WHERE station_id = :station_id AND report_date = :report_date
+        FROM mcc_chemical_report 
+        WHERE station_id = :station_id AND chemical_type_id = 6 AND report_date = :report_date
         LIMIT 1
     ");
     $tokenStmt->execute([
@@ -53,7 +53,7 @@ try {
         $randPart = sprintf("%03d", rand(1, 999));
         $tokenId = "TKN-DC-CHEM-" . $datePart . "-" . $randPart;
 
-        $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM dc_mcc_chemical_report WHERE token_id = ?");
+        $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM mcc_chemical_report WHERE token_id = ? AND chemical_type_id = 6");
         $checkStmt->execute([$tokenId]);
         while ($checkStmt->fetchColumn() > 0) {
             $randPart = sprintf("%03d", rand(1, 999));
@@ -65,23 +65,24 @@ try {
     $pdo->beginTransaction();
 
     $checkRowStmt = $pdo->prepare("
-        SELECT id FROM dc_mcc_chemical_report 
+        SELECT id FROM mcc_chemical_report 
         WHERE token_id = :token_id 
           AND parameter_id = :parameter_id 
           AND shift_id = :shift_id 
           AND station_id = :station_id
+          AND chemical_type_id = 6
     ");
 
     $updateRowStmt = $pdo->prepare("
-        UPDATE dc_mcc_chemical_report 
+        UPDATE mcc_chemical_report 
         SET qty_used = :qty_used, auditor_name = :auditor_name 
-        WHERE id = :id
+        WHERE id = :id AND chemical_type_id = 6
     ");
 
     $insertRowStmt = $pdo->prepare("
-        INSERT INTO dc_mcc_chemical_report 
-        (parameter_id, shift_id, qty_used, token_id, station_id, report_date, auditor_name) 
-        VALUES (:parameter_id, :shift_id, :qty_used, :token_id, :station_id, :report_date, :auditor_name)
+        INSERT INTO mcc_chemical_report 
+        (chemical_type_id, parameter_id, shift_id, qty_used, token_id, station_id, report_date, auditor_name) 
+        VALUES (6, :parameter_id, :shift_id, :qty_used, :token_id, :station_id, :report_date, :auditor_name)
     ");
 
     foreach ($values as $val) {

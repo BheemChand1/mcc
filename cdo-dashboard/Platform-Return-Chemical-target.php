@@ -20,21 +20,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->beginTransaction();
 
             $findActiveStmt = $pdo->prepare("
-                SELECT * FROM mcc_prt_chemical_target 
-                WHERE station_id = :station_id AND parameter_id = :parameter_id AND effective_to IS NULL
+                SELECT * FROM mcc_chemical_target 
+                WHERE station_id = :station_id AND chemical_type_id = 4 AND parameter_id = :parameter_id AND effective_to IS NULL
                 LIMIT 1
             ");
 
             $closeActiveStmt = $pdo->prepare("
-                UPDATE mcc_prt_chemical_target 
+                UPDATE mcc_chemical_target 
                 SET effective_to = :effective_to 
                 WHERE id = :id
             ");
 
             $insertNewStmt = $pdo->prepare("
-                INSERT INTO mcc_prt_chemical_target 
-                (parameter_id, station_id, `qty(ml)`, penalty, `penalty_qty(ml)`, effective_from, effective_to) 
-                VALUES (:parameter_id, :station_id, :qty, :penalty, :penalty_qty, :effective_from, NULL)
+                INSERT INTO mcc_chemical_target 
+                (parameter_id, chemical_type_id, station_id, `qty(ml)`, penalty, `penalty_qty(ml)`, effective_from, effective_to) 
+                VALUES (:parameter_id, 4, :station_id, :qty, :penalty, :penalty_qty, :effective_from, NULL)
             ");
 
             foreach ($targetsInput as $paramId => $values) {
@@ -97,18 +97,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Fetch all active chemical parameters - PRT
 $paramsStmt = $pdo->prepare("
-    SELECT id AS parameter_id, name AS parameter_name, units 
-    FROM mcc_prt_chemical_param
-    WHERE station_id = :station_id
-    ORDER BY id ASC
+    SELECT p.id AS parameter_id, p.name AS parameter_name, COALESCE(u.unit_symbol, 'ml') AS units 
+    FROM mcc_chemical_param p
+    LEFT JOIN mcc_chemical_units u ON p.base_unit_id = u.id
+    INNER JOIN mcc_chemical_param_type_map m ON p.id = m.parameter_id
+    WHERE m.station_id = :station_id AND m.chemical_type_id = 4 AND m.status = 'Active'
+    ORDER BY p.id ASC
 ");
 $paramsStmt->execute(['station_id' => $stationId]);
 $parametersList = $paramsStmt->fetchAll();
 
 // Resolve active target values (effective_to IS NULL) - PRT
 $activeTargetsStmt = $pdo->prepare("
-    SELECT * FROM mcc_prt_chemical_target 
-    WHERE station_id = :station_id AND effective_to IS NULL
+    SELECT * FROM mcc_chemical_target 
+    WHERE station_id = :station_id AND chemical_type_id = 4 AND effective_to IS NULL
 ");
 $activeTargetsStmt->execute(['station_id' => $stationId]);
 $activeTargetsRaw = $activeTargetsStmt->fetchAll();

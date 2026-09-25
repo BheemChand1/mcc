@@ -6,17 +6,17 @@
 require_once __DIR__ . '/errors.php';
 
 // Database credentials
-// define('DB_HOST', '184.168.122.185');
-// define('DB_USER', 'mccbeatleanalyti_user');
-// define('DB_PASS', 'Cee;[+&e$a+9rAXe');
-// define('DB_NAME', 'mccbeatleanalyti_db');
+define('DB_HOST', '184.168.122.185');
+define('DB_USER', 'mccbeatleanalyti_user');
+define('DB_PASS', 'Cee;[+&e$a+9rAXe');
+define('DB_NAME', 'mccbeatleanalyti_db');
 
 
 //Datebase credentials for local testing
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '');    
-define('DB_NAME', 'mcc');
+// define('DB_HOST', 'localhost');
+// define('DB_USER', 'root');
+// define('DB_PASS', '');    
+// define('DB_NAME', 'mcc');
 
 // -----------------------------------------------------------------------------
 // 1. MySQLi Connection (Standard/Procedural & Object-Oriented support)

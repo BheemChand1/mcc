@@ -769,28 +769,55 @@ $has_billing      = (in_array('billing_management', $active_app_keys) || in_arra
           </a>
         </li>
 
-        <!-- Chemical Inventory Management -->
+        <!-- Inventory Dropdown -->
         <?php 
-        $chemInvPages = ['chemical-inventory.php', 'chemical-daily-report.php'];
-        $isChemInvActive = in_array($currentPage, $chemInvPages);
+        $chemPages = ['chemical-inventory.php', 'chemical-daily-report.php'];
+        $isChemActive = in_array($currentPage, $chemPages);
         ?>
-        <li class="nav-item <?= $isChemInvActive ? 'menu-open' : '' ?>">
-          <a href="#" class="nav-link <?= $isChemInvActive ? 'active' : '' ?>">
+        <li class="nav-item <?= $isChemActive ? 'menu-open' : '' ?>">
+          <a href="#" class="nav-link <?= $isChemActive ? 'active' : '' ?>">
             <i class="nav-icon bi bi-box-seam"></i>
             <p>
-              Chemical Inventory
+              Inventory
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
           <ul class="nav nav-treeview ms-3">
             <li class="nav-item">
               <a href="chemical-inventory.php" class="nav-link <?= ($currentPage == 'chemical-inventory.php') ? 'active' : '' ?>">
-                <p>Manage Stock</p>
+                <p>Manage Chemical Stock</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="chemical-daily-report.php" class="nav-link <?= ($currentPage == 'chemical-daily-report.php') ? 'active' : '' ?>">
-                <p>Daily Usage Report</p>
+                <p>Chemical Daily Report</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+
+        <!-- Equipment Management Dropdown -->
+        <?php 
+        $equipPages = ['equipment-inventory.php', 'equipment-daily-report.php'];
+        $isEquipActive = in_array($currentPage, $equipPages);
+        ?>
+        <li class="nav-item <?= $isEquipActive ? 'menu-open' : '' ?>">
+          <a href="#" class="nav-link <?= $isEquipActive ? 'active' : '' ?>">
+            <i class="nav-icon bi bi-tools"></i>
+            <p>
+              Equipment
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview ms-3">
+            <li class="nav-item">
+              <a href="equipment-inventory.php" class="nav-link <?= ($currentPage == 'equipment-inventory.php') ? 'active' : '' ?>">
+                <p>Equipment Inventory</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="equipment-daily-report.php" class="nav-link <?= ($currentPage == 'equipment-daily-report.php') ? 'active' : '' ?>">
+                <p>Equipments Report</p>
               </a>
             </li>
           </ul>

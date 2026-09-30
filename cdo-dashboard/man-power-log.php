@@ -154,12 +154,14 @@ if (!function_exists('getEffectivePenaltiesForMonth')) {
 if (!function_exists('getScorecardTableForCategory')) {
     function getScorecardTableForCategory($categoryName) {
         $c = strtoupper(trim($categoryName));
-        if ($c === 'NORMAL CLEANING' || $c === 'EXTERNAL COACH CLEANING') {
+        if (strpos($c, 'NORMAL') !== false || strpos($c, 'EXTERNAL') !== false) {
             return 'mcc_normal_scorecard_report';
-        } elseif ($c === 'INTENSIVE COACH CLEANING') {
+        } elseif (strpos($c, 'INTENSIVE') !== false) {
             return 'mcc_intensive_scorecard_report';
-        } elseif ($c === 'WATERING AND INTERNAL DRY CLEANING OF COACHES FOR PLATFORM RETURN TRAINS' || strpos($c, 'PLATFORM RETURN') !== false) {
+        } elseif (strpos($c, 'PLATFORM') !== false || strpos($c, 'PRT') !== false || strpos($c, 'WATERING') !== false) {
             return 'mcc_prt_scorecard_report';
+        } elseif (strpos($c, 'VANDE') !== false || strpos($c, 'VB') !== false) {
+            return 'mcc_vb_scorecard_report';
         }
         return null;
     }
@@ -177,26 +179,39 @@ if (!function_exists('getRailwayDateCoachCount')) {
         $nextDate = date('Y-m-d', strtotime($date . ' +1 day'));
         $endDateTime = $nextDate . ' 07:00:00';
 
-        try {
-            $stmt = $pdo->prepare("
-                SELECT COUNT(DISTINCT token_id, coach_no) AS total_coaches
-                FROM {$tableName}
-                WHERE station_id = :station_id
-                  AND (
-                      (created_at IS NOT NULL AND created_at >= :start_dt AND created_at <= :end_dt)
-                      OR (created_at IS NULL AND report_date = :rep_date)
-                      OR report_date = :rep_date
-                  )
-            ");
-            $stmt->execute([
-                'station_id' => $stationId,
-                'start_dt' => $startDateTime,
-                'end_dt' => $endDateTime,
-                'rep_date' => $date
-            ]);
-            $count = intval($stmt->fetchColumn() ?: 0);
-        } catch (Exception $e) {
-            $count = 0;
+        $tablesToTry = [$tableName];
+        if ($tableName === 'mcc_intensive_scorecard_report') {
+            $tablesToTry[] = 'mcc_intensive_scorecard_2_report';
+        } elseif ($tableName === 'mcc_intensive_scorecard_2_report') {
+            $tablesToTry[] = 'mcc_intensive_scorecard_report';
+        }
+
+        $count = 0;
+        foreach ($tablesToTry as $tbl) {
+            try {
+                $stmt = $pdo->prepare("
+                    SELECT COUNT(DISTINCT token_id, coach_no) AS total_coaches
+                    FROM {$tbl}
+                    WHERE station_id = :station_id
+                      AND (
+                          (created_at IS NOT NULL AND created_at >= :start_dt AND created_at <= :end_dt)
+                          OR report_date = :rep_date
+                      )
+                ");
+                $stmt->execute([
+                    'station_id' => $stationId,
+                    'start_dt' => $startDateTime,
+                    'end_dt' => $endDateTime,
+                    'rep_date' => $date
+                ]);
+                $res = intval($stmt->fetchColumn() ?: 0);
+                if ($res > 0) {
+                    $count = $res;
+                    break;
+                }
+            } catch (Exception $e) {
+                // Table error
+            }
         }
         
         $coachCache[$cacheKey] = $count;

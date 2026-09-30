@@ -63,17 +63,70 @@ function isUnskilledRole($roleName) {
  * Helper function to map category to scorecard table
  */
 function getScorecardTableForCategory($categoryName) {
-    $c = strtolower(trim($categoryName));
-    if (strpos($c, 'normal') !== false) {
+    $c = strtoupper(trim($categoryName));
+    if (strpos($c, 'NORMAL') !== false || strpos($c, 'EXTERNAL') !== false) {
         return 'mcc_normal_scorecard_report';
-    } elseif (strpos($c, 'intensive') !== false) {
-        return 'mcc_intensive_scorecard_2_report';
-    } elseif (strpos($c, 'prt') !== false || strpos($c, 'platform') !== false) {
+    } elseif (strpos($c, 'INTENSIVE') !== false) {
+        return 'mcc_intensive_scorecard_report';
+    } elseif (strpos($c, 'PLATFORM') !== false || strpos($c, 'PRT') !== false || strpos($c, 'WATERING') !== false) {
         return 'mcc_prt_scorecard_report';
-    } elseif (strpos($c, 'vande') !== false || strpos($c, 'vb') !== false) {
+    } elseif (strpos($c, 'VANDE') !== false || strpos($c, 'VB') !== false) {
         return 'mcc_vb_scorecard_report';
     }
     return null;
+}
+
+/**
+ * Helper function to get distinct coach count for a railway date (06:00 AM of $date to 07:00 AM of next day)
+ */
+function getRailwayDateCoachCount($pdo, $tableName, $stationId, $date) {
+    static $coachCache = [];
+    $cacheKey = "{$tableName}_{$stationId}_{$date}";
+    if (isset($coachCache[$cacheKey])) {
+        return $coachCache[$cacheKey];
+    }
+
+    $startDateTime = $date . ' 06:00:00';
+    $nextDate = date('Y-m-d', strtotime($date . ' +1 day'));
+    $endDateTime = $nextDate . ' 07:00:00';
+
+    $tablesToTry = [$tableName];
+    if ($tableName === 'mcc_intensive_scorecard_report') {
+        $tablesToTry[] = 'mcc_intensive_scorecard_2_report';
+    } elseif ($tableName === 'mcc_intensive_scorecard_2_report') {
+        $tablesToTry[] = 'mcc_intensive_scorecard_report';
+    }
+
+    $count = 0;
+    foreach ($tablesToTry as $tbl) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT COUNT(DISTINCT token_id, coach_no) AS total_coaches
+                FROM {$tbl}
+                WHERE station_id = :station_id
+                  AND (
+                      (created_at IS NOT NULL AND created_at >= :start_dt AND created_at <= :end_dt)
+                      OR report_date = :rep_date
+                  )
+            ");
+            $stmt->execute([
+                'station_id' => $stationId,
+                'start_dt' => $startDateTime,
+                'end_dt' => $endDateTime,
+                'rep_date' => $date
+            ]);
+            $res = intval($stmt->fetchColumn() ?: 0);
+            if ($res > 0) {
+                $count = $res;
+                break;
+            }
+        } catch (Exception $e) {
+            // Table error
+        }
+    }
+    
+    $coachCache[$cacheKey] = $count;
+    return $count;
 }
 
 /**

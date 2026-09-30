@@ -119,7 +119,7 @@ if ($hasNormal) {
 
 if ($hasDc) {
     $dcLabel = $reportNames['dc_cleaning'] ?? $reportNames[3] ?? 'Depot Cleaning';
-    $categories['dc'] = ['label' => $dcLabel, 'short' => 'Depot', 'table' => 'dc_mcc_report', 'color' => '#10b981', 'icon' => 'bi-shield-check'];
+    $categories['dc'] = ['label' => $dcLabel, 'short' => 'Depot', 'table' => 'dc_mcc_report', 'color' => '#10b981', 'icon' => 'bi-shield-check', 'unit' => 'Depot Cleaned'];
 }
 
 if ($hasPrt) {
@@ -647,7 +647,7 @@ include 'sidebar.php';
           <div class="mccx-kpi-icon"><i class="bi <?= $cat['icon'] ?>"></i></div>
           <div class="mccx-kpi-body">
             <h3><?= $cat['label'] ?></h3>
-            <small>Coaches Cleaned</small>
+            <small><?= htmlspecialchars($cat['unit'] ?? ($key === 'dc' || $cat['table'] === 'dc_mcc_report' ? 'Depot Cleaned' : 'Coaches Cleaned')) ?></small>
             <div class="mccx-kpi-value"><?= $stat['coaches'] ?></div>
           </div>
           <div class="mccx-kpi-delta">

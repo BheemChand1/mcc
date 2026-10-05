@@ -472,13 +472,15 @@ include 'sidebar.php';
                         </div>
                     </div>
                     <div class="col-6 col-md-3">
-                        <div class="stat-box bg-light border-primary" style="background: linear-gradient(135deg, #07385f 0%, #0d5c94 100%) !important; color: #ffffff;">
-                            <div class="d-flex align-items-center justify-content-between">
-                                <span class="text-white-50 small fw-bold text-uppercase">Quick Action</span>
-                                <i class="bi bi-lightning-charge-fill text-warning fs-4"></i>
+                        <div class="stat-box d-flex flex-column justify-content-between h-100" style="background: #ffffff; border: 1px solid #cbd5e1; border-top: 3px solid #10b981;">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <span class="text-muted small fw-bold text-uppercase">Quick Action</span>
+                                <span class="badge bg-success-subtle text-success p-1 rounded-circle"><i class="bi bi-lightning-charge-fill text-success"></i></span>
                             </div>
-                            <button type="button" class="btn btn-warning btn-sm fw-bold w-100 mt-2 text-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#addChemicalModal">
-                                <i class="bi bi-plus-lg me-1"></i> Add Chemical
+                            <button type="button" class="btn btn-success btn-sm fw-bold w-100 shadow-sm d-flex align-items-center justify-content-center gap-1" 
+                                    style="background: #10b981 !important; border-color: #059669 !important; color: #ffffff !important; padding: 7px 12px; font-size: 13px; border-radius: 6px;"
+                                    data-bs-toggle="modal" data-bs-target="#addChemicalModal">
+                                <i class="bi bi-plus-circle-fill"></i> Add New Chemical
                             </button>
                         </div>
                     </div>

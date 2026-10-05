@@ -771,7 +771,7 @@ $has_billing      = (in_array('billing_management', $active_app_keys) || in_arra
 
         <!-- Inventory Dropdown -->
         <?php 
-        $chemPages = ['chemical-inventory.php', 'chemical-daily-report.php'];
+        $chemPages = ['chemical-inventory.php', 'chemical-daily-report.php', 'manage-chemicals.php'];
         $isChemActive = in_array($currentPage, $chemPages);
         ?>
         <li class="nav-item <?= $isChemActive ? 'menu-open' : '' ?>">
@@ -783,6 +783,11 @@ $has_billing      = (in_array('billing_management', $active_app_keys) || in_arra
             </p>
           </a>
           <ul class="nav nav-treeview ms-3">
+            <li class="nav-item">
+              <a href="manage-chemicals.php" class="nav-link <?= ($currentPage == 'manage-chemicals.php') ? 'active' : '' ?>">
+                <p>Add / Map Chemicals</p>
+              </a>
+            </li>
             <li class="nav-item">
               <a href="chemical-inventory.php" class="nav-link <?= ($currentPage == 'chemical-inventory.php') ? 'active' : '' ?>">
                 <p>Manage Chemical Stock</p>

@@ -244,6 +244,9 @@ include 'sidebar.php';
                     <span class="fw-bold text-white"><i class="bi bi-box-seam me-1"></i> Chemical Stock Master</span>
                 </div>
                 <div class="d-flex align-items-center gap-2">
+                    <a href="manage-chemicals.php" class="btn btn-sm btn-success fw-bold px-3 shadow-sm" style="border-radius: 6px;">
+                        <i class="bi bi-plus-circle-fill me-1"></i> Add / Map Chemical
+                    </a>
                     <a href="chemical-daily-report.php" class="btn-summary">
                         <i class="bi bi-calendar2-day me-1"></i> Daily Usage Report
                     </a>
@@ -310,6 +313,11 @@ include 'sidebar.php';
                                     <tr>
                                         <td colspan="8" class="text-center py-4 text-muted">
                                             <i class="bi bi-inbox fs-3 d-block mb-2"></i> No active chemicals found for this station.
+                                            <div class="mt-2">
+                                                <a href="manage-chemicals.php" class="btn btn-sm btn-primary fw-semibold">
+                                                    <i class="bi bi-plus-circle me-1"></i> Add / Map Chemicals
+                                                </a>
+                                            </div>
                                         </td>
                                     </tr>
                                 <?php else: ?>

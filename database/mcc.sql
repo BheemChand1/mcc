@@ -109,34 +109,41 @@ INSERT INTO `attendance_logs` (`id`, `employee_code`, `employee_name`, `punch_ti
 --
 
 CREATE TABLE `biometric_manpower_target` (
-  `id` int(11) NOT NULL,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
   `station_id` int(11) NOT NULL DEFAULT 1,
   `category_id` int(11) NOT NULL DEFAULT 0,
-  `category_name` varchar(100) DEFAULT NULL,
-  `designation_id` int(11) NOT NULL DEFAULT 0,
-  `designation_name` varchar(100) NOT NULL,
   `target_date` date NOT NULL,
+  `manpower_type_id` int(11) NOT NULL DEFAULT 0,
+  `manpower_type` varchar(255) NOT NULL DEFAULT '',
   `target_qty` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `is_coach_wise` tinyint(1) NOT NULL DEFAULT 0,
   `effective_from` date DEFAULT NULL,
   `effective_to` date DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_station_date_cat_type` (`station_id`,`target_date`,`category_id`,`manpower_type_id`),
+  KEY `idx_station` (`station_id`),
+  KEY `idx_target_date` (`target_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- --------------------------------------------------------
+
 --
--- Dumping data for table `biometric_manpower_target`
+-- Table structure for table `mcc_biometric_manpower_types`
 --
 
-INSERT INTO `biometric_manpower_target` (`id`, `station_id`, `category_id`, `category_name`, `designation_id`, `designation_name`, `target_date`, `target_qty`, `effective_from`, `effective_to`, `created_at`, `updated_at`) VALUES
-(1, 1, 17, 'Normal cleaning', 1, 'Unskilled', '2026-09-01', 0.58, '2026-09-01', '2026-09-30', '2026-09-10 10:10:53', '2026-09-10 10:15:32'),
-(2, 1, 17, 'Normal cleaning', 2, 'Supervisor', '2026-09-01', 0.46, '2026-09-01', '2026-09-30', '2026-09-10 10:10:54', '2026-09-10 10:15:32'),
-(3, 1, 19, 'Depot Cleaning', 1, 'Unskilled', '2026-09-01', 21.00, '2026-09-01', '2026-09-30', '2026-09-10 10:10:54', '2026-09-10 10:15:32'),
-(4, 1, 19, 'Depot Cleaning', 2, 'Supervisor', '2026-09-01', 1.00, '2026-09-01', '2026-09-30', '2026-09-10 10:10:54', '2026-09-10 10:10:54'),
-(5, 1, 20, 'Prt cleaning', 1, 'Unskilled', '2026-09-01', 0.20, '2026-09-01', '2026-09-30', '2026-09-10 10:10:54', '2026-09-10 10:15:32'),
-(6, 1, 21, 'Vande Bharat', 1, 'Unskilled', '2026-09-01', 3.00, '2026-09-01', '2026-09-30', '2026-09-10 10:10:54', '2026-09-10 10:10:54'),
-(9, 1, 18, 'Intensive Cleaning', 1, 'Unskilled', '2026-09-01', 0.58, '2026-09-01', '2026-09-30', '2026-09-10 10:15:32', '2026-09-10 10:15:32'),
-(13, 1, 20, 'Prt cleaning', 2, 'Supervisor', '2026-09-01', 3.00, '2026-09-01', '2026-09-30', '2026-09-10 10:15:32', '2026-09-10 10:15:32'),
-(15, 1, 21, 'Vande Bharat', 2, 'Supervisor', '2026-09-01', 1.00, '2026-09-01', '2026-09-30', '2026-09-10 10:15:33', '2026-09-10 10:15:33');
+CREATE TABLE `mcc_biometric_manpower_types` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `station_id` int(11) NOT NULL DEFAULT 1,
+  `role_name` varchar(255) NOT NULL,
+  `order_no` int(11) NOT NULL DEFAULT 0,
+  `status` enum('Active','Inactive') DEFAULT 'Active',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_station_role` (`station_id`,`role_name`),
+  KEY `fk_bio_type_station` (`station_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 

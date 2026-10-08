@@ -4,9 +4,66 @@
  * Annexure A-3 Standard Layout with Dynamic Coaches
  */
 require_once 'auth.php';
+global $pdo;
 
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
+$editToken = $_GET['edit'] ?? '';
+$flashSuccess = '';
+$flashError = '';
+
+// Handle Direct PHP POST Save
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_sheet_changes'])) {
+    $targetToken = trim($_POST['token_id'] ?? '');
+    $postedScores = $_POST['scores'] ?? [];
+
+    if (!empty($targetToken) && !empty($postedScores)) {
+        try {
+            $pdo->beginTransaction();
+
+            $chk = $pdo->prepare("SELECT COUNT(*) FROM mcc_intensive_pantry_report WHERE token_id = :tok AND station_id = :sid AND audit_by = :aud");
+            $chk->execute(['tok' => $targetToken, 'sid' => $stationId, 'aud' => $auditorId]);
+
+            if ($chk->fetchColumn() > 0) {
+                $updStmt = $pdo->prepare("
+                    UPDATE mcc_intensive_pantry_report 
+                    SET score_value = :val 
+                    WHERE token_id = :tok 
+                      AND station_id = :sid 
+                      AND audit_by = :aud 
+                      AND sub_parameter_id = :sp_id 
+                      AND coach_no = :c_no
+                ");
+
+                foreach ($postedScores as $spId => $coachVals) {
+                    foreach ($coachVals as $cNo => $val) {
+                        $updStmt->execute([
+                            'val' => trim($val),
+                            'tok' => $targetToken,
+                            'sid' => $stationId,
+                            'aud' => $auditorId,
+                            'sp_id' => $spId,
+                            'c_no' => $cNo
+                        ]);
+                    }
+                }
+
+                $pdo->commit();
+                $flashSuccess = "Pantry Car Scorecard (Token: " . htmlspecialchars($targetToken) . ") updated successfully!";
+                $editToken = ''; // Exit edit mode after saving
+            } else {
+                $pdo->rollBack();
+                $flashError = "Unauthorized: You can only edit sheets submitted by your auditor account.";
+            }
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $flashError = "Failed to update sheet: " . $e->getMessage();
+        }
+    }
+}
+
 
 // Station information
 $stationQuery = $pdo->prepare("
@@ -761,6 +818,19 @@ include 'sidebar.php';
                 </div>
             </div>
 
+            <?php if (!empty($flashSuccess)): ?>
+                <div class="alert alert-success alert-dismissible fade show no-print mb-3" role="alert">
+                    <i class="bi bi-check-circle-fill me-2"></i> <?= $flashSuccess ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            <?php endif; ?>
+            <?php if (!empty($flashError)): ?>
+                <div class="alert alert-danger alert-dismissible fade show no-print mb-3" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i> <?= $flashError ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            <?php endif; ?>
+
             <!-- Scorecard Document Wrapper -->
             <div class="pantry-wrap">
                 <?php if (empty($sheetsData)): ?>
@@ -772,26 +842,53 @@ include 'sidebar.php';
                 <?php foreach ($sheetsData as $sheet): 
                     $coachList = $sheet['coaches'];
                     $coachCount = count($coachList);
+                    $isEditingThisSheet = (!empty($sheet['token_id']) && (string)$editToken === (string)$sheet['token_id']);
                 ?>
-                    <div class="pantry-frame">
+                    <?php if ($isEditingThisSheet): ?>
+                    <form method="POST" action="">
+                        <input type="hidden" name="token_id" value="<?= htmlspecialchars($sheet['token_id']) ?>">
+                        <input type="hidden" name="from_date" value="<?= htmlspecialchars($fromDate) ?>">
+                        <input type="hidden" name="to_date" value="<?= htmlspecialchars($toDate) ?>">
+                    <?php endif; ?>
 
-                        <!-- Token & Approval on the Side -->
+                    <div class="pantry-frame" style="<?= $isEditingThisSheet ? 'border: 2px solid #0284c7; box-shadow: 0 0 22px rgba(2, 132, 199, 0.35);' : '' ?>">
+
+                        <!-- Token & Approval / Edit Controls on the Side -->
                         <div class="pantry-token-side d-flex align-items-center gap-2" style="position: absolute; top: 22px; right: 25px;">
                             <?php if (!empty($sheet['token_id'])): ?>
                                 <span style="font-size: 12.5px; font-weight: 700; color: #0f172a; background: #f8fafc; border: 1px solid #94a3b8; padding: 4px 12px; border-radius: 4px; letter-spacing: 0.3px;"><strong>Token:</strong> <?= htmlspecialchars($sheet['token_id']) ?></span>
                             <?php endif; ?>
                             <?php if (!empty($sheet['isApproved'])): ?>
                                 <span class="badge bg-success px-3 py-2 text-white" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px; box-shadow: 0 2px 5px rgba(21,128,61,0.2);"><i class="bi bi-patch-check-fill me-1"></i> Approved</span>
-                            <?php elseif (!empty($isCDO) && !empty($sheet['token_id'])): ?>
-                                <button type="button" class="btn btn-sm btn-success no-print" onclick="approveReport(this, 'mcc_intensive_pantry_report', '<?= htmlspecialchars($sheet['token_id']) ?>')" style="font-weight: 600; padding: 5px 14px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 2px 6px rgba(16,185,129,0.25);">
-                                    <i class="bi bi-check2-circle"></i> <span>Approve</span>
-                                </button>
+                            <?php else: ?>
+                                <span class="badge bg-warning text-dark px-3 py-2" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px;"><i class="bi bi-clock-history me-1"></i> Pending Approval</span>
+                            <?php endif; ?>
+
+                            <?php if (!empty($sheet['token_id'])): ?>
+                                <?php if ($isEditingThisSheet): ?>
+                                    <button type="submit" name="save_sheet_changes" class="btn btn-sm btn-success fw-bold text-white no-print shadow-sm px-3" style="font-weight: 700;">
+                                        <i class="bi bi-check2-circle me-1"></i> Save Changes
+                                    </button>
+                                    <a href="?from_date=<?= urlencode($fromDate) ?>&to_date=<?= urlencode($toDate) ?>" class="btn btn-sm btn-secondary fw-bold text-white no-print shadow-sm px-3">
+                                        <i class="bi bi-x-circle me-1"></i> Cancel
+                                    </a>
+                                <?php else: ?>
+                                    <a href="?from_date=<?= urlencode($fromDate) ?>&to_date=<?= urlencode($toDate) ?>&edit=<?= urlencode($sheet['token_id']) ?>" class="btn btn-sm fw-bold text-dark no-print shadow-sm px-3" style="background-color: #fbbf24 !important; color: #000000 !important; font-weight: 700 !important; border: 1px solid #f59e0b;" title="Edit Sheet">
+                                        <i class="bi bi-pencil-square me-1"></i> Edit Sheet
+                                    </a>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </div>
 
                         <!-- Main Titles -->
                         <h2 class="scorecard-main-title">SCORECARD FOR INTENSIVE CLEANING OF PANTRY CAR</h2>
                         <div class="scorecard-subtitle">(To be filled by the supervisor/Nominated representative of CDO/ADME)</div>
+
+                        <?php if ($isEditingThisSheet): ?>
+                            <div class="alert alert-info py-2 px-3 mb-3 d-flex align-items-center justify-content-between no-print" style="border: 1px solid #b9e6fe; background-color: #f0f9ff; color: #0369a1; border-radius: 6px; margin-top: 15px;">
+                                <span class="small fw-semibold"><i class="bi bi-info-circle-fill me-1"></i> <strong>Edit Mode Active:</strong> You can edit the coach scores in the table cells below. Click <strong>Save Changes</strong> above to update the database.</span>
+                            </div>
+                        <?php endif; ?>
 
                         <!-- Professional Metadata Card -->
                         <div class="meta-card">
@@ -866,8 +963,19 @@ include 'sidebar.php';
                                                 <?php foreach ($coachList as $cNo): 
                                                     $val = $sub['scores'][$cNo] ?? ($sub['coach_vals'][$cNo] ?? '');
                                                 ?>
-                                                    <td class="col-coach">
-                                                        <?= getPantryGradeBadge($val) ?>
+                                                    <td class="col-coach" style="<?= $isEditingThisSheet ? 'padding: 2px !important;' : '' ?>">
+                                                        <?php if ($isEditingThisSheet): ?>
+                                                            <select name="scores[<?= $sub['id'] ?>][<?= htmlspecialchars($cNo) ?>]" class="form-select form-select-sm text-center fw-bold" style="width: 56px; margin: 0 auto; background: #ffffff !important; color: #000000 !important; border: 1.5px solid #0284c7; padding: 2px 2px; font-size: 12px; font-weight: 700; height: 28px;">
+                                                                <option value="-" <?= ($val === '-' || $val === '') ? 'selected' : '' ?>>-</option>
+                                                                <option value="3" <?= ((string)$val === '3' || strtolower((string)$val) === 'vg') ? 'selected' : '' ?>>3</option>
+                                                                <option value="2" <?= ((string)$val === '2' || strtolower((string)$val) === 'sat') ? 'selected' : '' ?>>2</option>
+                                                                <option value="1" <?= ((string)$val === '1' || strtolower((string)$val) === 'poor') ? 'selected' : '' ?>>1</option>
+                                                                <option value="0" <?= ((string)$val === '0' || strtolower((string)$val) === 'na') ? 'selected' : '' ?>>0</option>
+                                                                <option value="X" <?= (strtoupper((string)$val) === 'X') ? 'selected' : '' ?>>X</option>
+                                                            </select>
+                                                        <?php else: ?>
+                                                            <?= getPantryGradeBadge($val) ?>
+                                                        <?php endif; ?>
                                                     </td>
                                                 <?php endforeach; ?>
 
@@ -910,6 +1018,7 @@ include 'sidebar.php';
                             </table>
                         </div>
 
+
                         <!-- Watering Section (Matching Photo 2) -->
                         <div class="watering-section">
                             <div>c. &nbsp; Watering of Intensive attended coaches (Tick Yes/No)</div>
@@ -949,8 +1058,12 @@ include 'sidebar.php';
                         </div>
 
                     </div>
+                    <?php if ($isEditingThisSheet): ?>
+                    </form>
+                    <?php endif; ?>
                 <?php endforeach; ?>
             </div>
+
 
         </div>
     </div>

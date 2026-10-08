@@ -192,19 +192,21 @@ try {
     // Graceful error capture
 }
 
-// Fetch all users with station info
+// Fetch all users with station info (excluding hidden role EDITOR)
 $users = [];
 try {
     $stmt = $pdo->query("
         SELECT u.*, s.station_name 
         FROM mcc_users u 
         LEFT JOIN mcc_stations s ON u.station_id = s.station_id 
+        WHERE UPPER(u.role) != 'EDITOR'
         ORDER BY u.role ASC, u.user_name ASC
     ");
     $users = $stmt->fetchAll();
 } catch (PDOException $e) {
     $dbError = $e->getMessage();
 }
+
 
 include 'header.php';
 include 'sidebar.php';

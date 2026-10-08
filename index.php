@@ -8,7 +8,9 @@ session_start();
 // If user is already logged in, redirect to appropriate dashboard
 if (isset($_SESSION['user_id'])) {
     $role = strtoupper($_SESSION['role'] ?? '');
-    if ($role === 'AUDITOR') {
+    if ($role === 'EDITOR') {
+        header("Location: editor/index.php");
+    } elseif ($role === 'AUDITOR') {
         header("Location: auditor/index.php");
     } else {
         header("Location: cdo-dashboard/index.php");
@@ -44,13 +46,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['station_id'] = $user['station_id'];
                         
                         // Redirect based on role
-                        if (strtoupper($user['role']) === 'AUDITOR') {
+                        if (strtoupper($user['role']) === 'EDITOR') {
+                            header("Location: editor/index.php");
+                        } elseif (strtoupper($user['role']) === 'AUDITOR') {
                             header("Location: auditor/index.php");
                         } else {
                             header("Location: cdo-dashboard/index.php");
                         }
                         exit();
                     } else {
+
                         $error = 'Incorrect password. Please try again.';
                     }
                 } else {

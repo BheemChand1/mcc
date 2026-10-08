@@ -192,10 +192,11 @@ if (!empty($inspectionTokens)) {
             $obt = $coachObtainedTotals[$cNo];
             $poss = $coachPossibleTotals[$cNo] ?: (count($dbParameters) * 3);
             $pct = $poss > 0 ? round(($obt / $poss) * 100, 2) : 100;
-            $coachSummary[] = [
+            $coachSummary[$cNo] = [
                 'coach' => $cNo,
                 'obtained' => $obt,
                 'possible' => $poss,
+                'eligible' => $poss,
                 'percent' => $pct . '%'
             ];
         }
@@ -203,6 +204,7 @@ if (!empty($inspectionTokens)) {
         $totalParamMarks = count($dbParameters) * 3;
         $totalEligible = count($coachSummary) * ($totalParamMarks > 0 ? $totalParamMarks : 54);
         $overallPercent = $totalEligible > 0 ? round(array_sum(array_column($coachSummary, 'obtained')) / $totalEligible * 100, 2) . '%' : '100%';
+
 
         $sheetsData[] = [
             'token_id' => $tokenRow['token_id'],
@@ -222,50 +224,8 @@ if (!empty($inspectionTokens)) {
             'isApproved' => !empty($scoreEntries) ? (int)($scoreEntries[0]['isApproved'] ?? 0) : 0
         ];
     }
-} else {
-    // Fallback sample sheet with 1 pantry coach
-    $sampleCoaches = ['WGACCW 19208'];
-    $fallbackRows = [];
-    $coachSummary = [];
-
-    foreach ($dbParameters as $p) {
-        $subData = [];
-        foreach ($p['subparts'] as $sp) {
-            $subData[] = [
-                'slot' => $sp['slot'],
-                'coach_vals' => ['WGACCW 19208' => '3']
-            ];
-        }
-        $fallbackRows[] = [
-            'sn' => $p['sn'],
-            'desc' => $p['desc'],
-            'subparts' => $subData,
-            'item_marks' => ['WGACCW 19208' => 3.0]
-        ];
-    }
-
-    $coachSummary['WGACCW 19208'] = [
-        'eligible' => 54,
-        'obtained' => 54.0,
-        'percent' => '100%'
-    ];
-
-    $sheetsData[] = [
-        'token_id' => 'TKN-PANTRY-20260817-001',
-        'train_no' => '12504',
-        'date' => date('d-m-Y', strtotime($toDate)),
-        'pantry_coaches' => 'WGACCW 19208',
-        'coaches' => $sampleCoaches,
-        'total_score_percent' => '100%',
-        'supervisor_name' => 'prabhunath',
-        'technician_name' => 'Sr. Technician',
-        'division' => $divisionName,
-        'station' => $stationName,
-        'contractor' => $contractorName,
-        'rows' => $fallbackRows,
-        'summary' => $coachSummary
-    ];
 }
+
 
 $pageTitle = 'Scorecard for Intensive Cleaning of Pantry Car | MCC';
 
@@ -806,6 +766,12 @@ include 'sidebar.php';
 
             <!-- Scorecard Document Wrapper -->
             <div class="pantry-wrap">
+                <?php if (empty($sheetsData)): ?>
+                    <div class="alert alert-warning no-print" style="margin: 0 0 20px 0; border-radius: 8px; border: 1px solid #ffeeba; background-color: #fff3cd; color: #856404; padding: 16px 20px; font-weight: 500;">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> No intensive pantry car inspection reports found for the selected date range (<?= htmlspecialchars(date('d-m-Y', strtotime($fromDate))) ?> to <?= htmlspecialchars(date('d-m-Y', strtotime($toDate))) ?>).
+                    </div>
+                <?php endif; ?>
+
                 <?php foreach ($sheetsData as $sheet): 
                     $coachList = $sheet['coaches'];
                     $coachCount = count($coachList);
@@ -901,7 +867,7 @@ include 'sidebar.php';
                                                 <td class="col-slot"><?= htmlspecialchars($sub['slot']) ?></td>
 
                                                 <?php foreach ($coachList as $cNo): 
-                                                    $val = $sub['coach_vals'][$cNo] ?? '';
+                                                    $val = $sub['scores'][$cNo] ?? ($sub['coach_vals'][$cNo] ?? '');
                                                 ?>
                                                     <td class="col-coach">
                                                         <?= getPantryGradeBadge($val) ?>
@@ -911,7 +877,7 @@ include 'sidebar.php';
                                                 <?php if ($sIndex === 0): ?>
                                                     <?php foreach ($coachList as $cNo): ?>
                                                         <td rowspan="<?= $subCount ?>" class="col-marks font-weight-bold">
-                                                            <?= number_format($row['item_marks'][$cNo] ?? 3.0, 1) ?>
+                                                            <?= number_format($row['coach_totals'][$cNo] ?? ($row['item_marks'][$cNo] ?? 0.0), 1) ?>
                                                         </td>
                                                     <?php endforeach; ?>
                                                 <?php endif; ?>
@@ -924,7 +890,7 @@ include 'sidebar.php';
                                         <td colspan="3" class="summary-row-label">Total Eligible marks</td>
                                         <?php foreach ($coachList as $cNo): ?>
                                             <td>-</td>
-                                            <td><?= $sheet['summary'][$cNo]['eligible'] ?? 54 ?></td>
+                                            <td><?= $sheet['summary'][$cNo]['possible'] ?? ($sheet['summary'][$cNo]['eligible'] ?? 54) ?></td>
                                         <?php endforeach; ?>
                                     </tr>
 
@@ -932,7 +898,7 @@ include 'sidebar.php';
                                         <td colspan="3" class="summary-row-label">Total Marks obtained</td>
                                         <?php foreach ($coachList as $cNo): ?>
                                             <td>-</td>
-                                            <td style="color: #0284c7; font-size: 12.5px;"><?= $sheet['summary'][$cNo]['obtained'] ?? 54.0 ?></td>
+                                            <td style="color: #0284c7; font-size: 12.5px;"><?= $sheet['summary'][$cNo]['obtained'] ?? 0.0 ?></td>
                                         <?php endforeach; ?>
                                     </tr>
 
@@ -940,12 +906,13 @@ include 'sidebar.php';
                                         <td colspan="3" class="summary-row-label">Percentage</td>
                                         <?php foreach ($coachList as $cNo): ?>
                                             <td>-</td>
-                                            <td style="color: #15803d; font-size: 12.5px;"><?= $sheet['summary'][$cNo]['percent'] ?? '100%' ?></td>
+                                            <td style="color: #15803d; font-size: 12.5px;"><?= $sheet['summary'][$cNo]['percent'] ?? '0%' ?></td>
                                         <?php endforeach; ?>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
+
 
                         <!-- Watering Section (Matching Photo 2) -->
                         <div class="watering-section">

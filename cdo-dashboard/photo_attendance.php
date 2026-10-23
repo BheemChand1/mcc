@@ -876,10 +876,22 @@ include 'sidebar.php';
                       if (stripos($row['shift'], '2') !== false) $shiftClass = 's2';
                       elseif (stripos($row['shift'], '3') !== false) $shiftClass = 's3';
 
+                      // Helper to resolve root-relative paths for images
+                      if (!function_exists('resolvePhotoAttendanceUrl')) {
+                          function resolvePhotoAttendanceUrl($path) {
+                              if (empty($path)) return '';
+                              $path = trim($path);
+                              if (preg_match('/^https?:\/\//i', $path) || strpos($path, '/') === 0 || strpos($path, '../') === 0) {
+                                  return $path;
+                              }
+                              return '../' . ltrim($path, '/');
+                          }
+                      }
+
                       // Determine photo URLs or fallbacks
-                      $inPhotoUrl = !empty($row['in_photo']) ? htmlspecialchars($row['in_photo']) : '';
-                      $outPhotoUrl = !empty($row['out_photo']) ? htmlspecialchars($row['out_photo']) : '';
-                      $empAvatarUrl = !empty($row['master_photo']) ? htmlspecialchars($row['master_photo']) : '';
+                      $inPhotoUrl = !empty($row['in_photo']) ? htmlspecialchars(resolvePhotoAttendanceUrl($row['in_photo'])) : '';
+                      $outPhotoUrl = !empty($row['out_photo']) ? htmlspecialchars(resolvePhotoAttendanceUrl($row['out_photo'])) : '';
+                      $empAvatarUrl = !empty($row['master_photo']) ? htmlspecialchars(resolvePhotoAttendanceUrl($row['master_photo'])) : '';
                   ?>
                     <tr>
                       <!-- S.No -->

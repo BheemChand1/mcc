@@ -196,6 +196,88 @@ if ($isFallback) {
     }
 }
 
+// Penalty parameters for Annexure A-1 (Back side)
+$penaltyItems = [
+    [
+        'sr' => 1,
+        'item' => 'If on any day cleaning activities are not carried out for reasons other than those attributed to force majeure, then penalty of Rs. 20000/- per day/rake shall be imposed. In such cases no separate penalty for shortage of manpower shall be imposed.',
+        'rate' => 20000,
+        'type' => 'rake'
+    ],
+    [
+        'sr' => 2,
+        'item' => 'Penalty to the tune of Rs. 500/- shall be imposed per rake per instance for not locking/unlocking of coaches as detailed under the \'Schedule of Work\'.',
+        'rate' => 500,
+        'type' => 'rake'
+    ],
+    [
+        'sr' => 3,
+        'item' => 'Penalty of Rs. 500/- per coach per occasion shall be imposed for not watering any coach.',
+        'rate' => 500,
+        'type' => 'coach'
+    ],
+    [
+        'sr' => 4,
+        'item' => 'Penalty of Rs. 500/- per machine/pit line shall be imposed for not deploying machines as per resource specification.',
+        'rate' => 500,
+        'type' => 'rake'
+    ],
+    [
+        'sr' => 5,
+        'item' => 'Penalty of Rs. 200/- per occasion if flooding of water inside coach (other than toilet floor) is reported during cleaning activity.',
+        'rate' => 200,
+        'type' => 'coach'
+    ],
+    [
+        'sr' => 6,
+        'item' => 'Penalty of Rs. 200/- per coach shall be imposed for not dry mopping of toilet floor/coach floor.',
+        'rate' => 200,
+        'type' => 'coach'
+    ],
+    [
+        'sr' => 7,
+        'item' => 'Penalty of Rs. 1000/- shall be imposed per occasion for dropping garbage, collected from the coaches during dry sweeping, on the railway track/ maintenance line.',
+        'rate' => 1000,
+        'type' => 'rake'
+    ],
+    [
+        'sr' => 8,
+        'item' => 'Penalty of Rs. 1000/- per coach per case shall be imposed if the toiletries is not supplied as per the prescribed quantity.(As applicable)',
+        'rate' => 1000,
+        'type' => 'coach'
+    ],
+    [
+        'sr' => 9,
+        'item' => 'Penalty of Rs. 2000/- per rake per case shall be imposed if chemicals used are of unapproved brand or less than the prescribed quantity.',
+        'rate' => 2000,
+        'type' => 'rake'
+    ],
+    [
+        'sr' => 10,
+        'item' => 'A penalty of Rs. 200/- per person will be levied for the staff having improper uniform.',
+        'rate' => 200,
+        'type' => 'rake'
+    ],
+    [
+        'sr' => 11,
+        'item' => 'Penalty of Rs. 1000/- plus minimum wages per shortage of manpower',
+        'rate' => 1000,
+        'type' => 'rake'
+    ],
+    [
+        'sr' => 12,
+        'item' => 'Penalty of Rs. 200/-per coach per case shall be imposed if the soap dispensers are not provided as per the prescribed quantity.',
+        'rate' => 200,
+        'type' => 'coach'
+    ],
+    [
+        'sr' => 13,
+        'item' => 'Any other penalty as specified',
+        'rate' => 0,
+        'type' => 'custom'
+    ]
+];
+
 $pageTitle = 'Normal Score Card | MCC';
 
 $extraStyles = "
@@ -219,6 +301,62 @@ $extraStyles = "
 
 .report-frame:last-child {
     margin-bottom: 0 !important;
+}
+
+.penalty-frame {
+    border: 1px solid #888 !important;
+    background: #efefef !important;
+}
+
+.penalty-table th, .penalty-table td {
+    padding: 5px 3px !important;
+    font-size: 11.5px;
+}
+
+.penalty-pill {
+    display: inline-block;
+    padding: 2px 4px;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 3px;
+    text-align: center;
+    min-width: 25px;
+    user-select: none;
+    cursor: default;
+}
+
+.penalty-pill-no {
+    background: #f8fafc;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+}
+
+.view-toggle-wrap {
+    display: inline-flex;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.btn-view-toggle {
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 4px;
+    border: 1px solid #1987C6;
+    background: #fff;
+    color: #1987C6;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-view-toggle:hover {
+    background: #e0f2fe;
+}
+
+.btn-view-toggle.active {
+    background: #1987C6;
+    color: #fff;
+    box-shadow: 0 2px 4px rgba(25, 135, 198, 0.25);
 }
 
 .report-header h2{
@@ -388,6 +526,13 @@ $extraStyles = "
         border-radius: 0 !important;
     }
 
+    .penalty-frame {
+        page-break-before: always !important;
+        break-before: page !important;
+        page-break-after: always !important;
+        break-after: page !important;
+    }
+
     .report-frame:last-child {
         page-break-after: avoid !important;
         break-after: avoid !important;
@@ -423,6 +568,18 @@ include 'sidebar.php';
                 <button type="button" class="btn-print" onclick="window.print()">
                     Print
                 </button>
+
+                <div class="view-toggle-wrap no-print">
+                    <button type="button" class="btn-view-toggle active" id="btn-toggle-all" onclick="setScorecardView('all')">
+                        <i class="bi bi-layout-split me-1"></i>Both Sides
+                    </button>
+                    <button type="button" class="btn-view-toggle" id="btn-toggle-front" onclick="setScorecardView('front')">
+                        <i class="bi bi-file-earmark-text me-1"></i>Front Side
+                    </button>
+                    <button type="button" class="btn-view-toggle" id="btn-toggle-back" onclick="setScorecardView('back')">
+                        <i class="bi bi-shield-exclamation me-1"></i>Back Side
+                    </button>
+                </div>
             </form>
 
             <div class="report-wrap">
@@ -433,7 +590,10 @@ include 'sidebar.php';
                 <?php endif; ?>
 
                 <?php foreach ($sheets as $sheet): ?>
-                    <div class="report-frame">
+                    <!-- ========================================== -->
+                    <!-- FRONT SIDE: Score Card For Normal Cleaning -->
+                    <!-- ========================================== -->
+                    <div class="report-frame front-frame" id="front-<?= htmlspecialchars($sheet['token_id'] ?? '') ?>">
                         <div class="report-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #999; padding-bottom: 10px; margin-bottom: 15px;">
                             <h2 style="margin: 0;">Score Card For Normal Cleaning</h2>
                             <div class="d-flex align-items-center gap-2">
@@ -591,10 +751,123 @@ include 'sidebar.php';
                             </div>
                         </div>
                     </div>
+
+                    <!-- ======================================================= -->
+                    <!-- BACK SIDE: Penalty Matrix                               -->
+                    <!-- ======================================================= -->
+                    <div class="report-frame penalty-frame" id="back-<?= htmlspecialchars($sheet['token_id'] ?? '') ?>">
+                        <div class="report-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px;">
+                            <div style="font-size: 13px; font-weight: 700; color: #475569;">
+                                <?php if (!$sheet['is_fallback'] && !empty($sheet['token_id'])): ?>
+                                    <span style="font-family: monospace; background: #e2e8f0; color: #334155; padding: 3px 8px; border-radius: 4px; border: 1px solid #cbd5e1;">Token: <?= htmlspecialchars($sheet['token_id']) ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="no-print">
+                                <span class="badge bg-secondary px-2 py-1" style="font-size: 11px;">Back Side</span>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="report-table penalty-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 38px;">Sr</th>
+                                        <th style="text-align: left !important; padding-left: 8px !important; min-width: 320px;">Item</th>
+                                        <?php for ($i = 1; $i <= count($sheet['coaches']); $i++): ?>
+                                            <th style="width: 32px; min-width: 30px;"><?= $i ?></th>
+                                        <?php endfor; ?>
+                                        <th style="width: 60px;">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Coach No Row -->
+                                    <tr style="background: #fafafa; font-weight: 700;">
+                                        <td style="font-weight: 700;"></td>
+                                        <td style="text-align: left !important; padding-left: 8px !important; font-weight: 700;">Coach No</td>
+                                        <?php foreach ($sheet['coaches'] as $coach): ?>
+                                            <td style="font-weight: 700; font-size: 11px;"><?= htmlspecialchars($coach) ?></td>
+                                        <?php endforeach; ?>
+                                        <td></td>
+                                    </tr>
+
+                                    <!-- 13 Penalty Parameters Matching Image -->
+                                    <?php foreach ($penaltyItems as $pItem): ?>
+                                        <tr data-penalty-rate="<?= $pItem['rate'] ?>" data-penalty-type="<?= $pItem['type'] ?>">
+                                            <td style="font-weight: 700; vertical-align: top; padding-top: 6px;"><?= $pItem['sr'] ?></td>
+                                            <td style="text-align: left !important; padding: 5px 8px !important; font-size: 11.5px; line-height: 1.35; font-weight: 500;">
+                                                <?= htmlspecialchars($pItem['item']) ?>
+                                            </td>
+
+                                            <?php 
+                                            foreach ($sheet['coaches'] as $cIdx => $coach): 
+                                                $hasCoach = !empty($coach);
+                                            ?>
+                                                <td style="padding: 2px !important;">
+                                                    <?php if ($hasCoach): ?>
+                                                        <span class="penalty-pill penalty-pill-no">No</span>
+                                                    <?php else: ?>
+                                                        <span style="color: #bbb;">-</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                            <?php endforeach; ?>
+
+                                            <td class="item-violation-count" style="font-weight: 700; font-size: 12px;">0</td>
+                                        </tr>
+                                    <?php endforeach; ?>
+
+                                    <!-- Total Penalty Summary Row -->
+                                    <tr style="background: #f8fafc; font-weight: 800; border-top: 2px solid #000;">
+                                        <td></td>
+                                        <td style="text-align: right !important; padding-right: 15px !important; font-size: 13px; font-weight: 800; text-transform: uppercase;">
+                                            Total Penalty
+                                        </td>
+                                        <?php for ($i = 1; $i <= count($sheet['coaches']); $i++): ?>
+                                            <td></td>
+                                        <?php endfor; ?>
+                                        <td class="sheet-total-penalty" style="font-size: 13px; color: #b91c1c; font-weight: 800; background: #fee2e2;">
+                                            Rs. 0
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Signatures & Notes exactly as shown in Image -->
+                        <div style="margin-top: 50px; padding: 0 20px;">
+                            <div style="margin-bottom: 35px; font-size: 13px; font-weight: 700; color: #000;">
+                                SSE/C&W &nbsp;&nbsp;____________________________________ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ____________________________________
+                            </div>
+
+                            <div style="font-size: 12px; line-height: 1.6; color: #111; font-weight: 600;">
+                                <div>Berth charges for OBHS staff</div>
+                                <div>(As per the below table-1) Berth charges for OBHS staff</div>
+                                <div>(As per the below table-1)</div>
+                            </div>
+                        </div>
+                    </div>
                 <?php endforeach; ?>
             </div>
         </div>
     </div>
 </main>
+
+<script>
+// Switch between Both Sides, Front Side Only, and Back Side Only
+function setScorecardView(mode) {
+    document.querySelectorAll('.btn-view-toggle').forEach(b => b.classList.remove('active'));
+    if (mode === 'all') {
+        document.querySelectorAll('.front-frame, .penalty-frame').forEach(f => f.style.display = '');
+        document.getElementById('btn-toggle-all')?.classList.add('active');
+    } else if (mode === 'front') {
+        document.querySelectorAll('.front-frame').forEach(f => f.style.display = '');
+        document.querySelectorAll('.penalty-frame').forEach(f => f.style.display = 'none');
+        document.getElementById('btn-toggle-front')?.classList.add('active');
+    } else if (mode === 'back') {
+        document.querySelectorAll('.front-frame').forEach(f => f.style.display = 'none');
+        document.querySelectorAll('.penalty-frame').forEach(f => f.style.display = '');
+        document.getElementById('btn-toggle-back')?.classList.add('active');
+    }
+}
+</script>
 
 <?php include 'footer.php'; ?>

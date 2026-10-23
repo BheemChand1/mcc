@@ -69,7 +69,9 @@ $page_report_mapping = [
     'cleanliness.php' => 'cleanliness',
     'photo-report.php' => 'photo_report',
     'man-power-log.php' => 'manpower',
-    'biometeric_manpower_log.php' => 'manpower'
+    'biometeric_manpower_log.php' => 'manpower',
+    'photo_attendance.php' => 'manpower',
+    'photo-attendance-summary.php' => 'manpower'
 ];
 
 $currentPage = basename($_SERVER['PHP_SELF']);

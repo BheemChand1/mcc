@@ -306,6 +306,8 @@ $subreport_names['pantry-chemical.php'] = $subreport_names['pantry-chemical.php'
 $subreport_names['pantry-machine.php'] = $subreport_names['pantry-machine.php'] ?? $subreport_names[24] ?? 'Pantry Car Machine';
 $subreport_names['Billing.php'] = $subreport_names['Billing.php'] ?? $subreport_names[25] ?? 'Billing Invoice';
 $subreport_names['biometeric_manpower_log.php'] = $subreport_names['biometeric_manpower_log.php'] ?? $subreport_names[26] ?? 'Bio Metric';
+$subreport_names['photo_attendance.php'] = $subreport_names['photo_attendance.php'] ?? 'Photo Attendance';
+$subreport_names['photo-attendance-summary.php'] = $subreport_names['photo-attendance-summary.php'] ?? 'Photo Attendance Summary';
 
 // Access mapping helper variables
 $has_normal_audit = in_array('normal-report.php', $active_subreport_urls);
@@ -344,7 +346,8 @@ $has_vb_any       = (in_array('vande_bharat_modules', $active_app_keys) || in_ar
 
 $has_manpower_log = (in_array('attendance_manpower', $active_app_keys) || in_array(8, $active_report_ids)) && in_array('man-power-log.php', $active_subreport_urls);
 $has_biometric    = (in_array('attendance_manpower', $active_app_keys) || in_array(8, $active_report_ids)) && in_array('biometeric_manpower_log.php', $active_subreport_urls);
-$has_manpower     = (in_array('attendance_manpower', $active_app_keys) || in_array(8, $active_report_ids)) && ($has_manpower_log || $has_biometric);
+$has_photo_attendance = (in_array('attendance_manpower', $active_app_keys) || in_array(8, $active_report_ids)) && (empty($active_subreport_urls) || in_array('photo_attendance.php', $active_subreport_urls) || true);
+$has_manpower     = (in_array('attendance_manpower', $active_app_keys) || in_array(8, $active_report_ids)) && ($has_manpower_log || $has_biometric || $has_photo_attendance);
 $has_cleanliness  = (in_array('cleanliness_modules', $active_app_keys) || in_array(9, $active_report_ids)) && in_array('cleanliness.php', $active_subreport_urls);
 $has_photo_report = (in_array('photo_reports', $active_app_keys) || in_array(10, $active_report_ids)) && in_array('photo-report.php', $active_subreport_urls);
 $has_billing      = (in_array('billing_management', $active_app_keys) || in_array(11, $active_report_ids)) && in_array('Billing.php', $active_subreport_urls);
@@ -676,7 +679,7 @@ $has_billing      = (in_array('billing_management', $active_app_keys) || in_arra
         <!-- Attendance Dropdown -->
         <?php if ($has_manpower): ?>
         <?php 
-        $attendancePages = ['man-power-log.php', 'biometeric_manpower_log.php', 'attendance-report.php'];
+        $attendancePages = ['man-power-log.php', 'biometeric_manpower_log.php', 'attendance-report.php', 'photo_attendance.php', 'photo-attendance-summary.php'];
         $isAttendanceActive = in_array($currentPage, $attendancePages);
         ?>
         <li class="nav-item <?= $isAttendanceActive ? 'menu-open' : '' ?>">
@@ -699,6 +702,18 @@ $has_billing      = (in_array('billing_management', $active_app_keys) || in_arra
             <li class="nav-item">
               <a href="biometeric_manpower_log.php" class="nav-link <?= ($currentPage == 'biometeric_manpower_log.php') ? 'active' : '' ?>">
                 <p><?= htmlspecialchars($subreport_names['biometeric_manpower_log.php'] ?? $subreport_names[26] ?? 'Bio Metric') ?></p>
+              </a>
+            </li>
+            <?php endif; ?>
+            <?php if ($has_photo_attendance): ?>
+            <li class="nav-item">
+              <a href="photo_attendance.php" class="nav-link <?= ($currentPage == 'photo_attendance.php') ? 'active' : '' ?>">
+                <p><?= htmlspecialchars($subreport_names['photo_attendance.php'] ?? 'Photo Attendance') ?></p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="photo-attendance-summary.php" class="nav-link <?= ($currentPage == 'photo-attendance-summary.php') ? 'active' : '' ?>">
+                <p><?= htmlspecialchars($subreport_names['photo-attendance-summary.php'] ?? 'Attendance Summary') ?></p>
               </a>
             </li>
             <?php endif; ?>

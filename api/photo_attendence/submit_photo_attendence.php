@@ -96,39 +96,99 @@ try {
         @mkdir($uploadDir, 0777, true);
     }
 
-    // Handle Photo Upload
+    // Helper function to compress and save image as WebP
+    if (!function_exists('compressToWebp')) {
+        function compressToWebp($sourcePath, $destinationPath, $quality = 75, $maxWidth = 1280, $isRawData = false) {
+            if (!function_exists('imagewebp') || !function_exists('imagecreatefromstring')) {
+                return false;
+            }
+
+            try {
+                $imgData = $isRawData ? $sourcePath : @file_get_contents($sourcePath);
+                if (empty($imgData)) {
+                    return false;
+                }
+
+                $srcImg = @imagecreatefromstring($imgData);
+                if (!$srcImg) {
+                    return false;
+                }
+
+                $width = imagesx($srcImg);
+                $height = imagesy($srcImg);
+
+                // Auto-downscale large camera photos while preserving aspect ratio
+                if ($maxWidth > 0 && $width > $maxWidth) {
+                    $newWidth = $maxWidth;
+                    $newHeight = (int)round(($height / $width) * $maxWidth);
+
+                    $dstImg = imagecreatetruecolor($newWidth, $newHeight);
+
+                    // Preserve transparency if PNG / WebP
+                    imagealphablending($dstImg, false);
+                    imagesavealpha($dstImg, true);
+
+                    imagecopyresampled($dstImg, $srcImg, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+                    imagedestroy($srcImg);
+                    $srcImg = $dstImg;
+                } else {
+                    imagealphablending($srcImg, false);
+                    imagesavealpha($srcImg, true);
+                }
+
+                // Compress and write WebP
+                $saved = imagewebp($srcImg, $destinationPath, $quality);
+                imagedestroy($srcImg);
+
+                return $saved && file_exists($destinationPath) && filesize($destinationPath) > 0;
+            } catch (Throwable $e) {
+                return false;
+            }
+        }
+    }
+
+    // Handle Photo Upload with WebP Compression
     $photoDbPath = null;
+    $cleanEmpId = preg_replace('/[^a-zA-Z0-9_-]/', '', $employeeId);
+    $uniqueWebpName = $attendance . '_' . $cleanEmpId . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.webp';
+    $targetPath = $uploadDir . $uniqueWebpName;
 
     if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
         $tmpName = $_FILES['photo']['tmp_name'];
-        $origName = $_FILES['photo']['name'];
-        $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-        if (empty($ext) || !in_array($ext, ['webp', 'jpg', 'jpeg', 'png'])) {
-            $ext = 'webp';
-        }
 
-        $cleanEmpId = preg_replace('/[^a-zA-Z0-9_-]/', '', $employeeId);
-        $uniqueFileName = $attendance . '_' . $cleanEmpId . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-        $targetPath = $uploadDir . $uniqueFileName;
+        // Attempt WebP compression
+        $compressed = compressToWebp($tmpName, $targetPath, 75, 1280, false);
 
-        if (@move_uploaded_file($tmpName, $targetPath)) {
-            $photoDbPath = 'attendence_photo/' . $uniqueFileName;
+        if ($compressed) {
+            $photoDbPath = 'attendence_photo/' . $uniqueWebpName;
+        } else {
+            // Fallback: move raw file if compression fails
+            $origName = $_FILES['photo']['name'];
+            $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION)) ?: 'webp';
+            $fallbackName = $attendance . '_' . $cleanEmpId . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+            $fallbackPath = $uploadDir . $fallbackName;
+            if (@move_uploaded_file($tmpName, $fallbackPath)) {
+                $photoDbPath = 'attendence_photo/' . $fallbackName;
+            }
         }
     } elseif (!empty($data['photo']) && is_string($data['photo'])) {
         // Handle base64 encoded photo if passed via JSON or string
         $photoData = $data['photo'];
-        $ext = 'webp';
         if (preg_match('/^data:image\/(\w+);base64,/', $photoData, $matches)) {
-            $ext = strtolower($matches[1]);
             $photoData = substr($photoData, strpos($photoData, ',') + 1);
         }
         $decodedData = base64_decode($photoData);
         if ($decodedData !== false) {
-            $cleanEmpId = preg_replace('/[^a-zA-Z0-9_-]/', '', $employeeId);
-            $uniqueFileName = $attendance . '_' . $cleanEmpId . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-            $targetPath = $uploadDir . $uniqueFileName;
-            if (@file_put_contents($targetPath, $decodedData)) {
-                $photoDbPath = 'attendence_photo/' . $uniqueFileName;
+            // Attempt WebP compression on raw binary data
+            $compressed = compressToWebp($decodedData, $targetPath, 75, 1280, true);
+
+            if ($compressed) {
+                $photoDbPath = 'attendence_photo/' . $uniqueWebpName;
+            } else {
+                // Fallback: save raw data
+                if (@file_put_contents($targetPath, $decodedData)) {
+                    $photoDbPath = 'attendence_photo/' . $uniqueWebpName;
+                }
             }
         }
     }

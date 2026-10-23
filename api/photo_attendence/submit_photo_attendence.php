@@ -5,10 +5,10 @@
  * Method: POST
  * 
  * FormData parameters:
- *   - station_id (required): Integer
- *   - employee_id (required): String
+ *   - station_id: Integer/String
+ *   - employee_id: String (required)
  *   - employee_name: String
- *   - attendance (required): 'in' or 'out'
+ *   - attendance: 'in' or 'out' (required)
  *   - process_name: String (e.g. 'Normal Cleaning')
  *   - latitude: Float/String
  *   - longitude: Float/String
@@ -16,116 +16,123 @@
  *   - photo: File (multipart/form-data)
  */
 
+// Buffer all output to ensure no stray HTML or warnings can precede JSON
+ob_start();
+
+// Disable HTML error display for pure JSON responses
+ini_set('display_errors', '0');
+error_reporting(0);
+
+// CORS Headers
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
-header("Access-Control-Allow-Methods: POST, OPTIONS");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
 
-// Handle preflight OPTIONS request
-if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
+// Helper to safely send JSON and terminate
+function sendJsonResponse($statusCode, $payload) {
+    if (ob_get_length()) {
+        ob_clean();
+    }
+    http_response_code($statusCode);
+    echo json_encode($payload);
     exit();
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode([
+// Handle preflight OPTIONS request
+if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    sendJsonResponse(200, ["status" => "success", "message" => "OK"]);
+}
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    sendJsonResponse(405, [
         "status" => "error",
         "status_code" => 405,
         "message" => "POST method required."
     ]);
-    exit();
-}
-
-require_once __DIR__ . '/../../connection.php';
-global $pdo;
-
-// Extract input from $_POST or raw JSON fallback
-$data = $_POST;
-if (empty($data)) {
-    $rawInput = file_get_contents("php://input");
-    if (!empty($rawInput)) {
-        $json = json_decode($rawInput, true);
-        if (is_array($json)) {
-            $data = $json;
-        }
-    }
-}
-
-$stationId    = isset($data['station_id']) ? intval($data['station_id']) : 0;
-$employeeId   = isset($data['employee_id']) ? trim($data['employee_id']) : '';
-$employeeName = isset($data['employee_name']) ? trim($data['employee_name']) : '';
-$attendance   = isset($data['attendance']) ? strtolower(trim($data['attendance'])) : '';
-$processName  = isset($data['process_name']) && !empty(trim($data['process_name'])) ? trim($data['process_name']) : 'Normal Cleaning';
-$latitude     = isset($data['latitude']) && $data['latitude'] !== '' ? floatval($data['latitude']) : null;
-$longitude    = isset($data['longitude']) && $data['longitude'] !== '' ? floatval($data['longitude']) : null;
-$address      = isset($data['address']) ? trim($data['address']) : '';
-
-// Validation
-if ($stationId <= 0 || empty($employeeId) || empty($attendance)) {
-    http_response_code(400);
-    echo json_encode([
-        "status" => "error",
-        "status_code" => 400,
-        "message" => "station_id, employee_id, and attendance ('in' or 'out') are required."
-    ]);
-    exit();
-}
-
-if ($attendance !== 'in' && $attendance !== 'out') {
-    http_response_code(400);
-    echo json_encode([
-        "status" => "error",
-        "status_code" => 400,
-        "message" => "attendance must be either 'in' or 'out'."
-    ]);
-    exit();
-}
-
-// Ensure upload directory exists
-$uploadDir = realpath(__DIR__ . '/../../') . DIRECTORY_SEPARATOR . 'attendence_photo' . DIRECTORY_SEPARATOR;
-if (!is_dir($uploadDir)) {
-    mkdir($uploadDir, 0777, true);
-}
-
-// Handle Photo Upload
-$photoDbPath = null;
-
-if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
-    $tmpName = $_FILES['photo']['tmp_name'];
-    $origName = $_FILES['photo']['name'];
-    $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-    if (empty($ext) || !in_array($ext, ['webp', 'jpg', 'jpeg', 'png'])) {
-        $ext = 'webp';
-    }
-
-    $cleanEmpId = preg_replace('/[^a-zA-Z0-9_-]/', '', $employeeId);
-    $uniqueFileName = $attendance . '_' . $cleanEmpId . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-    $targetPath = $uploadDir . $uniqueFileName;
-
-    if (move_uploaded_file($tmpName, $targetPath)) {
-        $photoDbPath = 'attendence_photo/' . $uniqueFileName;
-    }
-} elseif (!empty($data['photo']) && is_string($data['photo'])) {
-    // Handle base64 encoded photo if passed via JSON or string
-    $photoData = $data['photo'];
-    $ext = 'webp';
-    if (preg_match('/^data:image\/(\w+);base64,/', $photoData, $matches)) {
-        $ext = strtolower($matches[1]);
-        $photoData = substr($photoData, strpos($photoData, ',') + 1);
-    }
-    $decodedData = base64_decode($photoData);
-    if ($decodedData !== false) {
-        $cleanEmpId = preg_replace('/[^a-zA-Z0-9_-]/', '', $employeeId);
-        $uniqueFileName = $attendance . '_' . $cleanEmpId . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-        $targetPath = $uploadDir . $uniqueFileName;
-        if (file_put_contents($targetPath, $decodedData)) {
-            $photoDbPath = 'attendence_photo/' . $uniqueFileName;
-        }
-    }
 }
 
 try {
+    require_once __DIR__ . '/../../connection.php';
+    global $pdo;
+
+    // Extract input from $_POST or raw JSON fallback
+    $data = $_POST;
+    if (empty($data)) {
+        $rawInput = file_get_contents("php://input");
+        if (!empty($rawInput)) {
+            $json = json_decode($rawInput, true);
+            if (is_array($json)) {
+                $data = $json;
+            }
+        }
+    }
+
+    $stationId    = isset($data['station_id']) && intval($data['station_id']) > 0 ? intval($data['station_id']) : 1;
+    $employeeId   = isset($data['employee_id']) ? trim($data['employee_id']) : '';
+    $employeeName = isset($data['employee_name']) ? trim($data['employee_name']) : '';
+    $attendance   = isset($data['attendance']) ? strtolower(trim($data['attendance'])) : 'in';
+    $processName  = isset($data['process_name']) && !empty(trim($data['process_name'])) ? trim($data['process_name']) : 'Normal Cleaning';
+    $latitude     = isset($data['latitude']) && $data['latitude'] !== '' ? floatval($data['latitude']) : null;
+    $longitude    = isset($data['longitude']) && $data['longitude'] !== '' ? floatval($data['longitude']) : null;
+    $address      = isset($data['address']) ? trim($data['address']) : '';
+
+    // Validation
+    if (empty($employeeId)) {
+        sendJsonResponse(400, [
+            "status" => "error",
+            "status_code" => 400,
+            "message" => "employee_id is required."
+        ]);
+    }
+
+    if ($attendance !== 'in' && $attendance !== 'out') {
+        $attendance = 'in';
+    }
+
+    // Ensure upload directory exists
+    $uploadDir = realpath(__DIR__ . '/../../') . DIRECTORY_SEPARATOR . 'attendence_photo' . DIRECTORY_SEPARATOR;
+    if (!is_dir($uploadDir)) {
+        @mkdir($uploadDir, 0777, true);
+    }
+
+    // Handle Photo Upload
+    $photoDbPath = null;
+
+    if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+        $tmpName = $_FILES['photo']['tmp_name'];
+        $origName = $_FILES['photo']['name'];
+        $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+        if (empty($ext) || !in_array($ext, ['webp', 'jpg', 'jpeg', 'png'])) {
+            $ext = 'webp';
+        }
+
+        $cleanEmpId = preg_replace('/[^a-zA-Z0-9_-]/', '', $employeeId);
+        $uniqueFileName = $attendance . '_' . $cleanEmpId . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+        $targetPath = $uploadDir . $uniqueFileName;
+
+        if (@move_uploaded_file($tmpName, $targetPath)) {
+            $photoDbPath = 'attendence_photo/' . $uniqueFileName;
+        }
+    } elseif (!empty($data['photo']) && is_string($data['photo'])) {
+        // Handle base64 encoded photo if passed via JSON or string
+        $photoData = $data['photo'];
+        $ext = 'webp';
+        if (preg_match('/^data:image\/(\w+);base64,/', $photoData, $matches)) {
+            $ext = strtolower($matches[1]);
+            $photoData = substr($photoData, strpos($photoData, ',') + 1);
+        }
+        $decodedData = base64_decode($photoData);
+        if ($decodedData !== false) {
+            $cleanEmpId = preg_replace('/[^a-zA-Z0-9_-]/', '', $employeeId);
+            $uniqueFileName = $attendance . '_' . $cleanEmpId . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+            $targetPath = $uploadDir . $uniqueFileName;
+            if (@file_put_contents($targetPath, $decodedData)) {
+                $photoDbPath = 'attendence_photo/' . $uniqueFileName;
+            }
+        }
+    }
+
     $now = date('Y-m-d H:i:s');
     $today = date('Y-m-d');
     $attendanceId = null;
@@ -264,9 +271,7 @@ try {
         }
     }
 
-    // Success response with status code
-    http_response_code(200);
-    echo json_encode([
+    sendJsonResponse(200, [
         "status"        => "success",
         "status_code"   => 200,
         "message"       => "Punch " . strtoupper($attendance) . " recorded successfully.",
@@ -275,11 +280,10 @@ try {
         "photo"         => $photoDbPath
     ]);
 
-} catch (PDOException $e) {
-    http_response_code(500);
-    echo json_encode([
+} catch (Throwable $e) {
+    sendJsonResponse(500, [
         "status"      => "error",
         "status_code" => 500,
-        "message"     => "Database error: " . $e->getMessage()
+        "message"     => "Server error: " . $e->getMessage()
     ]);
 }

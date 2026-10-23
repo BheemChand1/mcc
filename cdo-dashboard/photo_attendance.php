@@ -34,7 +34,7 @@ if ($selectedToDate < $selectedFromDate) {
 $sql = "
     SELECT 
         p.*,
-        COALESCE(e.full_name, p.employee_id) AS employee_name,
+        COALESCE(e.full_name, p.employee_name, p.employee_id) AS employee_name,
         COALESCE(e.designation, 'Staff') AS designation,
         e.employee_photo AS master_photo,
         s.station_name,

@@ -58,11 +58,12 @@ try {
         exit();
     }
 
-    if (strtoupper($user['role'] ?? '') !== 'AUDITOR') {
+    $userRole = strtoupper($user['role'] ?? '');
+    if (!in_array($userRole, ['AUDITOR', 'PHOTO_ATTENDENCE', 'PHOTO_ATTENDANCE'])) {
         http_response_code(403);
         echo json_encode([
             "status" => "error",
-            "message" => "Access denied. Only users with AUDITOR role can log in."
+            "message" => "Access denied. Only users with AUDITOR or PHOTO_ATTENDENCE role can log in."
         ]);
         exit();
     }

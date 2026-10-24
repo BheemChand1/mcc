@@ -88,6 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         $coach_nos = $_POST['coach_no'] ?? [];
         $coach_statuses = $_POST['coach_status'] ?? [];
+        $coach_orders = $_POST['coach_order'] ?? [];
 
         if (empty($train_no) || $station_id <= 0 || $train_id <= 0) {
             $message = 'Train number and station are required.';
@@ -117,6 +118,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $pdo->prepare("DELETE FROM mcc_coaches WHERE train_id = :id")->execute(['id' => $train_id]);
 
                     if (!empty($coach_nos) && is_array($coach_nos)) {
+                        $coachItems = [];
+                        foreach ($coach_nos as $idx => $cNo) {
+                            $cNoClean = strtoupper(trim($cNo));
+                            if ($cNoClean === '') continue;
+
+                            $ord = (isset($coach_orders[$idx]) && is_numeric($coach_orders[$idx]))
+                                ? intval($coach_orders[$idx])
+                                : ($idx + 1);
+
+                            $cStat = (isset($coach_statuses[$idx]) && $coach_statuses[$idx] === 'Inactive') ? 'Inactive' : 'Active';
+
+                            $coachItems[] = [
+                                'coach_no' => $cNoClean,
+                                'order'    => $ord,
+                                'status'   => $cStat,
+                                'orig_idx' => $idx
+                            ];
+                        }
+
+                        // Sort coaches according to specified numeric order
+                        usort($coachItems, function($a, $b) {
+                            if ($a['order'] === $b['order']) {
+                                return $a['orig_idx'] <=> $b['orig_idx'];
+                            }
+                            return $a['order'] <=> $b['order'];
+                        });
+
                         $cStmt = $pdo->prepare("
                             INSERT INTO mcc_coaches (train_id, coach_no, display_order, status) 
                             VALUES (:train_id, :coach_no, :display_order, :status)
@@ -124,22 +152,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                         $seenCoaches = [];
                         $order = 1;
-                        foreach ($coach_nos as $idx => $cNo) {
-                            $cNoClean = strtoupper(trim($cNo));
-                            if ($cNoClean === '') continue;
-
+                        foreach ($coachItems as $cItem) {
+                            $cNoClean = $cItem['coach_no'];
                             if (isset($seenCoaches[$cNoClean])) {
                                 $cNoClean .= " (" . ($seenCoaches[$cNoClean] + 1) . ")";
                             }
                             $seenCoaches[$cNoClean] = ($seenCoaches[$cNoClean] ?? 0) + 1;
 
-                            $cStat = (isset($coach_statuses[$idx]) && $coach_statuses[$idx] === 'Inactive') ? 'Inactive' : 'Active';
-
                             $cStmt->execute([
                                 'train_id'      => $train_id,
                                 'coach_no'      => $cNoClean,
                                 'display_order' => $order++,
-                                'status'        => $cStat
+                                'status'        => $cItem['status']
                             ]);
                         }
                     }
@@ -610,21 +634,29 @@ include 'sidebar.php';
 
           <hr class="my-4">
 
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <h6 class="font-weight-bold text-dark mb-0">Coach Composition</h6>
-            <button type="button" class="btn btn-sm btn-indigo text-white rounded-pill px-3" id="eModalAddCoachBtn">
-              <i class="bi bi-plus-lg me-1"></i> Add Coach
-            </button>
+          <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <div>
+              <h6 class="font-weight-bold text-dark mb-0">Coach Composition</h6>
+              <div class="text-muted" style="font-size: 0.8rem;">Edit order numbers directly or use &uarr;&darr; buttons to arrange sequence.</div>
+            </div>
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 font-weight-bold" onclick="sortEditModalCoachesByOrder()" title="Reorder list by entered order numbers">
+                <i class="bi bi-sort-numeric-down me-1"></i> Sort by Order
+              </button>
+              <button type="button" class="btn btn-sm btn-indigo text-white rounded-pill px-3" id="eModalAddCoachBtn">
+                <i class="bi bi-plus-lg me-1"></i> Add Coach
+              </button>
+            </div>
           </div>
 
           <div class="table-responsive rounded-3 border" style="max-height: 380px; overflow-y: auto;">
             <table class="table table-hover align-middle mb-0" id="eModalCoachesTable">
               <thead class="table-light sticky-top">
                 <tr>
-                  <th style="width: 70px;" class="text-center">#</th>
+                  <th style="width: 85px;" class="text-center">Order #</th>
                   <th>Coach Number / Identifier <span class="text-danger">*</span></th>
-                  <th style="width: 140px;">Status</th>
-                  <th style="width: 90px;" class="text-center">Action</th>
+                  <th style="width: 130px;">Status</th>
+                  <th style="width: 130px;" class="text-center">Action</th>
                 </tr>
               </thead>
               <tbody id="eModalCoachesTbody">
@@ -694,11 +726,11 @@ function viewTrainDetails(trainId) {
                         const statusBadge = (c.status === 'Active') ? 'bg-success' : 'bg-secondary';
                         tbodyHtml += `
                             <tr>
-                                <td class="text-center text-muted font-weight-bold">${idx + 1}</td>
-                                <td class="font-monospace font-weight-bold text-dark fs-6">${c.coach_no}</td>
+                                <td class="text-center text-muted font-weight-bold">\${idx + 1}</td>
+                                <td class="font-monospace font-weight-bold text-dark fs-6">\${c.coach_no}</td>
                                 <td class="text-center">
-                                    <span class="badge ${statusBadge} rounded-pill">
-                                        ${c.status}
+                                    <span class="badge \${statusBadge} rounded-pill">
+                                        \${c.status}
                                     </span>
                                 </td>
                             </tr>
@@ -722,36 +754,100 @@ function viewTrainDetails(trainId) {
         .catch(err => alert('Network error: ' + err));
 }
 
-function addEditModalCoachRow(cNo = '', cStatus = 'Active') {
+function addEditModalCoachRow(cNo = '', cStatus = 'Active', cOrder = null) {
     const tbody = document.getElementById('eModalCoachesTbody');
-    const index = tbody.children.length;
+    const rowCount = tbody.querySelectorAll('tr.coach-edit-row').length;
+    const orderNum = (cOrder !== null && cOrder !== undefined && cOrder !== '') ? parseInt(cOrder, 10) : (rowCount + 1);
 
     const tr = document.createElement('tr');
+    tr.className = 'coach-edit-row';
     tr.innerHTML = `
-        <td class="text-center text-muted font-weight-bold e-pos">${index + 1}</td>
+        <td class="text-center">
+            <input type="number" name="coach_order[]" class="form-control form-control-sm text-center font-weight-bold e-coach-order" min="1" step="1" value="\${orderNum}" title="Edit order number">
+        </td>
         <td>
-            <input type="text" name="coach_no[]" class="form-control form-control-sm rounded-2 text-uppercase font-weight-bold" value="${cNo}" required>
+            <input type="text" name="coach_no[]" class="form-control form-control-sm rounded-2 text-uppercase font-weight-bold" value="\${cNo}" placeholder="e.g. A1, B1, S2" required>
         </td>
         <td>
             <select name="coach_status[]" class="form-select form-select-sm rounded-2">
-                <option value="Active" ${cStatus === 'Active' ? 'selected' : ''}>Active</option>
-                <option value="Inactive" ${cStatus === 'Inactive' ? 'selected' : ''}>Inactive</option>
+                <option value="Active" \${cStatus === 'Active' ? 'selected' : ''}>Active</option>
+                <option value="Inactive" \${cStatus === 'Inactive' ? 'selected' : ''}>Inactive</option>
             </select>
         </td>
         <td class="text-center">
-            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove(); reIndexEditRows();">
-                <i class="bi bi-trash"></i>
-            </button>
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-secondary" title="Move Up" onclick="moveCoachRow(this, -1)">
+                    <i class="bi bi-arrow-up"></i>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" title="Move Down" onclick="moveCoachRow(this, 1)">
+                    <i class="bi bi-arrow-down"></i>
+                </button>
+                <button type="button" class="btn btn-outline-danger" title="Remove Coach" onclick="removeCoachRow(this)">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
         </td>
     `;
     tbody.appendChild(tr);
 }
 
-function reIndexEditRows() {
+function moveCoachRow(btn, direction) {
+    const tr = btn.closest('tr');
+    const tbody = tr.parentNode;
+    if (direction === -1) {
+        const prev = tr.previousElementSibling;
+        if (prev) {
+            tbody.insertBefore(tr, prev);
+            recalcOrderFromDomOrder();
+        }
+    } else if (direction === 1) {
+        const next = tr.nextElementSibling;
+        if (next) {
+            tbody.insertBefore(next, tr);
+            recalcOrderFromDomOrder();
+        }
+    }
+}
+
+function removeCoachRow(btn) {
+    const tr = btn.closest('tr');
+    tr.remove();
+    recalcOrderFromDomOrder();
+}
+
+function recalcOrderFromDomOrder() {
     const tbody = document.getElementById('eModalCoachesTbody');
-    tbody.querySelectorAll('tr').forEach((row, i) => {
-        const p = row.querySelector('.e-pos');
-        if (p) p.innerText = (i + 1);
+    const rows = tbody.querySelectorAll('tr.coach-edit-row');
+    rows.forEach((row, i) => {
+        const ordInput = row.querySelector('.e-coach-order');
+        if (ordInput) ordInput.value = i + 1;
+    });
+}
+
+function sortEditModalCoachesByOrder() {
+    const tbody = document.getElementById('eModalCoachesTbody');
+    const rows = Array.from(tbody.querySelectorAll('tr.coach-edit-row'));
+    if (rows.length === 0) return;
+
+    rows.forEach((row, idx) => {
+        row.dataset.origIdx = idx;
+    });
+
+    rows.sort((a, b) => {
+        const valA = parseInt(a.querySelector('.e-coach-order')?.value, 10);
+        const valB = parseInt(b.querySelector('.e-coach-order')?.value, 10);
+        const numA = isNaN(valA) ? 999999 : valA;
+        const numB = isNaN(valB) ? 999999 : valB;
+        if (numA === numB) {
+            return parseInt(a.dataset.origIdx, 10) - parseInt(b.dataset.origIdx, 10);
+        }
+        return numA - numB;
+    });
+
+    rows.forEach((row, idx) => {
+        tbody.appendChild(row);
+        const ordInput = row.querySelector('.e-coach-order');
+        if (ordInput) ordInput.value = idx + 1;
     });
 }
 
@@ -770,8 +866,8 @@ function openEditTrainModal(trainId) {
                 const tbody = document.getElementById('eModalCoachesTbody');
                 tbody.innerHTML = '';
 
-                coaches.forEach(c => {
-                    addEditModalCoachRow(c.coach_no, c.status);
+                coaches.forEach((c, idx) => {
+                    addEditModalCoachRow(c.coach_no, c.status, c.display_order || (idx + 1));
                 });
 
                 const modal = new bootstrap.Modal(document.getElementById('editTrainModal'));
@@ -787,6 +883,13 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('eModalAddCoachBtn').addEventListener('click', function() {
         addEditModalCoachRow();
     });
+
+    const editForm = document.getElementById('editTrainForm');
+    if (editForm) {
+        editForm.addEventListener('submit', function() {
+            sortEditModalCoachesByOrder();
+        });
+    }
 });
 EOT;
 include 'footer.php';

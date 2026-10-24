@@ -125,7 +125,6 @@ if (!empty($inspectionTokens)) {
             }
         }
         $auditorSig = resolveAuditorSignature($pdo, $auditById, $auditorName);
-        $uniqueCoaches = sortCoachesByRakeOrder($uniqueCoaches, $tokenRow['train_no'], $stationId, $pdo);
 
         if (empty($uniqueCoaches)) {
             $uniqueCoaches = ['WGACCW 19208'];

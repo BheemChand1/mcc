@@ -118,7 +118,8 @@ if ($isFallback) {
                 $dbCoaches[$row['coach_no']] = true;
             }
             $dbCoaches = array_keys($dbCoaches);
-            $dbCoaches = sortCoachesByRakeOrder($dbCoaches, $trainNo, $stationId, $pdo);
+            natsort($dbCoaches);
+            $dbCoaches = array_values($dbCoaches);
         }
 
         $attendedCount = count($dbCoaches);

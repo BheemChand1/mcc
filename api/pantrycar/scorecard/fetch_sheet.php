@@ -29,12 +29,13 @@ if ($stationId === null || $stationId <= 0) {
 }
 
 try {
-    // 1. Fetch distinct train_no and report_date for the station and date from mcc_intensive_scorecard_2_report
+    // 1. Fetch distinct train_no and report_date for the station and date from mcc_intensive_scorecard_2_report ordered by latest created
     $stmt = $pdo->prepare("
-        SELECT DISTINCT train_no, report_date 
+        SELECT train_no, report_date 
         FROM mcc_intensive_scorecard_2_report 
         WHERE station_id = :station_id AND report_date = :report_date
-        ORDER BY train_no ASC
+        GROUP BY train_no, report_date
+        ORDER BY MAX(id) DESC
     ");
     $stmt->execute([
         'station_id'  => $stationId,
@@ -42,12 +43,13 @@ try {
     ]);
     $trainsList = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 2. Query to check existence, auditor_name, token_id, coaches, and filled score values in mcc_intensive_pantry_report
+    // 2. Query to check existence, auditor_name, token_id, coaches, and filled score values in mcc_intensive_pantry_report ordered by id ASC
     $pantryStmt = $pdo->prepare("
-        SELECT DISTINCT token_id, auditor_name, coach_no
+        SELECT token_id, auditor_name, coach_no
         FROM mcc_intensive_pantry_report
         WHERE station_id = :station_id AND train_no = :train_no AND report_date = :report_date
-        ORDER BY coach_no ASC
+        GROUP BY token_id, auditor_name, coach_no
+        ORDER BY MIN(id) ASC
     ");
 
     $statusStmt = $pdo->prepare("

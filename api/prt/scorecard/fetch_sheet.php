@@ -29,12 +29,13 @@ if ($stationId === null || $stationId <= 0) {
 }
 
 try {
-    // 1. Fetch distinct tokens and trains for the station and date - PRT
+    // 1. Fetch distinct tokens and trains for the station and date - PRT ordered by latest created
     $stmt = $pdo->prepare("
-        SELECT DISTINCT token_id, train_no, report_date 
+        SELECT token_id, train_no, report_date 
         FROM mcc_prt_scorecard_report 
         WHERE station_id = :station_id AND report_date = :report_date
-        ORDER BY token_id DESC
+        GROUP BY token_id, train_no, report_date
+        ORDER BY MAX(id) DESC
     ");
     $stmt->execute([
         'station_id' => $stationId,
@@ -45,12 +46,13 @@ try {
     $sheets = [];
 
     if (!empty($tokensList)) {
-        // Prepare statement to fetch distinct coaches for a token - PRT
+        // Prepare statement to fetch distinct coaches for a token - PRT ordered by id ASC
         $coachesStmt = $pdo->prepare("
-            SELECT DISTINCT coach_no 
+            SELECT coach_no 
             FROM mcc_prt_scorecard_report 
             WHERE token_id = :token_id
-            ORDER BY coach_no ASC
+            GROUP BY coach_no
+            ORDER BY MIN(id) ASC
         ");
 
         $statusStmt = $pdo->prepare("

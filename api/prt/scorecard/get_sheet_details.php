@@ -38,12 +38,13 @@ try {
         exit();
     }
 
-    // 2. Fetch distinct coaches - PRT
+    // 2. Fetch distinct coaches - PRT ordered by id ASC
     $coachesStmt = $pdo->prepare("
-        SELECT DISTINCT coach_no 
+        SELECT coach_no 
         FROM mcc_prt_scorecard_report 
         WHERE token_id = :token_id
-        ORDER BY coach_no ASC
+        GROUP BY coach_no
+        ORDER BY MIN(id) ASC
     ");
     $coachesStmt->execute(['token_id' => $tokenId]);
     $coaches = $coachesStmt->fetchAll(PDO::FETCH_COLUMN);

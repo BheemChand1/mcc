@@ -27,7 +27,7 @@ if (empty($tokenId) || empty($trainNo)) {
 }
 
 try {
-    // Query coach completion counts in chemical reports table - Pantry Car (type_id = 3)
+    // Query coach completion counts in chemical reports table - Pantry Car (type_id = 3) ordered by id ASC
     $stmt = $pdo->prepare("
         SELECT coach_no, 
                SUM(CASE WHEN qty_used IS NULL OR qty_used = '' THEN 1 ELSE 0 END) AS empty_count,
@@ -35,7 +35,7 @@ try {
          FROM mcc_chemical_report
          WHERE token_id = :token_id AND train_no = :train_no AND chemical_type_id = 3
          GROUP BY coach_no
-         ORDER BY coach_no ASC
+         ORDER BY MIN(id) ASC
     ");
     $stmt->execute([
         'token_id' => $tokenId,

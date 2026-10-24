@@ -125,6 +125,7 @@ if ($isFallback) {
         SELECT s.* 
         FROM mcc_prt_scorecard_report s
         WHERE s.station_id = :station_id AND s.token_id = :token_id
+        ORDER BY s.id ASC
     ");
 
     foreach ($tokens as $t) {
@@ -158,8 +159,6 @@ if ($isFallback) {
                 $dbCoaches[$row['coach_no']] = true;
             }
             $dbCoaches = array_keys($dbCoaches);
-            natsort($dbCoaches);
-            $dbCoaches = array_values($dbCoaches);
         }
 
         $attendedCount = count($dbCoaches);

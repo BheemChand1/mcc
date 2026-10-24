@@ -27,7 +27,7 @@ if (empty($tokenId) || empty($trainNo)) {
 }
 
 try {
-    // Query coach completion counts - Intensive 2
+    // Query coach completion counts - Intensive 2 ordered by id ASC
     $stmt = $pdo->prepare("
         SELECT coach_no, 
                SUM(CASE WHEN score_value IS NULL OR score_value = '' THEN 1 ELSE 0 END) AS empty_count,
@@ -35,7 +35,7 @@ try {
         FROM mcc_intensive_scorecard_2_report
         WHERE token_id = :token_id AND train_no = :train_no
         GROUP BY coach_no
-        ORDER BY coach_no ASC
+        ORDER BY MIN(id) ASC
     ");
     $stmt->execute([
         'token_id' => $tokenId,

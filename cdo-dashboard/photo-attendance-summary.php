@@ -7,20 +7,12 @@ $extraStyles = "";
 // Month & Year selection (Default to current month and year)
 $selectedMonth = isset($_GET['month']) ? str_pad($_GET['month'], 2, '0', STR_PAD_LEFT) : date('m');
 $selectedYear = isset($_GET['year']) ? intval($_GET['year']) : intval(date('Y'));
-$selectedProcess = isset($_GET['process']) ? trim($_GET['process']) : '';
 
 // Days in month
 $firstDayOfMonth = "$selectedYear-$selectedMonth-01";
 $lastDayOfMonth = date('Y-m-t', strtotime($firstDayOfMonth));
 $daysInMonth = cal_days_in_month(CAL_GREGORIAN, intval($selectedMonth), $selectedYear);
 $summaryMonthDisplay = date('F Y', strtotime($firstDayOfMonth));
-
-// Fetch distinct processes for filter
-$procStmt = $pdo->query("SELECT DISTINCT process FROM mcc_photo_attendance WHERE process IS NOT NULL AND process != '' ORDER BY process ASC");
-$allProcesses = $procStmt->fetchAll(PDO::FETCH_COLUMN);
-if (empty($allProcesses)) {
-    $allProcesses = ['Normal Cleaning', 'Pit Cleaning', 'Intensive Cleaning', 'Platform Return Cleaning'];
-}
 
 // ----------------------------------------------------
 // Query All Monthly Records
@@ -41,18 +33,12 @@ $sql = "
     FROM mcc_photo_attendance p
     LEFT JOIN mcc_employee e ON p.employee_id = e.employee_id
     WHERE p.attendance_date BETWEEN :start_date AND :end_date
+    ORDER BY p.attendance_date ASC, p.in_time ASC
 ";
 $params = [
     'start_date' => $firstDayOfMonth,
     'end_date' => $lastDayOfMonth
 ];
-
-if (!empty($selectedProcess)) {
-    $sql .= " AND p.process = :process";
-    $params['process'] = $selectedProcess;
-}
-
-$sql .= " ORDER BY p.attendance_date ASC, p.in_time ASC";
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
@@ -570,18 +556,6 @@ include 'sidebar.php';
               </select>
             </div>
 
-            <div class="filter-group">
-              <label for="process"><i class="bi bi-gear-wide-connected me-1"></i>Process Filter</label>
-              <select id="process" name="process" class="filter-select">
-                <option value="">All Processes</option>
-                <?php foreach ($allProcesses as $p): ?>
-                  <option value="<?= htmlspecialchars($p) ?>" <?= ($selectedProcess === $p) ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($p) ?>
-                  </option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-
             <div class="filter-group" style="flex-direction: row; gap: 8px;">
               <button type="submit" class="btn-filter-go">
                 <i class="bi bi-funnel-fill"></i> Load Summary
@@ -595,49 +569,6 @@ include 'sidebar.php';
               <i class="bi bi-printer-fill"></i> Print Summary
             </button>
           </form>
-        </div>
-
-        <!-- Monthly KPI Deck -->
-        <div class="kpi-deck no-print">
-          <div class="kpi-card">
-            <div class="kpi-icon-wrap kpi-icon-blue">
-              <i class="bi bi-calendar2-check-fill"></i>
-            </div>
-            <div class="kpi-meta">
-              <div class="kpi-label">Total Shifts Logged</div>
-              <div class="kpi-value"><?= number_format($totalMonthlyPunches) ?></div>
-            </div>
-          </div>
-
-          <div class="kpi-card">
-            <div class="kpi-icon-wrap kpi-icon-green">
-              <i class="bi bi-people-fill"></i>
-            </div>
-            <div class="kpi-meta">
-              <div class="kpi-label">Unique Staff Active</div>
-              <div class="kpi-value"><?= number_format($uniqueStaffCount) ?></div>
-            </div>
-          </div>
-
-          <div class="kpi-card">
-            <div class="kpi-icon-wrap kpi-icon-purple">
-              <i class="bi bi-clock-history"></i>
-            </div>
-            <div class="kpi-meta">
-              <div class="kpi-label">Total Hours Worked</div>
-              <div class="kpi-value"><?= number_format($totalHoursLogged) ?> hrs</div>
-            </div>
-          </div>
-
-          <div class="kpi-card">
-            <div class="kpi-icon-wrap kpi-icon-amber">
-              <i class="bi bi-patch-check-fill"></i>
-            </div>
-            <div class="kpi-meta">
-              <div class="kpi-label">Photo Verification Rate</div>
-              <div class="kpi-value"><?= $compliancePercent ?>%</div>
-            </div>
-          </div>
         </div>
 
         <!-- Navigation Tabs -->
@@ -668,7 +599,7 @@ include 'sidebar.php';
               </div>
               <div>
                 <span class="badge bg-light text-dark px-3 py-2 fw-bold" style="font-size: 13px; border-radius: 8px;">
-                  <i class="bi bi-check2-circle text-success me-1"></i> Shift Wise & Process Breakdown
+                  <i class="bi bi-check2-circle text-success me-1"></i> Shift Wise Summary
                 </span>
               </div>
             </div>
@@ -678,30 +609,21 @@ include 'sidebar.php';
                 <thead>
                   <tr class="main-th">
                     <th rowspan="2" style="width: 50px;">Day</th>
-                    <th rowspan="2" style="width: 110px;">Date</th>
+                    <th rowspan="2" style="width: 140px;">Date</th>
                     <th colspan="3" style="background:#0c4a6e;">Shift Breakdown (Dynamic by IN Time)</th>
-                    <th rowspan="2" style="width: 110px; background:#075985;">Total Staff</th>
-                    <th colspan="4" style="background:#1e3a5f;">Process Breakdown</th>
-                    <th colspan="2" style="background:#334155;">Photo Verification</th>
-                    <th rowspan="2" style="width: 100px;">Total Hours</th>
+                    <th rowspan="2" style="width: 120px; background:#075985;">Total Staff</th>
+                    <th rowspan="2" style="width: 120px;">Total Hours</th>
                   </tr>
                   <tr class="sub-th">
                     <th style="color:#0369a1;">Shift 1 (06-14)</th>
                     <th style="color:#b45309;">Shift 2 (14-22)</th>
                     <th style="color:#6d28d9;">Shift 3 (22-06)</th>
-                    <th>Normal</th>
-                    <th>Pit</th>
-                    <th>Intensive</th>
-                    <th>Platform</th>
-                    <th>IN Snapshots</th>
-                    <th>OUT Snapshots</th>
                   </tr>
                 </thead>
                 <tbody>
                   <?php 
                   $sumS1 = 0; $sumS2 = 0; $sumS3 = 0; $sumTotal = 0;
-                  $sumNorm = 0; $sumPit = 0; $sumInt = 0; $sumPrt = 0;
-                  $sumInPhotos = 0; $sumOutPhotos = 0; $sumSeconds = 0;
+                  $sumSeconds = 0;
 
                   for ($d = 1; $d <= $daysInMonth; $d++): 
                       $row = $daySummary[$d];
@@ -713,12 +635,6 @@ include 'sidebar.php';
                       $sumS2 += $row['shift2'];
                       $sumS3 += $row['shift3'];
                       $sumTotal += $row['total_present'];
-                      $sumNorm += $row['normal_clean'];
-                      $sumPit += $row['pit_clean'];
-                      $sumInt += $row['intensive_clean'];
-                      $sumPrt += $row['prt_clean'];
-                      $sumInPhotos += $row['in_photos'];
-                      $sumOutPhotos += $row['out_photos'];
                       $sumSeconds += $row['total_seconds'];
 
                       $dayHours = round($row['total_seconds'] / 3600, 1);
@@ -736,20 +652,6 @@ include 'sidebar.php';
                       <td>
                         <strong class="text-primary fs-6"><?= $row['total_present'] ?></strong>
                       </td>
-                      <td><?= $row['normal_clean'] ?></td>
-                      <td><?= $row['pit_clean'] ?></td>
-                      <td><?= $row['intensive_clean'] ?></td>
-                      <td><?= $row['prt_clean'] ?></td>
-                      <td>
-                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
-                          <i class="bi bi-camera me-1"></i><?= $row['in_photos'] ?>
-                        </span>
-                      </td>
-                      <td>
-                        <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle px-2 py-1">
-                          <i class="bi bi-camera me-1"></i><?= $row['out_photos'] ?>
-                        </span>
-                      </td>
                       <td><strong><?= $dayHours > 0 ? "{$dayHours}h" : '-' ?></strong></td>
                     </tr>
                   <?php endfor; ?>
@@ -761,12 +663,6 @@ include 'sidebar.php';
                     <td><?= $sumS2 ?></td>
                     <td><?= $sumS3 ?></td>
                     <td><?= $sumTotal ?></td>
-                    <td><?= $sumNorm ?></td>
-                    <td><?= $sumPit ?></td>
-                    <td><?= $sumInt ?></td>
-                    <td><?= $sumPrt ?></td>
-                    <td><?= $sumInPhotos ?></td>
-                    <td><?= $sumOutPhotos ?></td>
                     <td><?= round($sumSeconds / 3600, 1) ?> hrs</td>
                   </tr>
                 </tfoot>
@@ -782,7 +678,7 @@ include 'sidebar.php';
               <div>
                 <h2 class="banner-title">
                   <i class="bi bi-person-badge-fill text-info"></i>
-                  Staff-Wise Monthly Attendance & Verification &mdash; <?= $summaryMonthDisplay ?>
+                  Staff-Wise Monthly Attendance &mdash; <?= $summaryMonthDisplay ?>
                 </h2>
                 <div class="banner-sub">
                   Total Staff Evaluated: <strong><?= count($empSummary) ?></strong> &bull;
@@ -796,22 +692,20 @@ include 'sidebar.php';
                 <thead>
                   <tr class="main-th">
                     <th style="width: 50px;">#</th>
-                    <th style="width: 120px;">Emp ID</th>
-                    <th style="width: 220px; text-align: left; padding-left: 16px;">Staff Name</th>
-                    <th style="width: 140px;">Designation</th>
-                    <th style="width: 110px;">Days Present</th>
-                    <th style="width: 90px;">Shift 1</th>
-                    <th style="width: 90px;">Shift 2</th>
-                    <th style="width: 90px;">Shift 3</th>
-                    <th style="width: 150px;">Primary Process</th>
-                    <th style="width: 120px;">Total Hours</th>
-                    <th style="width: 120px;">Photos Logged</th>
+                    <th style="width: 140px;">Emp ID</th>
+                    <th style="width: 250px; text-align: left; padding-left: 16px;">Staff Name</th>
+                    <th style="width: 160px;">Designation</th>
+                    <th style="width: 130px;">Days Present</th>
+                    <th style="width: 100px;">Shift 1</th>
+                    <th style="width: 100px;">Shift 2</th>
+                    <th style="width: 100px;">Shift 3</th>
+                    <th style="width: 130px;">Total Hours</th>
                   </tr>
                 </thead>
                 <tbody>
                   <?php if (empty($empSummary)): ?>
                     <tr>
-                      <td colspan="11" style="padding: 30px; text-align: center; color: #64748b;">
+                      <td colspan="9" style="padding: 30px; text-align: center; color: #64748b;">
                         No staff attendance records logged for this month.
                       </td>
                     </tr>
@@ -819,11 +713,7 @@ include 'sidebar.php';
                     <?php 
                     $eSerial = 1;
                     foreach ($empSummary as $emp): 
-                        // Find dominant process
-                        arsort($emp['processes']);
-                        $topProcess = key($emp['processes']) ?? 'Normal Cleaning';
                         $empHours = round($emp['total_seconds'] / 3600, 1);
-                        $totalSnaps = $emp['in_photos_count'] + $emp['out_photos_count'];
                     ?>
                       <tr>
                         <td><?= $eSerial++ ?></td>
@@ -840,17 +730,7 @@ include 'sidebar.php';
                         <td><span class="badge-shift s1"><?= $emp['shift1_count'] ?></span></td>
                         <td><span class="badge-shift s2"><?= $emp['shift2_count'] ?></span></td>
                         <td><span class="badge-shift s3"><?= $emp['shift3_count'] ?></span></td>
-                        <td>
-                          <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 fw-bold">
-                            <?= htmlspecialchars($topProcess) ?>
-                          </span>
-                        </td>
                         <td><strong><?= $empHours ?> hrs</strong></td>
-                        <td>
-                          <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
-                            <i class="bi bi-camera-fill me-1"></i><?= $totalSnaps ?>
-                          </span>
-                        </td>
                       </tr>
                     <?php endforeach; ?>
                   <?php endif; ?>

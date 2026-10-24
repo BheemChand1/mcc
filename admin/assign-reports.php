@@ -96,6 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'vande-bharat-machine.php' => 'vb_mach',
                 'man-power-log.php' => 'manpower',
                 'biometeric_manpower_log.php' => 'manpower',
+                'photo_attendance.php' => 'manpower',
                 'cleanliness.php' => 'cleanliness',
                 'photo-report.php' => 'photo_report',
                 'Billing.php' => 'billing'
@@ -254,7 +255,8 @@ if (isset($_GET['edit_station'])) {
                 'name' => 'Attendance & Manpower',
                 'subreports' => [
                     ['name' => 'Man Power Log', 'url' => 'man-power-log.php', 'aap_key' => 'man_power_log'],
-                    ['name' => 'Bio Metric', 'url' => 'biometeric_manpower_log.php', 'aap_key' => 'biometric_manpower_log']
+                    ['name' => 'Bio Metric', 'url' => 'biometeric_manpower_log.php', 'aap_key' => 'biometric_manpower_log'],
+                    ['name' => 'Photo Attendance', 'url' => 'photo_attendance.php', 'aap_key' => 'photo_attendance']
                 ]
             ],
             'cleanliness_modules' => [
@@ -290,6 +292,7 @@ if (isset($_GET['edit_station'])) {
         $insRepStmt = $pdo->prepare("INSERT INTO mcc_reports (report_name, app_key, station_id, status) VALUES (?, ?, ?, 'Inactive')");
         $insSubStmt = $pdo->prepare("INSERT INTO mcc_subreports (report_url, report_name, report_id, status, aap_key) VALUES (?, ?, ?, 'Inactive', ?)");
         $chkSubStmt = $pdo->prepare("SELECT COUNT(*) FROM mcc_subreports WHERE report_id = :report_id");
+        $chkSingleSub = $pdo->prepare("SELECT COUNT(*) FROM mcc_subreports WHERE report_id = :report_id AND report_url = :url");
 
         foreach ($defaultTemplate as $appKey => $template) {
             if (!isset($existingKeyMap[$appKey])) {
@@ -302,10 +305,10 @@ if (isset($_GET['edit_station'])) {
                 }
             } else {
                 $repId = $existingKeyMap[$appKey];
-                // Check if subreports exist for this report
-                $chkSubStmt->execute(['report_id' => $repId]);
-                if ($chkSubStmt->fetchColumn() == 0) {
-                    foreach ($template['subreports'] as $sub) {
+                // Check if subreports exist or if any new subreport is missing
+                foreach ($template['subreports'] as $sub) {
+                    $chkSingleSub->execute(['report_id' => $repId, 'url' => $sub['url']]);
+                    if ($chkSingleSub->fetchColumn() == 0) {
                         $insSubStmt->execute([$sub['url'], $sub['name'], $repId, $sub['aap_key']]);
                     }
                 }

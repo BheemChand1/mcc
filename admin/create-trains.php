@@ -19,6 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     // Coaches payload
     $coach_nos = $_POST['coach_no'] ?? [];
     $coach_statuses = $_POST['coach_status'] ?? [];
+    $coach_orders = $_POST['coach_order'] ?? [];
 
     if (empty($train_no) || $station_id <= 0) {
         $message = 'Please provide a valid Train Number and select a Station.';
@@ -49,6 +50,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 // 2. Insert Coaches if provided
                 $coachCount = 0;
                 if (!empty($coach_nos) && is_array($coach_nos)) {
+                    $coachItems = [];
+                    foreach ($coach_nos as $idx => $cNo) {
+                        $cNoClean = strtoupper(trim($cNo));
+                        if ($cNoClean === '') continue;
+
+                        $ord = (isset($coach_orders[$idx]) && is_numeric($coach_orders[$idx]))
+                            ? intval($coach_orders[$idx])
+                            : ($idx + 1);
+
+                        $cStat = (isset($coach_statuses[$idx]) && $coach_statuses[$idx] === 'Inactive') ? 'Inactive' : 'Active';
+
+                        $coachItems[] = [
+                            'coach_no' => $cNoClean,
+                            'order'    => $ord,
+                            'status'   => $cStat,
+                            'orig_idx' => $idx
+                        ];
+                    }
+
+                    // Sort coaches according to inserted numeric order
+                    usort($coachItems, function($a, $b) {
+                        if ($a['order'] === $b['order']) {
+                            return $a['orig_idx'] <=> $b['orig_idx'];
+                        }
+                        return $a['order'] <=> $b['order'];
+                    });
+
                     $cStmt = $pdo->prepare("
                         INSERT INTO mcc_coaches (train_id, coach_no, display_order, status) 
                         VALUES (:train_id, :coach_no, :display_order, :status)
@@ -56,22 +84,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
                     $seenCoaches = [];
                     $order = 1;
-                    foreach ($coach_nos as $idx => $cNo) {
-                        $cNoClean = strtoupper(trim($cNo));
-                        if ($cNoClean === '') continue;
-
+                    foreach ($coachItems as $cItem) {
+                        $cNoClean = $cItem['coach_no'];
                         if (isset($seenCoaches[$cNoClean])) {
                             $cNoClean .= " (" . ($seenCoaches[$cNoClean] + 1) . ")";
                         }
                         $seenCoaches[$cNoClean] = ($seenCoaches[$cNoClean] ?? 0) + 1;
 
-                        $cStat = (isset($coach_statuses[$idx]) && $coach_statuses[$idx] === 'Inactive') ? 'Inactive' : 'Active';
-
                         $cStmt->execute([
                             'train_id'      => $train_id,
                             'coach_no'      => $cNoClean,
                             'display_order' => $order++,
-                            'status'        => $cStat
+                            'status'        => $cItem['status']
                         ]);
                         $coachCount++;
                     }
@@ -221,14 +245,19 @@ include 'sidebar.php';
                 <h5 class="card-title mb-0 font-weight-bold text-dark d-flex align-items-center">
                   <i class="bi bi-grid-3x3-gap-fill text-indigo me-2"></i> 2. Coach Composition Builder
                 </h5>
-                <button type="button" class="btn btn-sm btn-indigo text-white rounded-pill px-3 fw-bold" id="addSingleCoachBtn">
-                  <i class="bi bi-plus-lg me-1"></i> Add More Coach
-                </button>
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 font-weight-bold" onclick="sortCoachesTableByOrder()" title="Rearrange rows by entered order numbers">
+                    <i class="bi bi-sort-numeric-down me-1"></i> Sort by Order
+                  </button>
+                  <button type="button" class="btn btn-sm btn-indigo text-white rounded-pill px-3 fw-bold" id="addSingleCoachBtn">
+                    <i class="bi bi-plus-lg me-1"></i> Add More Coach
+                  </button>
+                </div>
               </div>
 
               <div class="card-body p-4">
                 <p class="text-muted small mb-3">
-                  Add alphanumeric coach numbers (e.g. <code>A1</code>, <code>B1</code>, <code>S1</code>, <code>124021</code>, <code>PC</code>, <code>EOG</code>) in order from engine to rear.
+                  Insert alphanumeric coach numbers and order numbers (e.g. <code>A1</code>, <code>B1</code>, <code>S1</code>, <code>124021</code>, <code>PC</code>, <code>EOG</code>) in sequence from engine to rear.
                 </p>
 
                 <!-- Coach List Table -->
@@ -236,10 +265,10 @@ include 'sidebar.php';
                   <table class="table table-hover align-middle mb-0" id="coachesTable">
                     <thead class="table-light sticky-top" style="z-index: 2;">
                       <tr>
-                        <th style="width: 70px;" class="text-center">#</th>
+                        <th style="width: 85px;" class="text-center">Order #</th>
                         <th>Coach Number / Identifier <span class="text-danger">*</span></th>
                         <th style="width: 140px;">Status</th>
-                        <th style="width: 100px;" class="text-center">Actions</th>
+                        <th style="width: 80px;" class="text-center">Action</th>
                       </tr>
                     </thead>
                     <tbody id="coachesTableBody">
@@ -319,7 +348,7 @@ function renderCoaches() {
     const badge = document.getElementById('coachCountBadge');
     const visualStrip = document.getElementById('visualRakeStrip');
 
-    const rows = tbody.querySelectorAll('tr');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
     const count = rows.length;
 
     badge.innerText = count + (count === 1 ? ' Coach' : ' Coaches');
@@ -330,71 +359,91 @@ function renderCoaches() {
     } else {
         emptyState.style.display = 'none';
         
+        const coachItems = rows.map((row, idx) => {
+            const ordInput = row.querySelector('.coach-order-input');
+            const ordVal = ordInput ? parseInt(ordInput.value, 10) : (idx + 1);
+            const cNoInput = row.querySelector('.coach-no-input');
+            const cNo = cNoInput ? cNoInput.value.toUpperCase().trim() : '';
+            return {
+                order: isNaN(ordVal) ? (idx + 1) : ordVal,
+                coachNo: cNo || ('C' + (idx + 1)),
+                origIdx: idx
+            };
+        });
+
+        coachItems.sort((a, b) => {
+            if (a.order === b.order) return a.origIdx - b.origIdx;
+            return a.order - b.order;
+        });
+
         let stripHtml = '';
-        rows.forEach((row, index) => {
-            const posBadge = row.querySelector('.coach-pos');
-            if (posBadge) posBadge.innerText = (index + 1);
-
-            const cNoInput = row.querySelector('input[name="coach_no[]"]');
-            const cNo = cNoInput ? cNoInput.value.toUpperCase().trim() : ('C' + (index + 1));
-
+        coachItems.forEach((c) => {
             stripHtml += '<div class="rake-tag">' + 
-                         '<span style="opacity: 0.5; font-size: 0.7rem;">' + (index + 1) + '.</span> ' + 
-                         (cNo || '-') + '</div>';
+                         '<span style="opacity: 0.5; font-size: 0.7rem;">#' + c.order + '</span> ' + 
+                         (c.coachNo || '-') + '</div>';
         });
 
         visualStrip.innerHTML = stripHtml;
     }
 }
 
-function addCoachRow(cNo = '', cStatus = 'Active') {
+function addCoachRow(cNo = '', cStatus = 'Active', cOrder = null) {
     const tbody = document.getElementById('coachesTableBody');
-    const index = tbody.children.length;
+    const rowCount = tbody.querySelectorAll('tr').length;
+    const orderNum = (cOrder !== null && cOrder !== undefined && cOrder !== '') ? parseInt(cOrder, 10) : (rowCount + 1);
 
     const tr = document.createElement('tr');
+    tr.className = 'coach-row';
     tr.innerHTML = `
-        <td class="text-center font-weight-bold text-muted coach-pos">${index + 1}</td>
+        <td class="text-center">
+            <input type="number" name="coach_order[]" class="form-control form-control-sm text-center font-weight-bold coach-order-input" min="1" step="1" value="\${orderNum}" placeholder="Order" title="Insert order number">
+        </td>
         <td>
-            <input type="text" name="coach_no[]" class="form-control rounded-2 text-uppercase font-weight-bold coach-no-input" value="${cNo}" placeholder="e.g. A1, B1, S1, 124021, PC, EOG" required autocomplete="off">
+            <input type="text" name="coach_no[]" class="form-control rounded-2 text-uppercase font-weight-bold coach-no-input" value="\${cNo}" placeholder="e.g. A1, B1, S1, 124021, PC, EOG" required autocomplete="off">
         </td>
         <td>
             <select name="coach_status[]" class="form-select rounded-2">
-                <option value="Active" ${cStatus === 'Active' ? 'selected' : ''}>Active</option>
-                <option value="Inactive" ${cStatus === 'Inactive' ? 'selected' : ''}>Inactive</option>
+                <option value="Active" \${cStatus === 'Active' ? 'selected' : ''}>Active</option>
+                <option value="Inactive" \${cStatus === 'Inactive' ? 'selected' : ''}>Inactive</option>
             </select>
         </td>
         <td class="text-center">
-            <div class="btn-group btn-group-sm">
-                <button type="button" class="btn btn-outline-secondary move-up-btn" title="Move Up"><i class="bi bi-arrow-up"></i></button>
-                <button type="button" class="btn btn-outline-secondary move-down-btn" title="Move Down"><i class="bi bi-arrow-down"></i></button>
-                <button type="button" class="btn btn-outline-danger remove-coach-btn" title="Remove"><i class="bi bi-trash"></i></button>
-            </div>
+            <button type="button" class="btn btn-sm btn-outline-danger remove-coach-btn" title="Remove"><i class="bi bi-trash"></i></button>
         </td>
     `;
 
     tr.querySelector('.coach-no-input').addEventListener('input', renderCoaches);
+    tr.querySelector('.coach-order-input').addEventListener('input', renderCoaches);
     tr.querySelector('.remove-coach-btn').addEventListener('click', function() {
         tr.remove();
         renderCoaches();
-    });
-    tr.querySelector('.move-up-btn').addEventListener('click', function() {
-        if (tr.previousElementSibling) {
-            tr.parentNode.insertBefore(tr, tr.previousElementSibling);
-            renderCoaches();
-        }
-    });
-    tr.querySelector('.move-down-btn').addEventListener('click', function() {
-        if (tr.nextElementSibling) {
-            tr.parentNode.insertBefore(tr, tr.nextElementSibling);
-            renderCoaches();
-        }
     });
 
     tbody.appendChild(tr);
     renderCoaches();
 
     const input = tr.querySelector('.coach-no-input');
-    if (input) input.focus();
+    if (input && !cNo) input.focus();
+}
+
+function sortCoachesTableByOrder() {
+    const tbody = document.getElementById('coachesTableBody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    if (rows.length === 0) return;
+
+    rows.forEach((row, idx) => { row.dataset.origIdx = idx; });
+
+    rows.sort((a, b) => {
+        const valA = parseInt(a.querySelector('.coach-order-input')?.value, 10);
+        const valB = parseInt(b.querySelector('.coach-order-input')?.value, 10);
+        const numA = isNaN(valA) ? 999999 : valA;
+        const numB = isNaN(valB) ? 999999 : valB;
+        if (numA === numB) return parseInt(a.dataset.origIdx, 10) - parseInt(b.dataset.origIdx, 10);
+        return numA - numB;
+    });
+
+    rows.forEach(row => tbody.appendChild(row));
+    renderCoaches();
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -408,6 +457,13 @@ document.addEventListener('DOMContentLoaded', function() {
             renderCoaches();
         }
     });
+
+    const createForm = document.getElementById('createTrainForm');
+    if (createForm) {
+        createForm.addEventListener('submit', function() {
+            sortCoachesTableByOrder();
+        });
+    }
 
     // Start with 1 initial empty coach row
     addCoachRow();

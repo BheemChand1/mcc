@@ -606,7 +606,7 @@ include 'sidebar.php';
           <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
             <div>
               <h6 class="fw-bold text-dark mb-0">Coach Composition</h6>
-              <div class="text-muted" style="font-size: 0.8rem;">Edit order numbers directly or use &uarr;&darr; buttons to arrange sequence.</div>
+              <div class="text-muted" style="font-size: 0.8rem;">Insert order numbers directly to set coach sequence.</div>
             </div>
             <div class="d-flex gap-2">
               <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-bold" onclick="sortEditModalCoachesByOrder()" title="Reorder list by entered order numbers">
@@ -625,7 +625,7 @@ include 'sidebar.php';
                   <th style="width: 85px;" class="text-center">Order #</th>
                   <th>Coach Number / Identifier <span class="text-danger">*</span></th>
                   <th style="width: 130px;">Status</th>
-                  <th style="width: 130px;" class="text-center">Action</th>
+                  <th style="width: 80px;" class="text-center">Action</th>
                 </tr>
               </thead>
               <tbody id="eModalCoachesTbody">
@@ -727,53 +727,17 @@ function addEditModalCoachRow(cNo = '', cStatus = 'Active', cOrder = null) {
             </select>
         </td>
         <td class="text-center">
-            <div class="btn-group btn-group-sm">
-                <button type="button" class="btn btn-outline-secondary" title="Move Up" onclick="moveCoachRow(this, -1)">
-                    <i class="bi bi-arrow-up"></i>
-                </button>
-                <button type="button" class="btn btn-outline-secondary" title="Move Down" onclick="moveCoachRow(this, 1)">
-                    <i class="bi bi-arrow-down"></i>
-                </button>
-                <button type="button" class="btn btn-outline-danger" title="Remove Coach" onclick="removeCoachRow(this)">
-                    <i class="bi bi-trash"></i>
-                </button>
-            </div>
+            <button type="button" class="btn btn-sm btn-outline-danger" title="Remove Coach" onclick="removeCoachRow(this)">
+                <i class="bi bi-trash"></i>
+            </button>
         </td>
     `;
     tbody.appendChild(tr);
 }
 
-function moveCoachRow(btn, direction) {
-    const tr = btn.closest('tr');
-    const tbody = tr.parentNode;
-    if (direction === -1) {
-        const prev = tr.previousElementSibling;
-        if (prev) {
-            tbody.insertBefore(tr, prev);
-            recalcOrderFromDomOrder();
-        }
-    } else if (direction === 1) {
-        const next = tr.nextElementSibling;
-        if (next) {
-            tbody.insertBefore(next, tr);
-            recalcOrderFromDomOrder();
-        }
-    }
-}
-
 function removeCoachRow(btn) {
     const tr = btn.closest('tr');
     tr.remove();
-    recalcOrderFromDomOrder();
-}
-
-function recalcOrderFromDomOrder() {
-    const tbody = document.getElementById('eModalCoachesTbody');
-    const rows = tbody.querySelectorAll('tr.coach-edit-row');
-    rows.forEach((row, i) => {
-        const ordInput = row.querySelector('.e-coach-order');
-        if (ordInput) ordInput.value = i + 1;
-    });
 }
 
 function sortEditModalCoachesByOrder() {

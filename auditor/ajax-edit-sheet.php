@@ -82,6 +82,10 @@ if ($action === 'fetch_sheet') {
         $reportDate = $rows[0]['report_date'] ?? 'N/A';
         $isApproved = intval($rows[0]['isApproved'] ?? 0);
 
+        if (!empty($rows) && isset($rows[0]['coach_no']) && !empty($trainNo) && $trainNo !== 'N/A') {
+            $rows = sortCoachesByRakeOrder($rows, $trainNo, $stationId, $pdo);
+        }
+
         // Helper maps for parameter names
         $paramMap = [];
         if (strpos($table, 'chemical') !== false) {

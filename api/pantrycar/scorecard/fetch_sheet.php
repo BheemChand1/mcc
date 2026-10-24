@@ -96,6 +96,7 @@ try {
                     $coaches[] = $pr['coach_no'];
                 }
             }
+            $coaches = sortCoachesByRakeOrder($coaches, $trainNo, $stationId, $pdo);
         } else {
             $auditorName = null;
             $tokenId     = null;

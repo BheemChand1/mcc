@@ -64,6 +64,7 @@ try {
         foreach ($tokensList as $tokenItem) {
             $coachesStmt->execute(['token_id' => $tokenItem['token_id']]);
             $coaches = $coachesStmt->fetchAll(PDO::FETCH_COLUMN);
+            $coaches = sortCoachesByRakeOrder($coaches, $tokenItem['train_no'] ?? null, $stationId, $pdo);
 
             $statusStmt->execute(['token_id' => $tokenItem['token_id']]);
             $statusRow = $statusStmt->fetch(PDO::FETCH_ASSOC);

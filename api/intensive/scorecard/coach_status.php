@@ -59,6 +59,7 @@ try {
             "status" => intval($row['empty_count']) === 0 ? 1 : 0
         ];
     }
+    $coachesStatus = sortCoachesByRakeOrder($coachesStatus, $trainNo, null, $pdo);
 
     http_response_code(200);
     echo json_encode([

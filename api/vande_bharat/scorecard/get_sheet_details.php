@@ -47,6 +47,7 @@ try {
     ");
     $coachesStmt->execute(['token_id' => $tokenId]);
     $coaches = $coachesStmt->fetchAll(PDO::FETCH_COLUMN);
+    $coaches = sortCoachesByRakeOrder($coaches, $meta['train_no'] ?? null, $meta['station_id'] ?? null, $pdo);
 
     // 3. Fetch active parameters and subparameters
     $paramsStmt = $pdo->prepare("

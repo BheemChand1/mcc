@@ -27,17 +27,15 @@ if (empty($tokenId) || empty($trainNo)) {
 }
 
 try {
-    // Query coach completion counts in chemical reports table ordered by rake display_order
+    // Query coach completion counts in chemical reports table
     $stmt = $pdo->prepare("
-        SELECT r.coach_no, 
-               SUM(CASE WHEN r.qty_used IS NULL OR r.qty_used = '' THEN 1 ELSE 0 END) AS empty_count,
+        SELECT coach_no, 
+               SUM(CASE WHEN qty_used IS NULL OR qty_used = '' THEN 1 ELSE 0 END) AS empty_count,
                COUNT(*) AS total_count
-         FROM mcc_chemical_report r
-         LEFT JOIN mcc_trains t ON t.train_no = r.train_no AND t.station_id = r.station_id
-         LEFT JOIN mcc_coaches c ON c.train_id = t.train_id AND c.coach_no = r.coach_no
-         WHERE r.token_id = :token_id AND r.train_no = :train_no AND r.chemical_type_id = 1
-         GROUP BY r.coach_no
-         ORDER BY MIN(COALESCE(c.display_order, 999999)) ASC, r.coach_no ASC
+         FROM mcc_chemical_report
+         WHERE token_id = :token_id AND train_no = :train_no AND chemical_type_id = 1
+         GROUP BY coach_no
+         ORDER BY coach_no ASC
     ");
     $stmt->execute([
         'token_id' => $tokenId,

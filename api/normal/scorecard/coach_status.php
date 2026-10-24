@@ -27,17 +27,15 @@ if (empty($tokenId) || empty($trainNo)) {
 }
 
 try {
-    // Query coach completion counts ordered by rake display_order
+    // Query coach completion counts
     $stmt = $pdo->prepare("
-        SELECT r.coach_no, 
-               SUM(CASE WHEN r.score_value IS NULL OR r.score_value = '' THEN 1 ELSE 0 END) AS empty_count,
+        SELECT coach_no, 
+               SUM(CASE WHEN score_value IS NULL OR score_value = '' THEN 1 ELSE 0 END) AS empty_count,
                COUNT(*) AS total_count
-        FROM mcc_normal_scorecard_report r
-        LEFT JOIN mcc_trains t ON t.train_no = r.train_no AND t.station_id = r.station_id
-        LEFT JOIN mcc_coaches c ON c.train_id = t.train_id AND c.coach_no = r.coach_no
-        WHERE r.token_id = :token_id AND r.train_no = :train_no
-        GROUP BY r.coach_no
-        ORDER BY MIN(COALESCE(c.display_order, 999999)) ASC, r.coach_no ASC
+        FROM mcc_normal_scorecard_report
+        WHERE token_id = :token_id AND train_no = :train_no
+        GROUP BY coach_no
+        ORDER BY coach_no ASC
     ");
     $stmt->execute([
         'token_id' => $tokenId,

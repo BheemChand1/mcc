@@ -45,15 +45,12 @@ try {
     $sheets = [];
 
     if (!empty($tokensList)) {
-        // Prepare statement to fetch distinct coaches for a token - PRT ordered by rake display_order
+        // Prepare statement to fetch distinct coaches for a token - PRT
         $coachesStmt = $pdo->prepare("
-            SELECT r.coach_no 
-            FROM mcc_prt_scorecard_report r
-            LEFT JOIN mcc_trains t ON t.train_no = r.train_no AND t.station_id = r.station_id
-            LEFT JOIN mcc_coaches c ON c.train_id = t.train_id AND c.coach_no = r.coach_no
-            WHERE r.token_id = :token_id
-            GROUP BY r.coach_no
-            ORDER BY MIN(COALESCE(c.display_order, 999999)) ASC, r.coach_no ASC
+            SELECT DISTINCT coach_no 
+            FROM mcc_prt_scorecard_report 
+            WHERE token_id = :token_id
+            ORDER BY coach_no ASC
         ");
 
         $statusStmt = $pdo->prepare("

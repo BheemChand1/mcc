@@ -42,15 +42,12 @@ try {
     ]);
     $trainsList = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 2. Query to check existence, auditor_name, token_id, coaches, and filled score values in mcc_intensive_pantry_report ordered by rake display_order
+    // 2. Query to check existence, auditor_name, token_id, coaches, and filled score values in mcc_intensive_pantry_report
     $pantryStmt = $pdo->prepare("
-        SELECT r.token_id, r.auditor_name, r.coach_no
-        FROM mcc_intensive_pantry_report r
-        LEFT JOIN mcc_trains t ON t.train_no = r.train_no AND t.station_id = r.station_id
-        LEFT JOIN mcc_coaches c ON c.train_id = t.train_id AND c.coach_no = r.coach_no
-        WHERE r.station_id = :station_id AND r.train_no = :train_no AND r.report_date = :report_date
-        GROUP BY r.token_id, r.auditor_name, r.coach_no
-        ORDER BY MIN(COALESCE(c.display_order, 999999)) ASC, r.coach_no ASC
+        SELECT DISTINCT token_id, auditor_name, coach_no
+        FROM mcc_intensive_pantry_report
+        WHERE station_id = :station_id AND train_no = :train_no AND report_date = :report_date
+        ORDER BY coach_no ASC
     ");
 
     $statusStmt = $pdo->prepare("

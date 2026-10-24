@@ -711,11 +711,6 @@ $has_billing      = (in_array('billing_management', $active_app_keys) || in_arra
                 <p><?= htmlspecialchars($subreport_names['photo_attendance.php'] ?? 'Photo Attendance') ?></p>
               </a>
             </li>
-            <li class="nav-item">
-              <a href="photo-attendance-summary.php" class="nav-link <?= ($currentPage == 'photo-attendance-summary.php') ? 'active' : '' ?>">
-                <p><?= htmlspecialchars($subreport_names['photo-attendance-summary.php'] ?? 'Attendance Summary') ?></p>
-              </a>
-            </li>
             <?php endif; ?>
           </ul>
         </li>

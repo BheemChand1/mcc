@@ -10,7 +10,8 @@ $flashError = '';
 
 // Handle Direct PHP POST Save (No AJAX)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_machine_changes'])) {
-    $targetDate = trim($_POST['report_date'] ?? '');
+    $targetDate = trim($_POST['original_report_date'] ?? ($_POST['report_date'] ?? ''));
+    $newReportDate = trim($_POST['sheet_report_date'] ?? '');
     $postedStatus = $_POST['used_status'] ?? [];
 
     if (!empty($targetDate) && !empty($postedStatus)) {
@@ -21,6 +22,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_machine_changes'
             $chk->execute(['rd' => $targetDate, 'sid' => $stationId]);
 
             if ($chk->fetchColumn() > 0) {
+                $finalDate = $targetDate;
+                if (!empty($newReportDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $newReportDate) && $newReportDate !== $targetDate) {
+                    $updDateStmt = $pdo->prepare("UPDATE mcc_normal_machine_report SET report_date = :new_rd WHERE report_date = :old_rd AND station_id = :sid");
+                    $updDateStmt->execute(['new_rd' => $newReportDate, 'old_rd' => $targetDate, 'sid' => $stationId]);
+                    $finalDate = $newReportDate;
+
+                    if ($newReportDate < $fromDate) $fromDate = $newReportDate;
+                    if ($newReportDate > $toDate) $toDate = $newReportDate;
+                }
+
                 $updStmt = $pdo->prepare("
                     UPDATE mcc_normal_machine_report 
                     SET used_status = :status 
@@ -34,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_machine_changes'
                     foreach ($shiftVals as $sId => $val) {
                         $updStmt->execute([
                             'status' => trim($val),
-                            'rd' => $targetDate,
+                            'rd' => $finalDate,
                             'sid' => $stationId,
                             'm_id' => $mId,
                             's_id' => $sId
@@ -43,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_machine_changes'
                 }
 
                 $pdo->commit();
-                $flashSuccess = "Machine report for " . htmlspecialchars(date('d-m-Y', strtotime($targetDate))) . " updated successfully!";
+                $flashSuccess = "Machine report for " . htmlspecialchars(date('d-m-Y', strtotime($finalDate))) . " updated successfully!";
                 $editDate = ''; // Exit edit mode
             } else {
                 $pdo->rollBack();
@@ -235,6 +246,7 @@ include 'sidebar.php';
                 ?>
                 <?php if ($isEditingThisSheet): ?>
                 <form method="POST" action="">
+                    <input type="hidden" name="original_report_date" value="<?= htmlspecialchars($sheet['report_date']) ?>">
                     <input type="hidden" name="report_date" value="<?= htmlspecialchars($sheet['report_date']) ?>">
                     <input type="hidden" name="from_date" value="<?= htmlspecialchars($fromDate) ?>">
                     <input type="hidden" name="to_date" value="<?= htmlspecialchars($toDate) ?>">
@@ -267,14 +279,21 @@ include 'sidebar.php';
 
                     <?php if ($isEditingThisSheet): ?>
                         <div class="alert alert-info py-2 px-3 mb-3 d-flex align-items-center justify-content-between no-print" style="border: 1px solid #b9e6fe; background-color: #f0f9ff; color: #0369a1; border-radius: 6px;">
-                            <span class="small fw-semibold"><i class="bi bi-info-circle-fill me-1"></i> <strong>Edit Mode Active:</strong> You can edit the shift status (Y/N) in the table below. Click <strong>Save Changes</strong> above to update the database.</span>
+                            <span class="small fw-semibold"><i class="bi bi-info-circle-fill me-1"></i> <strong>Edit Mode Active:</strong> You can edit the sheet Date and shift status (Y/N) in the table below. Click <strong>Save Changes</strong> above to update the database.</span>
                         </div>
                     <?php endif; ?>
 
                     <div class="report-meta-section">
                         <div class="meta-row">
                             <div class="meta-item"><span>Railway:</span> <?= htmlspecialchars($railwayName) ?></div>
-                            <div class="meta-item"><span>Date:</span> <?= htmlspecialchars(date('d-m-Y', strtotime($sheet['report_date']))) ?></div>
+                            <div class="meta-item">
+                                <span>Date:</span> 
+                                <?php if ($isEditingThisSheet): ?>
+                                    <input type="date" name="sheet_report_date" value="<?= htmlspecialchars($sheet['report_date']) ?>" class="form-control form-control-sm text-center fw-bold d-inline-block" style="width: 145px; height: 30px; font-size: 0.9rem; padding: 2px 6px; border: 1.5px solid #0284c7; background-color: #fff;" required>
+                                <?php else: ?>
+                                    <?= htmlspecialchars(date('d-m-Y', strtotime($sheet['report_date']))) ?>
+                                <?php endif; ?>
+                            </div>
                             <div class="meta-item"><span>Division:</span> <?= htmlspecialchars($divisionName) ?></div>
                             <div class="meta-item"><span>Station:</span> <?= htmlspecialchars($stationName) ?></div>
                         </div>

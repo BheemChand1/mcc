@@ -12,8 +12,9 @@ $flashError = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_chemical_changes'])) {
     $targetToken = trim($_POST['token_id'] ?? '');
     $postedQty = $_POST['qty_used'] ?? [];
+    $newReportDate = trim($_POST['sheet_report_date'] ?? '');
 
-    if (!empty($targetToken) && !empty($postedQty)) {
+    if (!empty($targetToken)) {
         try {
             $pdo->beginTransaction();
 
@@ -21,26 +22,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_chemical_changes
             $chk->execute(['tok' => $targetToken, 'sid' => $stationId]);
 
             if ($chk->fetchColumn() > 0) {
-                $updStmt = $pdo->prepare("
-                    UPDATE mcc_chemical_report 
-                    SET qty_used = :qty 
-                    WHERE token_id = :tok 
-                      AND station_id = :sid 
-                      AND parameter_id = :p_id
-                      AND chemical_type_id = 1
-                ");
+                // Update Date if provided
+                if (!empty($newReportDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $newReportDate)) {
+                    $dateUpd = $pdo->prepare("UPDATE mcc_chemical_report SET report_date = :dt WHERE token_id = :tok AND station_id = :sid AND chemical_type_id = 1");
+                    $dateUpd->execute(['dt' => $newReportDate, 'tok' => $targetToken, 'sid' => $stationId]);
 
-                foreach ($postedQty as $pId => $qtyVal) {
-                    $updStmt->execute([
-                        'qty' => floatval($qtyVal),
-                        'tok' => $targetToken,
-                        'sid' => $stationId,
-                        'p_id' => $pId
-                    ]);
+                    // Also keep normal scorecard report date in sync if it exists for this token
+                    try {
+                        $scDateUpd = $pdo->prepare("UPDATE mcc_normal_scorecard_report SET report_date = :dt WHERE token_id = :tok AND station_id = :sid");
+                        $scDateUpd->execute(['dt' => $newReportDate, 'tok' => $targetToken, 'sid' => $stationId]);
+                    } catch (Exception $ex) {}
+
+                    // Ensure updated date falls within current filter range so it remains visible
+                    if ($newReportDate < $fromDate) $fromDate = $newReportDate;
+                    if ($newReportDate > $toDate) $toDate = $newReportDate;
+                }
+
+                // Update Quantities
+                if (!empty($postedQty)) {
+                    $updStmt = $pdo->prepare("
+                        UPDATE mcc_chemical_report 
+                        SET qty_used = :qty 
+                        WHERE token_id = :tok 
+                          AND station_id = :sid 
+                          AND parameter_id = :p_id
+                          AND chemical_type_id = 1
+                    ");
+
+                    foreach ($postedQty as $pId => $qtyVal) {
+                        $updStmt->execute([
+                            'qty' => floatval($qtyVal),
+                            'tok' => $targetToken,
+                            'sid' => $stationId,
+                            'p_id' => $pId
+                        ]);
+                    }
                 }
 
                 $pdo->commit();
-                $flashSuccess = "Chemical report (Token: " . htmlspecialchars($targetToken) . ") updated successfully!";
+                $dateNote = (!empty($newReportDate)) ? " (Date: " . date('d-m-Y', strtotime($newReportDate)) . ")" : "";
+                $flashSuccess = "Chemical report (Token: " . htmlspecialchars($targetToken) . ") updated successfully{$dateNote}!";
                 $editToken = ''; // Exit edit mode after saving
             } else {
                 $pdo->rollBack();
@@ -417,7 +438,7 @@ include 'sidebar.php';
 
                         <?php if ($isEditingThisSheet): ?>
                             <div class="alert alert-info py-2 px-3 mb-3 d-flex align-items-center justify-content-between no-print" style="border: 1px solid #b9e6fe; background-color: #f0f9ff; color: #0369a1; border-radius: 6px;">
-                                <span class="small fw-semibold"><i class="bi bi-info-circle-fill me-1"></i> <strong>Edit Mode Active:</strong> You can edit the chemical quantities used in the table below. Click <strong>Save Changes</strong> above to update the database.</span>
+                                <span class="small fw-semibold"><i class="bi bi-info-circle-fill me-1"></i> <strong>Edit Mode Active:</strong> You can edit the Date and chemical quantities used in the table below. Click <strong>Save Changes</strong> above to update the database.</span>
                             </div>
                         <?php endif; ?>
 
@@ -427,7 +448,13 @@ include 'sidebar.php';
                                     <strong>Railway:</strong> <?= htmlspecialchars($railwayName) ?> &nbsp;|&nbsp;
                                     <strong>Division:</strong> <?= htmlspecialchars($divisionName) ?> &nbsp;|&nbsp;
                                     <strong>Station:</strong> <?= htmlspecialchars($stationName) ?> &nbsp;|&nbsp;
-                                    <strong>Date:</strong> <?= htmlspecialchars($sheet['report_date'] ? date('d-m-Y', strtotime($sheet['report_date'])) : date('d-m-Y', strtotime($fromDate))) ?> &nbsp;|&nbsp;
+                                    <strong>Date:</strong> 
+                                    <?php if ($isEditingThisSheet): ?>
+                                        <input type="date" name="sheet_report_date" value="<?= htmlspecialchars($sheet['report_date']) ?>" class="form-control form-control-sm text-center fw-bold d-inline-block" style="width: 145px; padding: 2px 6px; font-size: 12px; border: 2px solid #0284c7; background: #fff !important; color: #000 !important; border-radius: 4px;" required>
+                                    <?php else: ?>
+                                        <?= htmlspecialchars($sheet['report_date'] ? date('d-m-Y', strtotime($sheet['report_date'])) : date('d-m-Y', strtotime($fromDate))) ?>
+                                    <?php endif; ?>
+                                    &nbsp;|&nbsp;
                                     <strong>Train No:</strong> <?= htmlspecialchars($sheet['train_no'] ?? '-') ?> &nbsp;|&nbsp;
                                     <strong>No. of Coaches:</strong> <?= htmlspecialchars($sheet['total_coaches']) ?>
                                 </div>

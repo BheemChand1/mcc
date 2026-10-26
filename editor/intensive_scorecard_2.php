@@ -8,6 +8,73 @@ require_once 'auth.php';
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
 $selectedTrain = $_GET['train_no'] ?? '';
+$editToken = $_GET['edit'] ?? '';
+$flashSuccess = '';
+$flashError = '';
+
+// Handle Direct PHP POST Save (Date, Scores)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_scorecard_changes'])) {
+    $targetToken = trim($_POST['token_id'] ?? '');
+    $newReportDate = trim($_POST['sheet_report_date'] ?? '');
+    $postedScores = $_POST['scores'] ?? [];
+
+    if (!empty($targetToken)) {
+        try {
+            $pdo->beginTransaction();
+
+            $chk = $pdo->prepare("SELECT COUNT(*) FROM mcc_intensive_scorecard_2_report WHERE token_id = :tok AND station_id = :sid");
+            $chk->execute(['tok' => $targetToken, 'sid' => $stationId]);
+
+            if ($chk->fetchColumn() > 0) {
+                // Update Date if provided
+                if (!empty($newReportDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $newReportDate)) {
+                    $dateUpd = $pdo->prepare("UPDATE mcc_intensive_scorecard_2_report SET report_date = :dt WHERE token_id = :tok AND station_id = :sid");
+                    $dateUpd->execute(['dt' => $newReportDate, 'tok' => $targetToken, 'sid' => $stationId]);
+
+                    if ($newReportDate < $fromDate) $fromDate = $newReportDate;
+                    if ($newReportDate > $toDate) $toDate = $newReportDate;
+                }
+
+                // Update Scores
+                if (!empty($postedScores)) {
+                    $updScoreStmt = $pdo->prepare("
+                        UPDATE mcc_intensive_scorecard_2_report 
+                        SET score_value = :val 
+                        WHERE token_id = :tok 
+                          AND station_id = :sid 
+                          AND sub_parameter_id = :sp_id 
+                          AND coach_no = :c_no
+                    ");
+
+                    foreach ($postedScores as $spId => $coachVals) {
+                        foreach ($coachVals as $cNo => $val) {
+                            $updScoreStmt->execute([
+                                'val' => trim($val),
+                                'tok' => $targetToken,
+                                'sid' => $stationId,
+                                'sp_id' => $spId,
+                                'c_no' => $cNo
+                            ]);
+                        }
+                    }
+                }
+
+                $pdo->commit();
+                $dateNote = (!empty($newReportDate)) ? " (Date: " . date('d-m-Y', strtotime($newReportDate)) . ")" : "";
+                $flashSuccess = "Intensive Scorecard (Annexure A-2, Token: " . htmlspecialchars($targetToken) . ") updated successfully{$dateNote}!";
+                $editToken = ''; // Exit edit mode after saving
+            } else {
+                $pdo->rollBack();
+                $flashError = "Record not found for this station.";
+            }
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $flashError = "Failed to update sheet: " . $e->getMessage();
+        }
+    }
+}
 
 // Station information
 $stationQuery = $pdo->prepare("
@@ -181,6 +248,8 @@ if (!empty($inspectionTokens)) {
             'token_id' => $tokenRow['token_id'],
             'train_no' => $tokenRow['train_no'],
             'date' => date('d-m-Y', strtotime($tokenRow['report_date'])),
+            'report_date_raw' => $tokenRow['report_date'],
+            'is_fallback' => false,
             'total_coaches' => $attendedCount ?: 19,
             'attended_coaches' => $attendedCount ?: 19,
             'total_score_percent' => $calculatedScore,
@@ -245,6 +314,8 @@ if (!empty($inspectionTokens)) {
         'token_id' => 'TOK-INT2-0941',
         'train_no' => '12504',
         'date' => date('d-m-Y', strtotime($toDate)),
+        'report_date_raw' => $toDate,
+        'is_fallback' => true,
         'total_coaches' => '19',
         'attended_coaches' => '19',
         'total_score_percent' => $fallbackScore,
@@ -696,10 +767,33 @@ include 'sidebar.php';
                 </div>
             </div>
 
+            <?php if (!empty($flashSuccess)): ?>
+                <div class="alert alert-success alert-dismissible fade show mb-3 no-print" role="alert">
+                    <i class="bi bi-check-circle-fill me-2"></i><strong>Success!</strong> <?= $flashSuccess ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            <?php endif; ?>
+            <?php if (!empty($flashError)): ?>
+                <div class="alert alert-danger alert-dismissible fade show mb-3 no-print" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i><strong>Error!</strong> <?= $flashError ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            <?php endif; ?>
+
             <!-- Scorecard Document Wrapper -->
             <div class="cts-wrap">
-                <?php foreach ($sheetsData as $sheet): ?>
-                    <div class="cts-frame">
+                <?php foreach ($sheetsData as $sheet): 
+                    $isEditingThisSheet = (!$sheet['is_fallback'] && !empty($sheet['token_id']) && (string)$editToken === (string)$sheet['token_id']);
+                ?>
+                    <?php if ($isEditingThisSheet): ?>
+                    <form method="POST" action="">
+                        <input type="hidden" name="token_id" value="<?= htmlspecialchars($sheet['token_id']) ?>">
+                        <input type="hidden" name="from_date" value="<?= htmlspecialchars($fromDate) ?>">
+                        <input type="hidden" name="to_date" value="<?= htmlspecialchars($toDate) ?>">
+                        <input type="hidden" name="train_no" value="<?= htmlspecialchars($selectedTrain) ?>">
+                    <?php endif; ?>
+
+                    <div class="cts-frame" style="<?= $isEditingThisSheet ? 'border: 2px solid #0284c7; box-shadow: 0 0 22px rgba(2, 132, 199, 0.35);' : '' ?>">
 
                         <!-- Token & Approval on the Side -->
                         <div class="cts-token-side d-flex align-items-center gap-2">
@@ -708,16 +802,35 @@ include 'sidebar.php';
                             <?php endif; ?>
                             <?php if (!empty($sheet['isApproved'])): ?>
                                 <span class="badge bg-success px-3 py-1 text-white" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px;"><i class="bi bi-patch-check-fill me-1"></i> Approved</span>
-                            <?php elseif (!empty($isCDO) && !empty($sheet['token_id'])): ?>
-                                <button type="button" class="btn btn-sm btn-success no-print" onclick="approveReport(this, 'mcc_intensive_scorecard_2_report', '<?= htmlspecialchars($sheet['token_id']) ?>')" style="font-weight: 600; padding: 4px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
-                                    <i class="bi bi-check2-circle"></i> <span>Approve</span>
-                                </button>
+                            <?php else: ?>
+                                <span class="badge bg-warning text-dark px-3 py-1" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px;"><i class="bi bi-clock-history me-1"></i> Pending Approval</span>
+                            <?php endif; ?>
+
+                            <?php if (!$sheet['is_fallback'] && !empty($sheet['token_id'])): ?>
+                                <?php if ($isEditingThisSheet): ?>
+                                    <button type="submit" name="save_scorecard_changes" class="btn btn-sm btn-success fw-bold text-white no-print shadow-sm px-3" style="font-weight: 700;">
+                                        <i class="bi bi-check2-circle me-1"></i> Save Changes
+                                    </button>
+                                    <a href="?from_date=<?= urlencode($fromDate) ?>&to_date=<?= urlencode($toDate) ?>&train_no=<?= urlencode($selectedTrain) ?>" class="btn btn-sm btn-secondary fw-bold text-white no-print shadow-sm px-3">
+                                        <i class="bi bi-x-circle me-1"></i> Cancel
+                                    </a>
+                                <?php else: ?>
+                                    <a href="?from_date=<?= urlencode($fromDate) ?>&to_date=<?= urlencode($toDate) ?>&train_no=<?= urlencode($selectedTrain) ?>&edit=<?= urlencode($sheet['token_id']) ?>" class="btn btn-sm fw-bold text-dark no-print shadow-sm px-3" style="background-color: #fbbf24 !important; color: #000000 !important; font-weight: 700 !important; border: 1px solid #f59e0b;" title="Edit Sheet">
+                                        <i class="bi bi-pencil-square me-1"></i> Edit Sheet
+                                    </a>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </div>
 
                         <!-- Main Titles -->
                         <h2 class="scorecard-main-title"><?= htmlspecialchars($sheet['title']) ?></h2>
                         <div class="scorecard-subtitle"><?= htmlspecialchars($sheet['subtitle']) ?></div>
+
+                        <?php if ($isEditingThisSheet): ?>
+                            <div class="alert alert-info py-2 px-3 mb-3 d-flex align-items-center justify-content-between no-print" style="border: 1px solid #b9e6fe; background-color: #f0f9ff; color: #0369a1; border-radius: 6px;">
+                                <span class="small fw-semibold"><i class="bi bi-info-circle-fill me-1"></i> <strong>Edit Mode Active:</strong> You can edit the Date and coach scores (0-3 or Y/N) directly in the table below. Click <strong>Save Changes</strong> above to update the database.</span>
+                            </div>
+                        <?php endif; ?>
 
                         <!-- Professional Metadata Card -->
                         <div class="meta-card">
@@ -728,7 +841,13 @@ include 'sidebar.php';
                                 </div>
                                 <div class="meta-item">
                                     <span class="meta-label">Date:</span>
-                                    <span class="meta-val"><?= htmlspecialchars($sheet['date']) ?></span>
+                                    <span class="meta-val">
+                                        <?php if ($isEditingThisSheet): ?>
+                                            <input type="date" name="sheet_report_date" value="<?= htmlspecialchars($sheet['report_date_raw']) ?>" class="form-control form-control-sm text-center fw-bold d-inline-block" style="width: 140px; height: 28px; font-size: 12px; padding: 1px 4px; border: 1.5px solid #0284c7; background: #fff !important; color: #000 !important;" required>
+                                        <?php else: ?>
+                                            <?= htmlspecialchars($sheet['date']) ?>
+                                        <?php endif; ?>
+                                    </span>
                                 </div>
                                 <div class="meta-item">
                                     <span class="meta-label">Total No of coaches in rake:</span>
@@ -791,9 +910,14 @@ include 'sidebar.php';
 
                                                 <?php for ($c = 0; $c < 24; $c++): 
                                                     $val = $sub['values'][$c] ?? '';
+                                                    $coachNo = $sheet['coach_numbers'][$c] ?? '';
                                                 ?>
                                                     <td class="col-c font-weight-bold">
-                                                        <?= htmlspecialchars($val) ?>
+                                                        <?php if ($isEditingThisSheet && !empty($coachNo)): ?>
+                                                            <input type="text" name="scores[<?= $sub['id'] ?>][<?= htmlspecialchars($coachNo) ?>]" value="<?= htmlspecialchars($val) ?>" class="form-control form-control-sm text-center fw-bold" style="width: 38px; height: 26px; padding: 1px; margin: 0 auto; border: 1.5px solid #0284c7; background: #fff !important; color: #000 !important; font-size: 11px;">
+                                                        <?php else: ?>
+                                                            <?= htmlspecialchars($val) ?>
+                                                        <?php endif; ?>
                                                     </td>
                                                 <?php endfor; ?>
 
@@ -826,6 +950,9 @@ include 'sidebar.php';
                         </div>
 
                     </div>
+                    <?php if ($isEditingThisSheet): ?>
+                    </form>
+                    <?php endif; ?>
                 <?php endforeach; ?>
             </div>
 

@@ -12,8 +12,9 @@ $flashError = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_dc_changes'])) {
     $targetToken = trim($_POST['token_id'] ?? '');
     $postedRatings = $_POST['ratings'] ?? [];
+    $newReportDate = trim($_POST['sheet_report_date'] ?? '');
 
-    if (!empty($targetToken) && !empty($postedRatings)) {
+    if (!empty($targetToken)) {
         try {
             $pdo->beginTransaction();
 
@@ -21,29 +22,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_dc_changes'])) {
             $chk->execute(['tok' => $targetToken, 'sid' => $stationId]);
 
             if ($chk->fetchColumn() > 0) {
-                $updStmt = $pdo->prepare("
-                    UPDATE dc_mcc_report 
-                    SET rating = :val 
-                    WHERE token_id = :tok 
-                      AND station_id = :sid 
-                      AND parameter_id = :p_id 
-                      AND shift_id = :s_id
-                ");
+                // Update Date if provided
+                if (!empty($newReportDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $newReportDate)) {
+                    $dateUpd = $pdo->prepare("UPDATE dc_mcc_report SET report_date = :dt WHERE token_id = :tok AND station_id = :sid");
+                    $dateUpd->execute(['dt' => $newReportDate, 'tok' => $targetToken, 'sid' => $stationId]);
 
-                foreach ($postedRatings as $pId => $shiftVals) {
-                    foreach ($shiftVals as $sId => $val) {
-                        $updStmt->execute([
-                            'val' => trim($val),
-                            'tok' => $targetToken,
-                            'sid' => $stationId,
-                            'p_id' => $pId,
-                            's_id' => $sId
-                        ]);
+                    try {
+                        $chemDateUpd = $pdo->prepare("UPDATE mcc_chemical_report SET report_date = :dt WHERE token_id = :tok AND station_id = :sid AND chemical_type_id = 6");
+                        $chemDateUpd->execute(['dt' => $newReportDate, 'tok' => $targetToken, 'sid' => $stationId]);
+                    } catch (Exception $ex) {}
+
+                    if ($newReportDate < $fromDate) $fromDate = $newReportDate;
+                    if ($newReportDate > $toDate) $toDate = $newReportDate;
+                }
+
+                if (!empty($postedRatings)) {
+                    $updStmt = $pdo->prepare("
+                        UPDATE dc_mcc_report 
+                        SET rating = :val 
+                        WHERE token_id = :tok 
+                          AND station_id = :sid 
+                          AND parameter_id = :p_id 
+                          AND shift_id = :s_id
+                    ");
+
+                    foreach ($postedRatings as $pId => $shiftVals) {
+                        foreach ($shiftVals as $sId => $val) {
+                            $updStmt->execute([
+                                'val' => trim($val),
+                                'tok' => $targetToken,
+                                'sid' => $stationId,
+                                'p_id' => $pId,
+                                's_id' => $sId
+                            ]);
+                        }
                     }
                 }
 
                 $pdo->commit();
-                $flashSuccess = "Scorecard (Token: " . htmlspecialchars($targetToken) . ") updated successfully!";
+                $dateNote = (!empty($newReportDate)) ? " (Date: " . date('d-m-Y', strtotime($newReportDate)) . ")" : "";
+                $flashSuccess = "Scorecard (Token: " . htmlspecialchars($targetToken) . ") updated successfully{$dateNote}!";
                 $editToken = ''; // Exit edit mode after saving
             } else {
                 $pdo->rollBack();
@@ -364,7 +382,12 @@ include 'sidebar.php';
                             <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px;">
                                 <div>
                                     <strong>Depot:</strong> <?= htmlspecialchars($stationName) ?> &nbsp;|&nbsp;
-                                    <strong>Inspection Date:</strong> <?= htmlspecialchars(date('d-m-Y', strtotime($sheet['report_date']))) ?>
+                                    <strong>Inspection Date:</strong> 
+                                    <?php if ($isEditingThisSheet): ?>
+                                        <input type="date" name="sheet_report_date" value="<?= htmlspecialchars($sheet['report_date']) ?>" class="form-control form-control-sm text-center fw-bold d-inline-block" style="width: 145px; height: 30px; font-size: 0.9rem; padding: 2px 6px; border: 1.5px solid #0284c7; background-color: #fff;" required>
+                                    <?php else: ?>
+                                        <?= htmlspecialchars(date('d-m-Y', strtotime($sheet['report_date']))) ?>
+                                    <?php endif; ?>
                                     <?php if (!$sheet['is_fallback']): ?>
                                         &nbsp;|&nbsp; <strong>Token:</strong> <?= htmlspecialchars($sheet['token_id']) ?>
                                     <?php endif; ?>

@@ -3,6 +3,77 @@ require_once 'auth.php';
 
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
+$editToken = $_GET['edit'] ?? '';
+$flashSuccess = '';
+$flashError = '';
+
+// Handle Direct PHP POST Save (No AJAX)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_chemical_changes'])) {
+    $targetToken = trim($_POST['token_id'] ?? '');
+    $postedQty = $_POST['qty_used'] ?? [];
+    $newReportDate = trim($_POST['sheet_report_date'] ?? '');
+
+    if (!empty($targetToken)) {
+        try {
+            $pdo->beginTransaction();
+
+            $chk = $pdo->prepare("SELECT COUNT(*) FROM mcc_chemical_report WHERE token_id = :tok AND station_id = :sid AND chemical_type_id = 4");
+            $chk->execute(['tok' => $targetToken, 'sid' => $stationId]);
+
+            if ($chk->fetchColumn() > 0) {
+                // Update Date if provided
+                if (!empty($newReportDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $newReportDate)) {
+                    $dateUpd = $pdo->prepare("UPDATE mcc_chemical_report SET report_date = :dt WHERE token_id = :tok AND station_id = :sid AND chemical_type_id = 4");
+                    $dateUpd->execute(['dt' => $newReportDate, 'tok' => $targetToken, 'sid' => $stationId]);
+
+                    // Also keep PRT scorecard report date in sync if it exists for this token
+                    try {
+                        $scDateUpd = $pdo->prepare("UPDATE mcc_prt_scorecard_report SET report_date = :dt WHERE token_id = :tok AND station_id = :sid");
+                        $scDateUpd->execute(['dt' => $newReportDate, 'tok' => $targetToken, 'sid' => $stationId]);
+                    } catch (Exception $ex) {}
+
+                    // Ensure updated date falls within current filter range so it remains visible
+                    if ($newReportDate < $fromDate) $fromDate = $newReportDate;
+                    if ($newReportDate > $toDate) $toDate = $newReportDate;
+                }
+
+                // Update Quantities
+                if (!empty($postedQty)) {
+                    $updStmt = $pdo->prepare("
+                        UPDATE mcc_chemical_report 
+                        SET qty_used = :qty 
+                        WHERE token_id = :tok 
+                          AND station_id = :sid 
+                          AND parameter_id = :p_id
+                          AND chemical_type_id = 4
+                    ");
+
+                    foreach ($postedQty as $pId => $qtyVal) {
+                        $updStmt->execute([
+                            'qty' => floatval($qtyVal),
+                            'tok' => $targetToken,
+                            'sid' => $stationId,
+                            'p_id' => $pId
+                        ]);
+                    }
+                }
+
+                $pdo->commit();
+                $dateNote = (!empty($newReportDate)) ? " (Date: " . date('d-m-Y', strtotime($newReportDate)) . ")" : "";
+                $flashSuccess = "PRT chemical report (Token: " . htmlspecialchars($targetToken) . ") updated successfully{$dateNote}!";
+                $editToken = ''; // Exit edit mode after saving
+            } else {
+                $pdo->rollBack();
+                $flashError = "Record not found for this station.";
+            }
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $flashError = "Failed to update sheet: " . $e->getMessage();
+        }
+    }
+}
 
 // Fetch all active parameters dynamically - PRT
 $paramsStmt = $pdo->prepare("
@@ -303,6 +374,19 @@ include 'sidebar.php';
             </form>
 
             <div class="report-wrap">
+                <?php if (!empty($flashSuccess)): ?>
+                    <div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
+                        <i class="bi bi-check-circle-fill me-2"></i><strong>Success!</strong> <?= $flashSuccess ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                <?php endif; ?>
+                <?php if (!empty($flashError)): ?>
+                    <div class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i><strong>Error!</strong> <?= $flashError ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                <?php endif; ?>
+
                 <?php if ($sheetsData[0]['is_fallback']): ?>
                     <div class="alert alert-warning no-print" style="margin: 0 0 20px 0; border-radius: 8px; border: 1px solid #ffeeba; background-color: #fff3cd; color: #856404; padding: 12px 20px;">
                         <i class="bi bi-exclamation-triangle-fill me-2"></i> No chemical reports found for the selected date range.
@@ -310,8 +394,17 @@ include 'sidebar.php';
                 <?php endif; ?>
 
                 <?php foreach ($sheetsData as $sheet): ?>
-                    <?php if ($sheet['is_fallback']) continue; ?>
-                    <div class="chemical-sheet">
+                    <?php if ($sheet['is_fallback']) continue; 
+                    $isEditingThisSheet = (!$sheet['is_fallback'] && !empty($sheet['token_id']) && (string)$editToken === (string)$sheet['token_id']);
+                    ?>
+                    <?php if ($isEditingThisSheet): ?>
+                    <form method="POST" action="">
+                        <input type="hidden" name="token_id" value="<?= htmlspecialchars($sheet['token_id']) ?>">
+                        <input type="hidden" name="from_date" value="<?= htmlspecialchars($fromDate) ?>">
+                        <input type="hidden" name="to_date" value="<?= htmlspecialchars($toDate) ?>">
+                    <?php endif; ?>
+
+                    <div class="chemical-sheet" style="<?= $isEditingThisSheet ? 'border: 2px solid #0284c7; box-shadow: 0 0 22px rgba(2, 132, 199, 0.35);' : '' ?>">
 
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;">
                             <h2 style="font-size: 18px; font-weight: 700; color: #1e293b; margin: 0;">Daily Chemical Report (Platform Return Trains)</h2>
@@ -321,13 +414,32 @@ include 'sidebar.php';
                                 <?php endif; ?>
                                 <?php if (!empty($sheet['isApproved'])): ?>
                                     <span class="badge bg-success px-3 py-2 text-white" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px; box-shadow: 0 2px 5px rgba(21,128,61,0.2);"><i class="bi bi-patch-check-fill me-1"></i> Approved</span>
-                                <?php elseif (!empty($isCDO) && empty($sheet['is_fallback'])): ?>
-                                    <button type="button" class="btn btn-sm btn-success no-print" onclick="approveReport(this, 'mcc_prt_chemical_report', '<?= htmlspecialchars($sheet['token_id']) ?>')" style="font-weight: 600; padding: 5px 14px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 2px 6px rgba(16,185,129,0.25);">
-                                        <i class="bi bi-check2-circle"></i> <span>Approve</span>
-                                    </button>
+                                <?php else: ?>
+                                    <span class="badge bg-warning text-dark px-3 py-2" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px;"><i class="bi bi-clock-history me-1"></i> Pending Approval</span>
+                                <?php endif; ?>
+
+                                <?php if (!$sheet['is_fallback'] && !empty($sheet['token_id'])): ?>
+                                    <?php if ($isEditingThisSheet): ?>
+                                        <button type="submit" name="save_chemical_changes" class="btn btn-sm btn-success fw-bold text-white no-print shadow-sm px-3" style="font-weight: 700;">
+                                            <i class="bi bi-check2-circle me-1"></i> Save Changes
+                                        </button>
+                                        <a href="?from_date=<?= urlencode($fromDate) ?>&to_date=<?= urlencode($toDate) ?>" class="btn btn-sm btn-secondary fw-bold text-white no-print shadow-sm px-3">
+                                            <i class="bi bi-x-circle me-1"></i> Cancel
+                                        </a>
+                                    <?php else: ?>
+                                        <a href="?from_date=<?= urlencode($fromDate) ?>&to_date=<?= urlencode($toDate) ?>&edit=<?= urlencode($sheet['token_id']) ?>" class="btn btn-sm fw-bold text-dark no-print shadow-sm px-3" style="background-color: #fbbf24 !important; color: #000000 !important; font-weight: 700 !important; border: 1px solid #f59e0b;" title="Edit Sheet">
+                                            <i class="bi bi-pencil-square me-1"></i> Edit Sheet
+                                        </a>
+                                    <?php endif; ?>
                                 <?php endif; ?>
                             </div>
                         </div>
+
+                        <?php if ($isEditingThisSheet): ?>
+                            <div class="alert alert-info py-2 px-3 mb-3 d-flex align-items-center justify-content-between no-print" style="border: 1px solid #b9e6fe; background-color: #f0f9ff; color: #0369a1; border-radius: 6px;">
+                                <span class="small fw-semibold"><i class="bi bi-info-circle-fill me-1"></i> <strong>Edit Mode Active:</strong> You can edit the Date and chemical quantities used in the table below. Click <strong>Save Changes</strong> above to update the database.</span>
+                            </div>
+                        <?php endif; ?>
 
                         <div style="font-size: 13px; color: #334155; margin-bottom: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; line-height: 1.6;">
                             <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px;">
@@ -335,7 +447,13 @@ include 'sidebar.php';
                                     <strong>Railway:</strong> <?= htmlspecialchars($railwayName) ?> &nbsp;|&nbsp;
                                     <strong>Division:</strong> <?= htmlspecialchars($divisionName) ?> &nbsp;|&nbsp;
                                     <strong>Station:</strong> <?= htmlspecialchars($stationName) ?> &nbsp;|&nbsp;
-                                    <strong>Date:</strong> <?= htmlspecialchars($sheet['report_date'] ? date('d-m-Y', strtotime($sheet['report_date'])) : date('d-m-Y', strtotime($fromDate))) ?> &nbsp;|&nbsp;
+                                    <strong>Date:</strong> 
+                                    <?php if ($isEditingThisSheet): ?>
+                                        <input type="date" name="sheet_report_date" value="<?= htmlspecialchars($sheet['report_date']) ?>" class="form-control form-control-sm text-center fw-bold d-inline-block" style="width: 145px; padding: 2px 6px; font-size: 12px; border: 2px solid #0284c7; background: #fff !important; color: #000 !important; border-radius: 4px;" required>
+                                    <?php else: ?>
+                                        <?= htmlspecialchars($sheet['report_date'] ? date('d-m-Y', strtotime($sheet['report_date'])) : date('d-m-Y', strtotime($fromDate))) ?>
+                                    <?php endif; ?>
+                                    &nbsp;|&nbsp;
                                     <strong>Train No:</strong> <?= htmlspecialchars($sheet['train_no'] ?? '-') ?> &nbsp;|&nbsp;
                                     <strong>No. of Coaches:</strong> <?= htmlspecialchars($sheet['total_coaches']) ?>
                                 </div>
@@ -391,7 +509,13 @@ include 'sidebar.php';
                                             <td><?= htmlspecialchars($param['units'] ?? 'ml/coach') ?></td>
                                             <td><?= $sheet['total_coaches'] ?></td>
                                             <td><?= number_format($totalTargetQty, 2) ?></td>
-                                            <td><strong><?= $rowTotalUsed > 0 ? number_format($rowTotalUsed, 2) : '-' ?></strong></td>
+                                            <td>
+                                                <?php if ($isEditingThisSheet): ?>
+                                                    <input type="number" step="0.01" min="0" name="qty_used[<?= $pId ?>]" value="<?= htmlspecialchars($rowTotalUsed > 0 ? $rowTotalUsed : '0') ?>" class="form-control form-control-sm text-center fw-bold" style="width: 100px; margin: 0 auto; background: #fff !important; color: #000 !important; border: 1.5px solid #0284c7; padding: 2px 4px; font-size: 13px;">
+                                                <?php else: ?>
+                                                    <strong><?= $rowTotalUsed > 0 ? number_format($rowTotalUsed, 2) : '-' ?></strong>
+                                                <?php endif; ?>
+                                            </td>
                                             <td><?= $diff < 0 ? number_format($diff, 2) : ($diff > 0 ? '+' . number_format($diff, 2) : '0.00') ?></td>
                                             <td><?= $rowPenalty > 0 ? 'Rs. ' . number_format($rowPenalty, 0) : '0' ?></td>
                                         </tr>
@@ -430,6 +554,9 @@ include 'sidebar.php';
                             </div>
                         </div>
                     </div>
+                    <?php if ($isEditingThisSheet): ?>
+                    </form>
+                    <?php endif; ?>
                 <?php endforeach; ?>
             </div>
         </div>

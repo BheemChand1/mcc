@@ -3,6 +3,77 @@ require_once 'auth.php';
 
 $fromDate = $_GET['from_date'] ?? date('Y-m-d', strtotime('-6 days'));
 $toDate = $_GET['to_date'] ?? date('Y-m-d');
+$editDate = $_GET['edit_date'] ?? '';
+$flashSuccess = '';
+$flashError = '';
+
+// Handle Direct PHP POST Save (No AJAX)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_machine_changes'])) {
+    $originalDate = trim($_POST['original_report_date'] ?? '');
+    $newReportDate = trim($_POST['sheet_report_date'] ?? '');
+    $postedStatuses = $_POST['used_status'] ?? [];
+
+    if (!empty($originalDate)) {
+        try {
+            $pdo->beginTransaction();
+
+            $chk = $pdo->prepare("SELECT COUNT(*) FROM mcc_vb_machine_report WHERE report_date = :odt AND station_id = :sid");
+            $chk->execute(['odt' => $originalDate, 'sid' => $stationId]);
+
+            if ($chk->fetchColumn() > 0) {
+                // 1. Update Report Date if changed
+                $finalDate = $originalDate;
+                if (!empty($newReportDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $newReportDate) && $newReportDate !== $originalDate) {
+                    $dateUpd = $pdo->prepare("UPDATE mcc_vb_machine_report SET report_date = :ndt WHERE report_date = :odt AND station_id = :sid");
+                    $dateUpd->execute(['ndt' => $newReportDate, 'odt' => $originalDate, 'sid' => $stationId]);
+                    $finalDate = $newReportDate;
+
+                    if ($newReportDate < $fromDate) $fromDate = $newReportDate;
+                    if ($newReportDate > $toDate) $toDate = $newReportDate;
+                }
+
+                // 2. Update used_status for each machine & shift
+                if (!empty($postedStatuses)) {
+                    $updStmt = $pdo->prepare("
+                        UPDATE mcc_vb_machine_report 
+                        SET used_status = :st 
+                        WHERE report_date = :rdt 
+                          AND station_id = :sid 
+                          AND parameter_id = :m_id 
+                          AND shift_id = :s_id
+                    ");
+
+                    foreach ($postedStatuses as $mId => $shifts) {
+                        if (is_array($shifts)) {
+                            foreach ($shifts as $sId => $val) {
+                                $cleanVal = in_array(strtoupper(trim($val)), ['Y', 'N']) ? strtoupper(trim($val)) : '-';
+                                $updStmt->execute([
+                                    'st' => $cleanVal,
+                                    'rdt' => $finalDate,
+                                    'sid' => $stationId,
+                                    'm_id' => $mId,
+                                    's_id' => $sId
+                                ]);
+                            }
+                        }
+                    }
+                }
+
+                $pdo->commit();
+                $flashSuccess = "Vande Bharat machine report for " . date('d-m-Y', strtotime($finalDate)) . " updated successfully!";
+                $editDate = ''; // Exit edit mode
+            } else {
+                $pdo->rollBack();
+                $flashError = "Vande Bharat machine report sheet not found for the given date.";
+            }
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $flashError = "Failed to update machine report: " . $e->getMessage();
+        }
+    }
+}
 
 // Fetch active shifts for this station (ordered by ID) - Vande Bharat
 $shiftsStmt = $pdo->prepare("
@@ -157,6 +228,19 @@ include 'sidebar.php';
             </form>
 
             <div class="report-wrap">
+                <?php if (!empty($flashSuccess)): ?>
+                    <div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
+                        <i class="bi bi-check-circle-fill me-2"></i><strong>Success!</strong> <?= $flashSuccess ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                <?php endif; ?>
+                <?php if (!empty($flashError)): ?>
+                    <div class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i><strong>Error!</strong> <?= $flashError ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                <?php endif; ?>
+
                 <?php if (empty($sheets)): ?>
                     <div class="alert alert-warning no-print" style="margin: 0 0 20px 0; border-radius: 8px; border: 1px solid #ffeeba; background-color: #fff3cd; color: #856404; padding: 12px 20px;">
                         <i class="bi bi-exclamation-triangle-fill me-2"></i> No daily machine reports found for the selected date range.
@@ -166,25 +250,58 @@ include 'sidebar.php';
                 <?php foreach ($sheets as $sheet):
                     $targetsMap = $sheet['targets'];
                     $reportsMap = $sheet['reports'];
+                    $isEditingThisSheet = ($editDate !== '' && $editDate === (string)$sheet['report_date']);
                 ?>
-                <div class="report-frame">
+                <?php if ($isEditingThisSheet): ?>
+                <form method="POST" action="">
+                    <input type="hidden" name="original_report_date" value="<?= htmlspecialchars($sheet['report_date']) ?>">
+                    <input type="hidden" name="report_date" value="<?= htmlspecialchars($sheet['report_date']) ?>">
+                    <input type="hidden" name="from_date" value="<?= htmlspecialchars($fromDate) ?>">
+                    <input type="hidden" name="to_date" value="<?= htmlspecialchars($toDate) ?>">
+                <?php endif; ?>
+
+                <div class="report-frame" style="<?= $isEditingThisSheet ? 'border: 2px solid #0284c7; box-shadow: 0 0 22px rgba(2, 132, 199, 0.35);' : '' ?>">
                     <div class="report-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #999; padding-bottom: 10px; margin-bottom: 15px;">
                         <h2 style="margin: 0;">Daily Machine Report (Vande Bharat)</h2>
                         <div class="d-flex align-items-center gap-2">
                             <?php if (!empty($sheet['isApproved'])): ?>
                                 <span class="badge bg-success px-3 py-2 text-white" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px; box-shadow: 0 2px 5px rgba(21,128,61,0.2);"><i class="bi bi-patch-check-fill me-1"></i> Approved</span>
-                            <?php elseif (!empty($isCDO)): ?>
-                                <button type="button" class="btn btn-sm btn-success no-print" onclick="approveReport(this, 'mcc_vb_machine_report', '', {report_date: '<?= htmlspecialchars($sheet['report_date']) ?>'})" style="font-weight: 600; padding: 5px 14px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 2px 6px rgba(16,185,129,0.25);">
-                                    <i class="bi bi-check2-circle"></i> <span>Approve</span>
+                            <?php else: ?>
+                                <span class="badge bg-warning text-dark px-3 py-2" style="font-size: 0.85rem; font-weight: 600; border-radius: 6px;"><i class="bi bi-clock-history me-1"></i> Pending Approval</span>
+                            <?php endif; ?>
+
+                            <?php if ($isEditingThisSheet): ?>
+                                <button type="submit" name="save_machine_changes" class="btn btn-sm btn-success fw-bold text-white no-print shadow-sm px-3" style="font-weight: 700;">
+                                    <i class="bi bi-check2-circle me-1"></i> Save Changes
                                 </button>
+                                <a href="?from_date=<?= urlencode($fromDate) ?>&to_date=<?= urlencode($toDate) ?>" class="btn btn-sm btn-secondary fw-bold text-white no-print shadow-sm px-3">
+                                    <i class="bi bi-x-circle me-1"></i> Cancel
+                                </a>
+                            <?php else: ?>
+                                <a href="?from_date=<?= urlencode($fromDate) ?>&to_date=<?= urlencode($toDate) ?>&edit_date=<?= urlencode($sheet['report_date']) ?>" class="btn btn-sm fw-bold text-dark no-print shadow-sm px-3" style="background-color: #fbbf24 !important; color: #000000 !important; font-weight: 700 !important; border: 1px solid #f59e0b;" title="Edit Sheet">
+                                    <i class="bi bi-pencil-square me-1"></i> Edit Sheet
+                                </a>
                             <?php endif; ?>
                         </div>
                     </div>
 
+                    <?php if ($isEditingThisSheet): ?>
+                        <div class="alert alert-info py-2 px-3 mb-3 d-flex align-items-center justify-content-between no-print" style="border: 1px solid #b9e6fe; background-color: #f0f9ff; color: #0369a1; border-radius: 6px;">
+                            <span class="small fw-semibold"><i class="bi bi-info-circle-fill me-1"></i> <strong>Edit Mode Active:</strong> You can edit the sheet Date and shift status (Y/N) in the table below. Click <strong>Save Changes</strong> above to update the database.</span>
+                        </div>
+                    <?php endif; ?>
+
                     <div class="report-meta-section">
                         <div class="meta-row">
                             <div class="meta-item"><span>Railway:</span> <?= htmlspecialchars($railwayName) ?></div>
-                            <div class="meta-item"><span>Date:</span> <?= htmlspecialchars(date('d-m-Y', strtotime($sheet['report_date']))) ?></div>
+                            <div class="meta-item">
+                                <span>Date:</span> 
+                                <?php if ($isEditingThisSheet): ?>
+                                    <input type="date" name="sheet_report_date" value="<?= htmlspecialchars($sheet['report_date']) ?>" class="form-control form-control-sm text-center fw-bold d-inline-block" style="width: 145px; height: 30px; font-size: 0.9rem; padding: 2px 6px; border: 1.5px solid #0284c7; background-color: #fff;" required>
+                                <?php else: ?>
+                                    <?= htmlspecialchars(date('d-m-Y', strtotime($sheet['report_date']))) ?>
+                                <?php endif; ?>
+                            </div>
                             <div class="meta-item"><span>Division:</span> <?= htmlspecialchars($divisionName) ?></div>
                             <div class="meta-item"><span>Station:</span> <?= htmlspecialchars($stationName) ?></div>
                         </div>
@@ -255,7 +372,17 @@ include 'sidebar.php';
                                                     $sId = $shift['shift_id'];
                                                     $status = $reportsMap[$mId][$sId] ?? '-';
                                                 ?>
-                                                    <td><strong><?= htmlspecialchars($status) ?></strong></td>
+                                                    <td>
+                                                        <?php if ($isEditingThisSheet): ?>
+                                                            <select name="used_status[<?= $mId ?>][<?= $sId ?>]" class="form-select form-select-sm text-center fw-bold" style="width: 70px; margin: 0 auto; background: #fff !important; color: #000 !important; border: 1.5px solid #0284c7; padding: 2px 4px; font-size: 13px;">
+                                                                <option value="Y" <?= $status === 'Y' ? 'selected' : '' ?>>Y</option>
+                                                                <option value="N" <?= $status === 'N' ? 'selected' : '' ?>>N</option>
+                                                                <option value="-" <?= ($status === '-' || empty($status)) ? 'selected' : '' ?>>-</option>
+                                                            </select>
+                                                        <?php else: ?>
+                                                            <strong><?= htmlspecialchars($status) ?></strong>
+                                                        <?php endif; ?>
+                                                    </td>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>
                                         </tr>
@@ -284,6 +411,9 @@ include 'sidebar.php';
                         </div>
                     </div>
                 </div>
+                <?php if ($isEditingThisSheet): ?>
+                </form>
+                <?php endif; ?>
                 <?php endforeach; ?>
             </div>
         </div>

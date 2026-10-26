@@ -97,7 +97,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     // C. Process Adding New Coaches
-                    if (!empty($newCoaches)) {
+                    $actualNewCoaches = array_filter(array_map('trim', (array)$newCoaches), function($c) { return $c !== ''; });
+                    if (!empty($actualNewCoaches)) {
                         $sampleStmt = $pdo->prepare("SELECT train_no, report_date, auditor_name, audit_by FROM mcc_normal_scorecard_report WHERE token_id = :tok AND station_id = :sid LIMIT 1");
                         $sampleStmt->execute(['tok' => $targetToken, 'sid' => $stationId]);
                         $sampleRow = $sampleStmt->fetch(PDO::FETCH_ASSOC);
@@ -113,15 +114,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 SELECT sp.id 
                                 FROM mcc_normal_scorecard_sub_param sp 
                                 JOIN mcc_normal_scorecard_param p ON sp.parameter_id = p.id 
-                                WHERE p.station_id = :sid AND sp.station_id = :sid AND p.status = 'Active' AND sp.status = 'Active'
+                                WHERE p.station_id = :param_station_id AND sp.station_id = :sub_station_id AND p.status = 'Active' AND sp.status = 'Active'
                             ");
-                            $allSpStmt->execute(['sid' => $stationId]);
+                            $allSpStmt->execute(['param_station_id' => $stationId, 'sub_station_id' => $stationId]);
                             $activeSpIds = $allSpStmt->fetchAll(PDO::FETCH_COLUMN);
 
-                            foreach ($newCoaches as $nc) {
-                                $nc = trim((string)$nc);
-                                if ($nc === '') continue;
-
+                            foreach ($actualNewCoaches as $nc) {
                                 $cExists = $pdo->prepare("SELECT COUNT(*) FROM mcc_normal_scorecard_report WHERE token_id = :tok AND station_id = :sid AND coach_no = :c_no");
                                 $cExists->execute(['tok' => $targetToken, 'sid' => $stationId, 'c_no' => $nc]);
                                 if ($cExists->fetchColumn() == 0) {

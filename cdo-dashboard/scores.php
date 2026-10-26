@@ -483,10 +483,10 @@ function getPRTScore($stationId, $year, $month) {
         if (empty($tokens)) return 0.0;
 
         $paramsStmt = $pdo->prepare("
-            SELECT sp.id, sp.parameter_id, p.name AS param_name
+            SELECT sp.id, sp.parameter_id, p.parameter_name AS param_name, sp.input_type
             FROM mcc_prt_scorecard_sub_param sp
             JOIN mcc_prt_scorecard_param p ON sp.parameter_id = p.id
-            WHERE p.station_id = :station_id AND sp.status = 'Active'
+            WHERE p.station_id = :station_id AND sp.status = 'Active' AND p.status = 'Active'
         ");
         $paramsStmt->execute(['station_id' => $stationId]);
         $subParamsList = $paramsStmt->fetchAll();
@@ -501,7 +501,8 @@ function getPRTScore($stationId, $year, $month) {
                 ];
             }
             $dynamicParameters[$pId]['sub_parameters'][] = [
-                'id' => $sp['id']
+                'id' => $sp['id'],
+                'input_type' => $sp['input_type'] ?? 'cleaning'
             ];
         }
 
@@ -527,10 +528,35 @@ function getPRTScore($stationId, $year, $month) {
             }
             $coaches = array_keys($coaches);
 
-            $parameterIds = array_keys($dynamicParameters);
-            $internalParamId = $parameterIds[0] ?? 0;
-            $externalParamId = $parameterIds[1] ?? 0;
-            $wateringParamId = $parameterIds[2] ?? 0;
+            $internalParamId = 0;
+            $externalParamId = 0;
+            $wateringParamId = 0;
+
+            foreach ($dynamicParameters as $pId => $pData) {
+                $pNameLower = strtolower($pData['name']);
+                $hasWateringInput = false;
+                foreach ($pData['sub_parameters'] as $sp) {
+                    if (isset($sp['input_type']) && $sp['input_type'] === 'watering') {
+                        $hasWateringInput = true;
+                        break;
+                    }
+                }
+
+                if ($hasWateringInput || strpos($pNameLower, 'water') !== false) {
+                    $wateringParamId = $pId;
+                } elseif (strpos($pNameLower, 'ext') !== false) {
+                    $externalParamId = $pId;
+                } elseif (strpos($pNameLower, 'int') !== false || strpos($pNameLower, 'clean') !== false) {
+                    $internalParamId = $pId;
+                }
+            }
+
+            if (!$internalParamId && !$externalParamId && !$wateringParamId) {
+                $paramKeys = array_keys($dynamicParameters);
+                $internalParamId = $paramKeys[0] ?? 0;
+                $wateringParamId = $paramKeys[1] ?? 0;
+                $externalParamId = $paramKeys[2] ?? 0;
+            }
 
             // Internal Score
             $internalSum = 0; $internalCount = 0;
@@ -570,9 +596,10 @@ function getPRTScore($stationId, $year, $month) {
                 foreach ($coaches as $coach) {
                     foreach ($dynamicParameters[$wateringParamId]['sub_parameters'] as $sp) {
                         $val = $scoresData[$sp['id']][$coach] ?? null;
-                        if ($val === 'Y') {
+                        $valUpper = strtoupper(trim((string)$val));
+                        if ($valUpper === 'Y' || $valUpper === '1') {
                             $wateringYes++; $wateringCount++;
-                        } elseif ($val === 'N') {
+                        } elseif ($valUpper === 'N' || $valUpper === '0') {
                             $wateringCount++;
                         }
                     }
@@ -580,7 +607,18 @@ function getPRTScore($stationId, $year, $month) {
             }
             $wateringPercentage = $wateringCount > 0 ? ($wateringYes / $wateringCount) * 100.0 : 0.0;
 
-            $sheetAvg = ($internalPercentage + $externalPercentage + $wateringPercentage) / 3.0;
+            $components = [];
+            if ($internalParamId && $internalCount > 0) {
+                $components[] = $internalPercentage;
+            }
+            if ($externalParamId && $externalCount > 0) {
+                $components[] = $externalPercentage;
+            }
+            if ($wateringParamId && $wateringCount > 0) {
+                $components[] = $wateringPercentage;
+            }
+
+            $sheetAvg = !empty($components) ? (array_sum($components) / count($components)) : 0.0;
             $totalSheetsScore += $sheetAvg;
             $sheetsCount++;
         }

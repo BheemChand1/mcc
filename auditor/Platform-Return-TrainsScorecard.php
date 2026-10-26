@@ -88,7 +88,7 @@ $tokens = $stmt->fetchAll();
 
 // Fetch active parameters and subparameters from the database for PRT report
 $paramsStmt = $pdo->prepare("
-    SELECT p.id AS parameter_id, p.parameter_name, sp.id AS sub_parameter_id, sp.sub_parameter_name
+    SELECT p.id AS parameter_id, p.parameter_name, sp.id AS sub_parameter_id, sp.sub_parameter_name, sp.input_type
     FROM mcc_prt_scorecard_param p
     JOIN mcc_prt_scorecard_sub_param sp ON p.id = sp.parameter_id
     WHERE p.station_id = :param_station_id AND sp.station_id = :sub_station_id AND p.status = 'Active' AND sp.status = 'Active'
@@ -112,7 +112,8 @@ foreach ($paramsRows as $row) {
     }
     $dynamicParameters[$pId]['sub_parameters'][] = [
         'id' => $row['sub_parameter_id'],
-        'name' => $row['sub_parameter_name']
+        'name' => $row['sub_parameter_name'],
+        'input_type' => $row['input_type'] ?? 'cleaning'
     ];
 }
 
@@ -171,11 +172,37 @@ if ($isFallback) {
             $coaches[] = '';
         }
 
-        // Dynamically map parameter IDs
-        $parameterIds = array_keys($dynamicParameters);
-        $internalParamId = $parameterIds[0] ?? 0;
-        $externalParamId = $parameterIds[1] ?? 0;
-        $wateringParamId = $parameterIds[2] ?? 0;
+        // Dynamically map parameter IDs by name / type
+        $internalParamId = 0;
+        $externalParamId = 0;
+        $wateringParamId = 0;
+
+        foreach ($dynamicParameters as $pId => $pData) {
+            $pNameLower = strtolower($pData['name']);
+            $hasWateringInput = false;
+            foreach ($pData['sub_parameters'] as $sp) {
+                if (isset($sp['input_type']) && $sp['input_type'] === 'watering') {
+                    $hasWateringInput = true;
+                    break;
+                }
+            }
+
+            if ($hasWateringInput || strpos($pNameLower, 'water') !== false) {
+                $wateringParamId = $pId;
+            } elseif (strpos($pNameLower, 'ext') !== false) {
+                $externalParamId = $pId;
+            } elseif (strpos($pNameLower, 'int') !== false || strpos($pNameLower, 'clean') !== false) {
+                $internalParamId = $pId;
+            }
+        }
+
+        // Fallback mapping if not matched by keywords
+        if (!$internalParamId && !$externalParamId && !$wateringParamId) {
+            $paramKeys = array_keys($dynamicParameters);
+            $internalParamId = $paramKeys[0] ?? 0;
+            $wateringParamId = $paramKeys[1] ?? 0;
+            $externalParamId = $paramKeys[2] ?? 0;
+        }
 
         // Calculations using dynamically loaded parameters
         $internalSum = 0;
@@ -220,7 +247,8 @@ if ($isFallback) {
                 if ($coach === '') continue;
                 foreach ($dynamicParameters[$wateringParamId]['sub_parameters'] as $sp) {
                     $val = $scoresData[$sp['id']][$coach] ?? null;
-                    if ($val === 'Y') {
+                    $valUpper = strtoupper(trim((string)$val));
+                    if ($valUpper === 'Y' || $valUpper === '1') {
                         $wateringYes++;
                     }
                 }
@@ -243,6 +271,7 @@ if ($isFallback) {
             'internal_percentage' => $internalPercentage,
             'external_percentage' => $externalPercentage,
             'watering_percentage' => $wateringPercentage,
+            'has_external' => ($externalParamId && $externalMax > 0),
             'is_fallback' => false,
             'attended_count' => $attendedCount,
             'isApproved' => (int)($firstRow['isApproved'] ?? 0)
@@ -586,10 +615,12 @@ include 'sidebar.php';
                                     <span>Internal Cleaning Score :</span>
                                     <?= $sheet['internal_percentage'] ?> %
                                 </div>
+                                <?php if (!empty($sheet['has_external'])): ?>
                                 <div class="meta-item">
                                     <span>External Cleaning Score :</span>
                                     <?= $sheet['external_percentage'] ?> %
                                 </div>
+                                <?php endif; ?>
                                 <div class="meta-item">
                                     <span>Watering Score :</span>
                                     <?= $sheet['watering_percentage'] ?> %

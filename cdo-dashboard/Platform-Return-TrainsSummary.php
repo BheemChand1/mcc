@@ -15,7 +15,7 @@ $daysInMonth = cal_days_in_month(CAL_GREGORIAN, intval($selectedMonth), $selecte
 
 // Fetch active parameters and subparameters - PRT
 $paramsStmt = $pdo->prepare("
-    SELECT p.id AS parameter_id, p.parameter_name, sp.id AS sub_parameter_id, sp.sub_parameter_name
+    SELECT p.id AS parameter_id, p.parameter_name, sp.id AS sub_parameter_id, sp.sub_parameter_name, sp.input_type
     FROM mcc_prt_scorecard_param p
     JOIN mcc_prt_scorecard_sub_param sp ON p.id = sp.parameter_id
     WHERE p.station_id = :param_station_id AND sp.station_id = :sub_station_id AND p.status = 'Active' AND sp.status = 'Active'
@@ -39,7 +39,8 @@ foreach ($paramsRows as $row) {
     }
     $dynamicParameters[$pId]['sub_parameters'][] = [
         'id' => $row['sub_parameter_id'],
-        'name' => $row['sub_parameter_name']
+        'name' => $row['sub_parameter_name'],
+        'input_type' => $row['input_type'] ?? 'cleaning'
     ];
 }
 
@@ -96,11 +97,36 @@ foreach ($tokens as $t) {
     $coaches = $dbCoaches;
     $attendedCount = count($dbCoaches);
 
-    // Dynamically map parameter IDs
-    $parameterIds = array_keys($dynamicParameters);
-    $internalParamId = $parameterIds[0] ?? 0;
-    $externalParamId = $parameterIds[1] ?? 0;
-    $wateringParamId = $parameterIds[2] ?? 0;
+    // Dynamically map parameter IDs by name / type
+    $internalParamId = 0;
+    $externalParamId = 0;
+    $wateringParamId = 0;
+
+    foreach ($dynamicParameters as $pId => $pData) {
+        $pNameLower = strtolower($pData['name']);
+        $hasWateringInput = false;
+        foreach ($pData['sub_parameters'] as $sp) {
+            if (isset($sp['input_type']) && $sp['input_type'] === 'watering') {
+                $hasWateringInput = true;
+                break;
+            }
+        }
+
+        if ($hasWateringInput || strpos($pNameLower, 'water') !== false) {
+            $wateringParamId = $pId;
+        } elseif (strpos($pNameLower, 'ext') !== false) {
+            $externalParamId = $pId;
+        } elseif (strpos($pNameLower, 'int') !== false || strpos($pNameLower, 'clean') !== false) {
+            $internalParamId = $pId;
+        }
+    }
+
+    if (!$internalParamId && !$externalParamId && !$wateringParamId) {
+        $paramKeys = array_keys($dynamicParameters);
+        $internalParamId = $paramKeys[0] ?? 0;
+        $wateringParamId = $paramKeys[1] ?? 0;
+        $externalParamId = $paramKeys[2] ?? 0;
+    }
 
     // Calculations
     $internalSum = 0;
@@ -145,7 +171,8 @@ foreach ($tokens as $t) {
             if ($coach === '') continue;
             foreach ($dynamicParameters[$wateringParamId]['sub_parameters'] as $sp) {
                 $val = $scoresData[$sp['id']][$coach] ?? null;
-                if ($val === 'Y') {
+                $valUpper = strtoupper(trim((string)$val));
+                if ($valUpper === 'Y' || $valUpper === '1') {
                     $wateringYes++;
                 }
             }
@@ -154,7 +181,18 @@ foreach ($tokens as $t) {
     $wateringMaxCount = $attendedCount * $wateringSubParamCount;
     $wateringPercentage = $wateringMaxCount > 0 ? ($wateringYes / $wateringMaxCount) * 100 : 0;
 
-    $avgScore = ($internalPercentage + $externalPercentage + $wateringPercentage) / 3.0;
+    $components = [];
+    if ($internalParamId && $internalMax > 0) {
+        $components[] = $internalPercentage;
+    }
+    if ($externalParamId && $externalMax > 0) {
+        $components[] = $externalPercentage;
+    }
+    if ($wateringParamId && $wateringMaxCount > 0) {
+        $components[] = $wateringPercentage;
+    }
+
+    $avgScore = !empty($components) ? (array_sum($components) / count($components)) : 0.0;
 
     $sheets[] = [
         'token_id' => $tokenId,

@@ -653,6 +653,7 @@ include 'sidebar.php';
                     <i class="bi bi-printer me-1"></i>Print
                 </button>
 
+                <!-- BACK SIDE VIEW TOGGLE (Temporarily disabled - uncomment to re-enable when Back Side is restored)
                 <div class="view-toggle-wrap no-print">
                     <button type="button" class="btn-view-toggle active" id="btn-toggle-all" onclick="setScorecardView('all')">
                         <i class="bi bi-layout-split me-1"></i>Both Sides
@@ -664,6 +665,7 @@ include 'sidebar.php';
                         <i class="bi bi-shield-exclamation me-1"></i>Back Side
                     </button>
                 </div>
+                -->
             </form>
 
 <div class="report-wrap">
@@ -920,9 +922,9 @@ include 'sidebar.php';
         </form>
         <?php endif; ?>
 
-        <!-- ======================================================= -->
-        <!-- BACK SIDE: Penalty Matrix                               -->
-        <!-- ======================================================= -->
+        <?php /* =======================================================
+        BACK SIDE: Penalty Matrix (Temporarily removed - kept for future restoration)
+        =======================================================
         <div class="report-frame penalty-frame" id="back-<?= htmlspecialchars($sheet['token_id'] ?? '') ?>">
             <div class="report-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px;">
                 <div style="font-size: 13px; font-weight: 700; color: #475569;">
@@ -1013,6 +1015,7 @@ include 'sidebar.php';
                 </div>
             </div>
         </div>
+        ======================================================= */ ?>
     <?php endforeach; ?>
     </div>
   </div>

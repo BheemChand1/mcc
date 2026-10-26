@@ -12,52 +12,134 @@ $editToken = $_GET['edit'] ?? '';
 $flashSuccess = '';
 $flashError = '';
 
-// Handle Direct PHP POST Save
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_sheet_changes'])) {
-    $targetToken = trim($_POST['token_id'] ?? '');
-    $postedScores = $_POST['scores'] ?? [];
+// Handle Direct PHP POST Save & Delete Coach
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // 1. Remove Coach Action
+    if (isset($_POST['remove_coach_btn'])) {
+        $targetToken = trim($_POST['token_id'] ?? '');
+        $coachToRemove = trim($_POST['remove_coach_btn'] ?? '');
 
-    if (!empty($targetToken) && !empty($postedScores)) {
-        try {
-            $pdo->beginTransaction();
+        if (!empty($targetToken) && !empty($coachToRemove)) {
+            try {
+                $pdo->beginTransaction();
 
-            $chk = $pdo->prepare("SELECT COUNT(*) FROM mcc_intensive_pantry_report WHERE token_id = :tok AND station_id = :sid");
-            $chk->execute(['tok' => $targetToken, 'sid' => $stationId]);
+                $delStmt = $pdo->prepare("DELETE FROM mcc_intensive_pantry_report WHERE token_id = :tok AND station_id = :sid AND coach_no = :c_no");
+                $delStmt->execute(['tok' => $targetToken, 'sid' => $stationId, 'c_no' => $coachToRemove]);
 
-            if ($chk->fetchColumn() > 0) {
-                $updStmt = $pdo->prepare("
-                    UPDATE mcc_intensive_pantry_report 
-                    SET score_value = :val 
-                    WHERE token_id = :tok 
-                      AND station_id = :sid 
-                      AND sub_parameter_id = :sp_id 
-                      AND coach_no = :c_no
-                ");
-
-                foreach ($postedScores as $spId => $coachVals) {
-                    foreach ($coachVals as $cNo => $val) {
-                        $updStmt->execute([
-                            'val' => trim($val),
-                            'tok' => $targetToken,
-                            'sid' => $stationId,
-                            'sp_id' => $spId,
-                            'c_no' => $cNo
-                        ]);
-                    }
-                }
+                try {
+                    $delChem = $pdo->prepare("DELETE FROM mcc_intensive_pantry_chemical_report WHERE token_id = :tok AND station_id = :sid AND coach_no = :c_no");
+                    $delChem->execute(['tok' => $targetToken, 'sid' => $stationId, 'c_no' => $coachToRemove]);
+                } catch (Exception $ex) {}
 
                 $pdo->commit();
-                $flashSuccess = "Pantry Car Scorecard (Token: " . htmlspecialchars($targetToken) . ") updated successfully!";
-                $editToken = ''; // Exit edit mode after saving
-            } else {
-                $pdo->rollBack();
-                $flashError = "Record not found for this station.";
+                $flashSuccess = "Coach " . htmlspecialchars($coachToRemove) . " removed successfully from Scorecard (Token: " . htmlspecialchars($targetToken) . ")!";
+                $editToken = $targetToken; // Keep in edit mode so user sees the change
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                $flashError = "Failed to remove coach: " . $e->getMessage();
             }
-        } catch (Exception $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
+        }
+    }
+
+    // 2. Save Sheet Changes (Date, Coaches, Scores)
+    if (isset($_POST['save_sheet_changes'])) {
+        $targetToken = trim($_POST['token_id'] ?? '');
+        $newReportDate = trim($_POST['sheet_report_date'] ?? '');
+        $coachRenames = $_POST['coach_rename'] ?? [];
+        $postedScores = $_POST['scores'] ?? [];
+
+        if (!empty($targetToken)) {
+            try {
+                $pdo->beginTransaction();
+
+                $chk = $pdo->prepare("SELECT COUNT(*) FROM mcc_intensive_pantry_report WHERE token_id = :tok AND station_id = :sid");
+                $chk->execute(['tok' => $targetToken, 'sid' => $stationId]);
+
+                if ($chk->fetchColumn() > 0) {
+                    // A. Update Report Date if provided
+                    if (!empty($newReportDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $newReportDate)) {
+                        $dateUpd = $pdo->prepare("UPDATE mcc_intensive_pantry_report SET report_date = :dt WHERE token_id = :tok AND station_id = :sid");
+                        $dateUpd->execute(['dt' => $newReportDate, 'tok' => $targetToken, 'sid' => $stationId]);
+
+                        try {
+                            $chemDateUpd = $pdo->prepare("UPDATE mcc_intensive_pantry_chemical_report SET report_date = :dt WHERE token_id = :tok AND station_id = :sid");
+                            $chemDateUpd->execute(['dt' => $newReportDate, 'tok' => $targetToken, 'sid' => $stationId]);
+                        } catch (Exception $ex) {}
+
+                        // Ensure updated date falls within current filter range so it remains visible
+                        if ($newReportDate < $fromDate) $fromDate = $newReportDate;
+                        if ($newReportDate > $toDate) $toDate = $newReportDate;
+                    }
+
+                    // B. Process Coach Renames / Deletions
+                    $delCoachStmt = $pdo->prepare("DELETE FROM mcc_intensive_pantry_report WHERE token_id = :tok AND station_id = :sid AND coach_no = :c_no");
+                    $renameCoachStmt = $pdo->prepare("UPDATE mcc_intensive_pantry_report SET coach_no = :new_c WHERE token_id = :tok AND station_id = :sid AND coach_no = :old_c");
+
+                    foreach ($coachRenames as $oldCoach => $newCoach) {
+                        $oldCoach = trim((string)$oldCoach);
+                        $newCoach = trim((string)$newCoach);
+                        if ($oldCoach === '') continue;
+
+                        if ($newCoach === '') {
+                            // Empty coach name means user wants to remove this coach
+                            $delCoachStmt->execute(['tok' => $targetToken, 'sid' => $stationId, 'c_no' => $oldCoach]);
+                            try {
+                                $delChem = $pdo->prepare("DELETE FROM mcc_intensive_pantry_chemical_report WHERE token_id = :tok AND station_id = :sid AND coach_no = :c_no");
+                                $delChem->execute(['tok' => $targetToken, 'sid' => $stationId, 'c_no' => $oldCoach]);
+                            } catch (Exception $ex) {}
+                        } elseif ($newCoach !== $oldCoach) {
+                            // Rename coach
+                            $renameCoachStmt->execute(['new_c' => $newCoach, 'tok' => $targetToken, 'sid' => $stationId, 'old_c' => $oldCoach]);
+                            try {
+                                $renameChem = $pdo->prepare("UPDATE mcc_intensive_pantry_chemical_report SET coach_no = :new_c WHERE token_id = :tok AND station_id = :sid AND coach_no = :old_c");
+                                $renameChem->execute(['new_c' => $newCoach, 'tok' => $targetToken, 'sid' => $stationId, 'old_c' => $oldCoach]);
+                            } catch (Exception $ex) {}
+                        }
+                    }
+
+                    // C. Update Scores
+                    if (!empty($postedScores)) {
+                        $updStmt = $pdo->prepare("
+                            UPDATE mcc_intensive_pantry_report 
+                            SET score_value = :val 
+                            WHERE token_id = :tok 
+                              AND station_id = :sid 
+                              AND sub_parameter_id = :sp_id 
+                              AND coach_no = :c_no
+                        ");
+
+                        foreach ($postedScores as $spId => $coachVals) {
+                            foreach ($coachVals as $cNo => $val) {
+                                $finalCoach = isset($coachRenames[$cNo]) ? trim((string)$coachRenames[$cNo]) : $cNo;
+                                if ($finalCoach === '') continue; // Skip deleted coach
+
+                                $updStmt->execute([
+                                    'val' => trim($val),
+                                    'tok' => $targetToken,
+                                    'sid' => $stationId,
+                                    'sp_id' => $spId,
+                                    'c_no' => $finalCoach
+                                ]);
+                            }
+                        }
+                    }
+
+                    $pdo->commit();
+                    $dateNote = (!empty($newReportDate)) ? " (Date: " . date('d-m-Y', strtotime($newReportDate)) . ")" : "";
+                    $flashSuccess = "Pantry Car Scorecard (Token: " . htmlspecialchars($targetToken) . ") updated successfully{$dateNote}!";
+                    $editToken = ''; // Exit edit mode after saving
+                } else {
+                    $pdo->rollBack();
+                    $flashError = "Record not found for this station.";
+                }
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                $flashError = "Failed to update sheet: " . $e->getMessage();
             }
-            $flashError = "Failed to update sheet: " . $e->getMessage();
         }
     }
 }
@@ -896,7 +978,13 @@ include 'sidebar.php';
                                 </div>
                                 <div class="meta-item">
                                     <span class="meta-label">Date:</span>
-                                    <span class="meta-val"><?= htmlspecialchars($sheet['date']) ?></span>
+                                    <span class="meta-val">
+                                        <?php if ($isEditingThisSheet): ?>
+                                            <input type="date" name="sheet_report_date" value="<?= htmlspecialchars($sheet['report_date'] ?? date('Y-m-d', strtotime($sheet['date']))) ?>" class="form-control form-control-sm text-center fw-bold d-inline-block" style="width: 145px; padding: 2px 6px; font-size: 12px; border: 2px solid #0284c7; background: #fff !important; color: #000 !important; border-radius: 4px;" required>
+                                        <?php else: ?>
+                                            <?= htmlspecialchars($sheet['date']) ?>
+                                        <?php endif; ?>
+                                    </span>
                                 </div>
                                 <div class="meta-item">
                                     <span class="meta-label">Pantry Coach No.:</span>
@@ -939,7 +1027,27 @@ include 'sidebar.php';
                                     </tr>
                                     <tr>
                                         <?php foreach ($coachList as $idx => $cNo): ?>
-                                            <th class="th-coach-no-val" style="font-size: 10.5px;"><?= htmlspecialchars($cNo) ?></th>
+                                            <th class="th-coach-no-val" style="font-size: 10.5px; padding: <?= $isEditingThisSheet ? '3px 2px' : '4px' ?> !important; vertical-align: top;">
+                                                <?php if ($isEditingThisSheet): ?>
+                                                    <input type="text" 
+                                                           name="coach_rename[<?= htmlspecialchars($cNo) ?>]" 
+                                                           value="<?= htmlspecialchars($cNo) ?>" 
+                                                           class="form-control form-control-sm text-center fw-bold" 
+                                                           style="width: 85px; margin: 0 auto; padding: 2px 3px; font-size: 11px; font-weight: 700; border: 1.5px solid #0284c7; background: #ffffff !important; color: #000000 !important;" 
+                                                           title="Edit coach number">
+                                                    <button type="submit" 
+                                                            name="remove_coach_btn" 
+                                                            value="<?= htmlspecialchars($cNo) ?>" 
+                                                            class="btn btn-danger btn-sm py-0 px-1 mt-1 no-print shadow-xs" 
+                                                            onclick="return confirm('Are you sure you want to permanently remove coach <?= htmlspecialchars($cNo) ?> from this scorecard?')" 
+                                                            title="Remove coach <?= htmlspecialchars($cNo) ?>" 
+                                                            style="font-size: 10px; line-height: 1.3; font-weight: 700; border-radius: 3px;">
+                                                        <i class="bi bi-x-circle"></i> Remove
+                                                    </button>
+                                                <?php else: ?>
+                                                    <?= htmlspecialchars($cNo) ?>
+                                                <?php endif; ?>
+                                            </th>
                                             <th class="th-coach-no-val">-</th>
                                         <?php endforeach; ?>
                                     </tr>

@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = "Station '$station_name' already exists in this Division.";
                     $messageType = 'warning';
                 } else {
-                    $ins = $pdo->prepare("INSERT INTO mcc_stations (station_name, division_id, status) VALUES (:name, :division, 'Active')");
+                    $ins = $pdo->prepare("INSERT INTO mcc_stations (station_name, division_id, status, active_backend_mobile) VALUES (:name, :division, 'Active', 1)");
                     $ins->execute(['name' => $station_name, 'division' => $division_id]);
                     $message = "Station '$station_name' successfully created.";
                     $messageType = 'success';
@@ -53,6 +53,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageType = 'success';
         } catch (PDOException $e) {
             $message = 'Error updating status: ' . $e->getMessage();
+            $messageType = 'danger';
+        }
+    }
+
+    // 3. Toggle Mobile Backend Action
+    if (isset($_POST['action']) && $_POST['action'] === 'toggle_mobile_backend') {
+        $station_id = intval($_POST['station_id'] ?? 0);
+        $current_mobile_status = intval($_POST['current_mobile_status'] ?? 1);
+        $new_mobile_status = ($current_mobile_status === 1) ? 0 : 1;
+        
+        try {
+            $upd = $pdo->prepare("UPDATE mcc_stations SET active_backend_mobile = :status, updated_at = NOW() WHERE station_id = :id");
+            $upd->execute(['status' => $new_mobile_status, 'id' => $station_id]);
+            $statusLabel = ($new_mobile_status === 1) ? 'Active (1)' : 'Inactive (0)';
+            $message = "Station mobile backend access updated to {$statusLabel}.";
+            $messageType = 'success';
+        } catch (PDOException $e) {
+            $message = 'Error updating mobile status: ' . $e->getMessage();
             $messageType = 'danger';
         }
     }
@@ -102,7 +120,10 @@ include 'sidebar.php';
             Manage Coaching Stations
           </h3>
         </div>
-        <div class="col-md-6 text-md-end mt-2 mt-md-0">
+        <div class="col-md-6 text-md-end mt-2 mt-md-0 d-flex gap-2 justify-content-md-end align-items-center flex-wrap">
+          <a href="station-mobile-status.php" class="btn btn-sm btn-outline-indigo rounded-pill px-3 shadow-sm">
+            <i class="bi bi-phone me-1"></i> Mobile Backend Access (0/1)
+          </a>
           <span class="badge bg-indigo-subtle text-indigo p-2 px-3 border border-indigo-subtle rounded-pill">
             System Stations: <?php echo count($stations); ?>
           </span>
@@ -138,21 +159,24 @@ include 'sidebar.php';
                 <table class="table table-hover table-striped mb-0">
                   <thead>
                     <tr>
-                      <th class="ps-3" style="width: 100px;">Station ID</th>
+                      <th class="ps-3" style="width: 90px;">Station ID</th>
                       <th>Station Name</th>
                       <th>Division</th>
                       <th>Zone</th>
-                      <th>Status</th>
-                      <th class="text-center" style="width: 150px;">Actions</th>
+                      <th>System Status</th>
+                      <th class="text-center" style="width: 140px;">Mobile Backend</th>
+                      <th class="text-center" style="width: 130px;">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     <?php if (empty($stations)): ?>
                       <tr>
-                        <td colspan="6" class="text-center py-5 text-muted small">No stations found in the database.</td>
+                        <td colspan="7" class="text-center py-5 text-muted small">No stations found in the database.</td>
                       </tr>
                     <?php else: ?>
-                      <?php foreach ($stations as $stn): ?>
+                      <?php foreach ($stations as $stn): 
+                        $isMobileActive = (($stn['active_backend_mobile'] ?? 1) == 1);
+                      ?>
                         <tr>
                           <td class="ps-3"><strong>STN-<?php echo $stn['station_id']; ?></strong></td>
                           <td><strong><?php echo htmlspecialchars($stn['station_name']); ?></strong></td>
@@ -169,10 +193,21 @@ include 'sidebar.php';
                           </td>
                           <td class="text-center">
                             <form action="stations.php" method="POST" class="d-inline">
+                              <input type="hidden" name="action" value="toggle_mobile_backend">
+                              <input type="hidden" name="station_id" value="<?php echo $stn['station_id']; ?>">
+                              <input type="hidden" name="current_mobile_status" value="<?php echo $isMobileActive ? 1 : 0; ?>">
+                              <button type="submit" class="btn btn-sm <?php echo $isMobileActive ? 'btn-success' : 'btn-outline-danger'; ?> rounded-pill px-2.5 py-0.5" style="font-size: 0.75rem;" title="Toggle Mobile Backend Access (0 or 1)">
+                                <i class="bi <?php echo $isMobileActive ? 'bi-phone' : 'bi-phone-slash'; ?> me-1"></i>
+                                <?php echo $isMobileActive ? 'Active (1)' : 'Inactive (0)'; ?>
+                              </button>
+                            </form>
+                          </td>
+                          <td class="text-center">
+                            <form action="stations.php" method="POST" class="d-inline">
                               <input type="hidden" name="action" value="toggle_status">
                               <input type="hidden" name="station_id" value="<?php echo $stn['station_id']; ?>">
                               <input type="hidden" name="current_status" value="<?php echo $stn['status']; ?>">
-                              <button type="submit" class="btn btn-sm <?php echo $stn['status'] === 'Active' ? 'btn-outline-danger' : 'btn-outline-success'; ?> rounded-pill px-3 font-weight-bold">
+                              <button type="submit" class="btn btn-sm <?php echo $stn['status'] === 'Active' ? 'btn-outline-danger' : 'btn-outline-success'; ?> rounded-pill px-3 font-weight-bold" style="font-size: 0.78rem;">
                                 <?php echo $stn['status'] === 'Active' ? 'Deactivate' : 'Activate'; ?>
                               </button>
                             </form>

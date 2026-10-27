@@ -53,6 +53,14 @@ $currentPage = basename($_SERVER['PHP_SELF']);
           </a>
         </li>
 
+        <!-- Mobile Backend Access / Status Link -->
+        <li class="nav-item mb-1">
+          <a href="station-mobile-status.php" class="nav-link p-2 d-flex align-items-center rounded-3 <?= ($currentPage == 'station-mobile-status.php') ? 'active bg-indigo text-white' : 'text-secondary-emphasis' ?>" style="transition: all 0.3s ease;">
+            <i class="bi bi-phone me-3" style="font-size: 1.15rem;"></i>
+            <p class="m-0">Mobile Backend Status</p>
+          </a>
+        </li>
+
         <?php 
         $trainPages = ['create-trains.php', 'view-trains.php', 'trains.php', 'edit-train.php'];
         $isTrainActive = in_array($currentPage, $trainPages);

@@ -31,7 +31,7 @@ if (empty($username) || empty($password)) {
 try {
     // 1. Fetch user by username
     $stmt = $pdo->prepare("
-        SELECT u.*, s.station_name 
+        SELECT u.*, s.station_name, s.active_backend_mobile 
         FROM mcc_users u
         LEFT JOIN mcc_stations s ON u.station_id = s.station_id
         WHERE u.username = :username 
@@ -89,7 +89,8 @@ try {
         "email" => $user['email'],
         "role" => $user['role'],
         "station_id" => intval($user['station_id']),
-        "station_name" => $user['station_name'] ?: "Not Assigned"
+        "station_name" => $user['station_name'] ?: "Not Assigned",
+        "active_backend_mobile" => isset($user['active_backend_mobile']) ? intval($user['active_backend_mobile']) : 1
     ]);
 
 } catch (Exception $e) {

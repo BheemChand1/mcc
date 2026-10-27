@@ -110,6 +110,191 @@ if (empty($allProcesses)) {
     $allProcesses = ['Normal Cleaning', 'Pit Cleaning', 'Intensive Cleaning', 'Platform Return Cleaning'];
 }
 
+// ----------------------------------------------------
+// Handle Excel Export Request
+// ----------------------------------------------------
+if (isset($_GET['export']) && $_GET['export'] === 'excel') {
+    $cleanDateFrom = date('d-m-Y', strtotime($selectedFromDate));
+    $cleanDateTo = date('d-m-Y', strtotime($selectedToDate));
+    $filename = "Photo_Attendance_Report_" . $selectedFromDate . ($selectedFromDate !== $selectedToDate ? "_to_" . $selectedToDate : "") . ".xls";
+
+    // Clear any previous output buffers
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
+
+    header("Content-Type: application/vnd.ms-excel; charset=utf-8");
+    header("Content-Disposition: attachment; filename=\"$filename\"");
+    header("Pragma: no-cache");
+    header("Expires: 0");
+
+    // Output UTF-8 Byte Order Mark
+    echo "\xEF\xBB\xBF";
+
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $baseUrl = $protocol . $host;
+    ?>
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <!--[if gte mso 9]>
+    <xml>
+      <x:ExcelWorkbook>
+        <x:ExcelWorksheets>
+          <x:ExcelWorksheet>
+            <x:Name>Photo Attendance</x:Name>
+            <x:WorksheetOptions>
+              <x:DisplayGridlines/>
+            </x:WorksheetOptions>
+          </x:ExcelWorksheet>
+        </x:ExcelWorksheets>
+      </x:ExcelWorkbook>
+    </xml>
+    <![endif]-->
+    <style>
+      table { border-collapse: collapse; width: 100%; font-family: Calibri, Arial, sans-serif; font-size: 11pt; }
+      th { background-color: #072a4a; color: #ffffff; border: 1px solid #94a3b8; font-weight: bold; text-align: center; vertical-align: middle; padding: 10px 8px; }
+      td { border: 1px solid #cbd5e1; vertical-align: middle; padding: 7px 8px; text-align: left; }
+      .text-center { text-align: center; }
+      .text-num { mso-number-format:"\@"; text-align: center; }
+      .header-title { font-size: 16pt; font-weight: bold; text-align: center; color: #072a4a; height: 35px; }
+      .header-meta { font-size: 10pt; text-align: center; color: #475569; height: 25px; }
+      .th-in { background-color: #0369a1; color: #ffffff; }
+      .th-out { background-color: #b45309; color: #ffffff; }
+      .bg-in { background-color: #f0fdf4; }
+      .bg-out { background-color: #fef2f2; }
+      .badge-in { color: #15803d; font-weight: bold; }
+      .badge-out { color: #b91c1c; font-weight: bold; }
+      .badge-pending { color: #b45309; font-weight: bold; }
+      .photo-link { color: #0284c7; text-decoration: underline; font-weight: 600; }
+    </style>
+    </head>
+    <body>
+    <table>
+      <tr>
+        <td colspan="15" class="header-title">INDIAN RAILWAYS - PHOTO ATTENDANCE & GEO-LOCATION REPORT</td>
+      </tr>
+      <tr>
+        <td colspan="15" class="header-meta">
+          Station: <strong><?= htmlspecialchars($stationName ?? 'Coaching Depot') ?></strong> &nbsp;|&nbsp;
+          Date Range: <strong><?= $cleanDateFrom ?></strong><?php if ($selectedFromDate !== $selectedToDate): ?> to <strong><?= $cleanDateTo ?></strong><?php endif; ?> &nbsp;|&nbsp;
+          Shift: <strong><?= htmlspecialchars(!empty($selectedShift) ? $selectedShift : 'All Shifts') ?></strong> &nbsp;|&nbsp;
+          Process: <strong><?= htmlspecialchars(!empty($selectedProcess) ? $selectedProcess : 'All Processes') ?></strong> &nbsp;|&nbsp;
+          Total Staff Logged: <strong><?= count($attendanceLogs) ?></strong> &nbsp;|&nbsp;
+          Exported On: <strong><?= date('d-m-Y H:i:s') ?></strong>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="15" style="border: none; height: 10px;"></td>
+      </tr>
+      <thead>
+        <tr>
+          <th style="width: 50px;">S.No</th>
+          <th style="width: 110px;">Date</th>
+          <th style="width: 100px;">Emp ID</th>
+          <th style="width: 200px;">Employee Name</th>
+          <th style="width: 140px;">Designation</th>
+          <th style="width: 90px;">Shift</th>
+          <th style="width: 130px;" class="th-in">Punch IN Time</th>
+          <th style="width: 260px;" class="th-in">Punch IN Location</th>
+          <th style="width: 140px;" class="th-in">Punch IN Photo</th>
+          <th style="width: 130px;" class="th-out">Punch OUT Time</th>
+          <th style="width: 260px;" class="th-out">Punch OUT Location</th>
+          <th style="width: 140px;" class="th-out">Punch OUT Photo</th>
+          <th style="width: 110px;">Duration</th>
+          <th style="width: 130px;">Status</th>
+          <th style="width: 160px;">Process</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php if (empty($attendanceLogs)): ?>
+          <tr>
+            <td colspan="15" class="text-center" style="padding: 20px; color: #64748b;">No attendance records found for the selected filter criteria.</td>
+          </tr>
+        <?php else: ?>
+          <?php 
+          $sno = 1;
+          foreach ($attendanceLogs as $log): 
+              $duration = '-';
+              $status = 'Punch-Out Pending';
+              if (!empty($log['in_time']) && !empty($log['out_time'])) {
+                  $inTs = strtotime($log['in_time']);
+                  $outTs = strtotime($log['out_time']);
+                  if ($outTs > $inTs) {
+                      $diff = $outTs - $inTs;
+                      $hrs = floor($diff / 3600);
+                      $mins = floor(($diff % 3600) / 60);
+                      $duration = "{$hrs}h {$mins}m";
+                  }
+                  $status = 'Completed';
+              } elseif (!empty($log['in_time'])) {
+                  $status = 'Active';
+              }
+
+              $inPhotoFull = '';
+              if (!empty($log['in_photo'])) {
+                  $p = trim($log['in_photo']);
+                  if (preg_match('/^https?:\/\//i', $p)) {
+                      $inPhotoFull = $p;
+                  } else {
+                      $inPhotoFull = $baseUrl . '/mcc/' . ltrim($p, '/');
+                  }
+              }
+
+              $outPhotoFull = '';
+              if (!empty($log['out_photo'])) {
+                  $p = trim($log['out_photo']);
+                  if (preg_match('/^https?:\/\//i', $p)) {
+                      $outPhotoFull = $p;
+                  } else {
+                      $outPhotoFull = $baseUrl . '/mcc/' . ltrim($p, '/');
+                  }
+              }
+
+              $inTimeFormatted = !empty($log['in_time']) ? date('H:i:s', strtotime($log['in_time'])) : '-';
+              $outTimeFormatted = !empty($log['out_time']) ? date('H:i:s', strtotime($log['out_time'])) : '-';
+              $attDateFormatted = !empty($log['attendance_date']) ? date('d-m-Y', strtotime($log['attendance_date'])) : '-';
+          ?>
+            <tr>
+              <td class="text-center"><?= $sno++ ?></td>
+              <td class="text-center"><?= $attDateFormatted ?></td>
+              <td class="text-num"><?= htmlspecialchars($log['employee_id']) ?></td>
+              <td><strong><?= htmlspecialchars($log['employee_name']) ?></strong></td>
+              <td><?= htmlspecialchars($log['designation']) ?></td>
+              <td class="text-center"><?= htmlspecialchars($log['shift']) ?></td>
+              <td class="text-center bg-in badge-in"><?= $inTimeFormatted ?></td>
+              <td class="bg-in"><?= htmlspecialchars($log['in_location'] ?: '-') ?></td>
+              <td class="text-center bg-in">
+                <?php if (!empty($inPhotoFull)): ?>
+                  <a href="<?= htmlspecialchars($inPhotoFull) ?>" class="photo-link" target="_blank">View IN Photo</a>
+                <?php else: ?>
+                  -
+                <?php endif; ?>
+              </td>
+              <td class="text-center bg-out badge-out"><?= $outTimeFormatted ?></td>
+              <td class="bg-out"><?= htmlspecialchars($log['out_location'] ?: '-') ?></td>
+              <td class="text-center bg-out">
+                <?php if (!empty($outPhotoFull)): ?>
+                  <a href="<?= htmlspecialchars($outPhotoFull) ?>" class="photo-link" target="_blank">View OUT Photo</a>
+                <?php else: ?>
+                  -
+                <?php endif; ?>
+              </td>
+              <td class="text-center"><strong><?= $duration ?></strong></td>
+              <td class="text-center <?= $status === 'Completed' ? 'badge-in' : 'badge-pending' ?>"><?= $status ?></td>
+              <td><?= htmlspecialchars($log['process'] ?: '-') ?></td>
+            </tr>
+          <?php endforeach; ?>
+        <?php endif; ?>
+      </tbody>
+    </table>
+    </body>
+    </html>
+    <?php
+    exit();
+}
+
 include 'header.php';
 include 'sidebar.php';
 ?>
@@ -246,6 +431,31 @@ include 'sidebar.php';
 .btn-print-action:hover {
   background: #1e293b;
   color: #fff;
+}
+
+.btn-export-excel {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #fff !important;
+  font-weight: 600;
+  font-size: 13px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+  transition: all 0.2s ease;
+}
+
+.btn-export-excel:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.4);
+  transform: translateY(-1px);
+  color: #fff !important;
 }
 
 /* KPI Cards */
@@ -699,7 +909,7 @@ include 'sidebar.php';
             Photo Attendance Filters & Control Panel
           </div>
 
-          <form method="GET" action="photo_attendance.php" class="filter-grid">
+          <form method="GET" action="photo_attendance.php" class="filter-grid" id="photoAttFilterForm">
             <div class="filter-group">
               <label for="from_date"><i class="bi bi-calendar3 me-1"></i>From Date</label>
               <input type="date" id="from_date" name="from_date" class="filter-input" value="<?= htmlspecialchars($selectedFromDate) ?>" required>
@@ -745,6 +955,9 @@ include 'sidebar.php';
               </button>
               <a href="photo_attendance.php" class="btn-filter-reset" title="Reset Filters">
                 <i class="bi bi-arrow-counterclockwise"></i> Reset
+              </a>
+              <a href="?<?= http_build_query(array_merge($_GET, ['export' => 'excel'])) ?>" onclick="event.preventDefault(); exportCurrentFiltersToExcel();" class="btn-export-excel" title="Export Current Filtered Records to Excel">
+                <i class="bi bi-file-earmark-excel-fill"></i> Export Excel
               </a>
               <a href="photo-attendance-summary.php?month=<?= date('m', strtotime($selectedFromDate)) ?>&year=<?= date('Y', strtotime($selectedFromDate)) ?>" class="btn-filter-reset" style="background:#0284c7; color:#fff; border-color:#0284c7;" title="View Monthly Summary">
                 <i class="bi bi-calendar-month-fill"></i> Monthly Summary
@@ -817,7 +1030,10 @@ include 'sidebar.php';
                 &bull; Total Staff Logged: <strong><?= $totalRecords ?></strong>
               </div>
             </div>
-            <div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <a href="?<?= http_build_query(array_merge($_GET, ['export' => 'excel'])) ?>" onclick="event.preventDefault(); exportCurrentFiltersToExcel();" class="btn-export-excel" style="height: 34px; padding: 0 14px; font-size: 12px;" title="Export Current Filtered Records to Excel">
+                <i class="bi bi-file-earmark-excel-fill"></i> Export Excel
+              </a>
               <span class="badge bg-light text-dark px-3 py-2 fw-bold" style="font-size: 13px; border-radius: 8px;">
                 <i class="bi bi-clock me-1 text-primary"></i> Live Verified Logs
               </span>
@@ -1131,6 +1347,18 @@ function openPhotoModal(imgUrl, empName, punchType, timeStr, locationStr, lat, l
 
   var myModal = new bootstrap.Modal(modalEl);
   myModal.show();
+}
+
+function exportCurrentFiltersToExcel() {
+  var form = document.getElementById('photoAttFilterForm');
+  var params;
+  if (form) {
+    params = new URLSearchParams(new FormData(form));
+  } else {
+    params = new URLSearchParams(window.location.search);
+  }
+  params.set('export', 'excel');
+  window.location.href = 'photo_attendance.php?' + params.toString();
 }
 </script>
 

@@ -8204,6 +8204,7 @@ CREATE TABLE `mcc_stations` (
   `station_name` varchar(120) NOT NULL,
   `division_id` int(11) NOT NULL,
   `status` enum('Active','Inactive') DEFAULT 'Active',
+  `active_backend_mobile` tinyint(1) NOT NULL DEFAULT 1 COMMENT '1=Yes/Active, 0=No/Inactive',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `contractor_name` varchar(255) DEFAULT 'Kingson Services'

@@ -19,19 +19,23 @@ if (empty($data)) {
 
 $stationId = isset($data['station_id']) ? intval($data['station_id']) : null;
 $shiftId = isset($data['shift_id']) ? intval($data['shift_id']) : null;
-$explicitDate = $data['date'] ?? ($data['report_date'] ?? null);
+$explicitDate = $data['report_date'] ?? ($data['date'] ?? null);
 $tokenId = $data['token_id'] ?? null;
 
 if (!empty($explicitDate)) {
     $reportDate = getRailwayOperatingDate($explicitDate);
+    $createdAt = getReportCreatedAt($explicitDate);
 } else if (!empty($tokenId) && preg_match('/(\d{4})(\d{2})(\d{2})/', $tokenId, $matches)) {
     $reportDate = $matches[1] . '-' . $matches[2] . '-' . $matches[3];
+    $createdAt = getReportCreatedAt($reportDate);
 } else {
     $reportDate = getRailwayOperatingDate();
+    $createdAt = getReportCreatedAt();
 }
 
-$auditorName = $data['auditor_name'] ?? $data['submitted_by'] ?? null;
-$valuesList = $data['values'] ?? $data['parameters'] ?? null; // Support both values and parameters
+$auditorName = $data['auditor_name'] ?? ($data['submitted_by'] ?? null);
+$auditorId = isset($data['auditor_id']) && !empty($data['auditor_id']) ? intval($data['auditor_id']) : (isset($data['audit_by']) && !empty($data['audit_by']) ? intval($data['audit_by']) : null);
+$valuesList = $data['values'] ?? ($data['parameters'] ?? null); // Support both values and parameters
 
 if (empty($stationId) || empty($shiftId) || empty($reportDate) || empty($valuesList) || !is_array($valuesList)) {
     http_response_code(400);
@@ -62,14 +66,14 @@ try {
 
     $updateStmt = $pdo->prepare("
         UPDATE mcc_vb_machine_report 
-        SET used_status = :used_status, token_id = :token_id, auditor_name = :auditor_name
+        SET used_status = :used_status, token_id = :token_id, auditor_name = :auditor_name, audit_by = COALESCE(:audit_by, audit_by)
         WHERE id = :id
     ");
 
     $insertStmt = $pdo->prepare("
         INSERT INTO mcc_vb_machine_report 
-        (parameter_id, shift_id, used_status, token_id, auditor_name, station_id, report_date)
-        VALUES (:parameter_id, :shift_id, :used_status, :token_id, :auditor_name, :station_id, :report_date)
+        (parameter_id, shift_id, used_status, token_id, auditor_name, station_id, report_date, created_at, audit_by)
+        VALUES (:parameter_id, :shift_id, :used_status, :token_id, :auditor_name, :station_id, :report_date, :created_at, :audit_by)
     ");
 
     $upsertCount = 0;
@@ -95,6 +99,7 @@ try {
                     'used_status' => $operated,
                     'token_id' => $tokenId,
                     'auditor_name' => $auditorName,
+                    'audit_by' => $auditorId,
                     'id' => $existing['id']
                 ]);
             } else {
@@ -106,7 +111,9 @@ try {
                     'token_id' => $tokenId,
                     'auditor_name' => $auditorName,
                     'station_id' => $stationId,
-                    'report_date' => $reportDate
+                    'report_date' => $reportDate,
+                    'created_at' => $createdAt,
+                    'audit_by' => $auditorId
                 ]);
             }
             $upsertCount++;
@@ -120,6 +127,8 @@ try {
         "status" => "success",
         "message" => "Machine report parameters submitted successfully.",
         "token_id" => $tokenId,
+        "report_date" => $reportDate,
+        "created_at" => $createdAt,
         "records_processed" => $upsertCount
     ]);
 

@@ -23,6 +23,7 @@ $trainNo = $data['train_no'] ?? null;
 $stationId = isset($data['station_id']) ? intval($data['station_id']) : 1;
 $explicitDate = $data['report_date'] ?? ($data['date'] ?? null);
 $reportDate = getRailwayOperatingDate($explicitDate);
+$createdAt = getReportCreatedAt($explicitDate);
 $coachNos = $data['coach_nos'] ?? null; // Expect array of coach numbers or comma-separated string
 
 if (empty($auditorName) || empty($trainNo) || empty($coachNos)) {
@@ -91,8 +92,8 @@ try {
 
     $insertStmt = $pdo->prepare("
         INSERT INTO mcc_intensive_scorecard_report 
-        (sub_parameter_id, station_id, token_id, train_no, coach_no, score_value, auditor_name, audit_by, report_date)
-        VALUES (:sub_parameter_id, :station_id, :token_id, :train_no, :coach_no, '', :auditor_name, :audit_by, :report_date)
+        (sub_parameter_id, station_id, token_id, train_no, coach_no, score_value, auditor_name, audit_by, report_date, created_at)
+        VALUES (:sub_parameter_id, :station_id, :token_id, :train_no, :coach_no, '', :auditor_name, :audit_by, :report_date, :created_at)
     ");
 
     foreach ($coachNos as $coachNo) {
@@ -105,7 +106,8 @@ try {
                 'coach_no' => trim($coachNo),
                 'auditor_name' => $auditorName,
                 'audit_by' => $auditorId,
-                'report_date' => $reportDate
+                'report_date' => $reportDate,
+                'created_at' => $createdAt
             ]);
         }
     }
@@ -114,8 +116,8 @@ try {
     if (!empty($chemParams)) {
         $insertChemStmt = $pdo->prepare("
             INSERT INTO mcc_chemical_report 
-            (chemical_type_id, parameter_id, coach_no, qty_used, auditor_name, station_id, token_id, train_no, audit_by, report_date)
-            VALUES (2, :parameter_id, :coach_no, NULL, :auditor_name, :station_id, :token_id, :train_no, :audit_by, :report_date)
+            (chemical_type_id, parameter_id, coach_no, qty_used, auditor_name, station_id, token_id, train_no, audit_by, report_date, created_at)
+            VALUES (2, :parameter_id, :coach_no, NULL, :auditor_name, :station_id, :token_id, :train_no, :audit_by, :report_date, :created_at)
         ");
 
         foreach ($coachNos as $coachNo) {
@@ -128,7 +130,8 @@ try {
                     'token_id' => $tokenId,
                     'train_no' => $trainNo,
                     'audit_by' => $auditorId,
-                    'report_date' => $reportDate
+                    'report_date' => $reportDate,
+                    'created_at' => $createdAt
                 ]);
             }
         }
@@ -142,6 +145,8 @@ try {
         "message" => "Intensive cleaning scorecard sheet initialized successfully.",
         "token_id" => $tokenId,
         "train_no" => $trainNo,
+        "report_date" => $reportDate,
+        "created_at" => $createdAt,
         "coaches_count" => count($coachNos)
     ]);
 

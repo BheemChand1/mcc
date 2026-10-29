@@ -1,26 +1,6 @@
 <?php
 require_once 'auth.php';
 
-// Check if table mcc_designation exists, if not create it
-$tableCheckDes = $pdo->query("SHOW TABLES LIKE 'mcc_designation'");
-if ($tableCheckDes->rowCount() == 0) {
-    $sqlDes = "CREATE TABLE `mcc_designation` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `station_id` INT NOT NULL DEFAULT 1,
-        `designation_name` VARCHAR(100) NOT NULL,
-        `status` ENUM('Active', 'Inactive') DEFAULT 'Active',
-        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX (`station_id`),
-        UNIQUE KEY `unique_station_designation` (`station_id`, `designation_name`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;";
-    $pdo->exec($sqlDes);
-
-    $initDesStmt = $pdo->prepare("INSERT IGNORE INTO mcc_designation (station_id, designation_name, status) VALUES (?, ?, 'Active')");
-    $initDesStmt->execute([$stationId, 'Unskilled']);
-    $initDesStmt->execute([$stationId, 'Supervisor']);
-}
-
 // Fetch active designations station-wise
 $desStmt = $pdo->prepare("
     SELECT designation_name 
@@ -34,50 +14,14 @@ if (empty($designationOptions)) {
     $designationOptions = ['Supervisor', 'Unskilled'];
 }
 
-// Check if table mcc_employee exists, if not create it
-$tableCheck = $pdo->query("SHOW TABLES LIKE 'mcc_employee'");
-if ($tableCheck->rowCount() == 0) {
-    $sql = "CREATE TABLE `mcc_employee` (
-        `id` INT AUTO_INCREMENT PRIMARY KEY,
-        `employee_id` VARCHAR(50) NOT NULL UNIQUE,
-        `full_name` VARCHAR(255) NOT NULL,
-        `designation` VARCHAR(255) NOT NULL,
-        `age` INT DEFAULT NULL,
-        `employee_photo` VARCHAR(255) DEFAULT NULL,
-        `father_name` VARCHAR(255) DEFAULT NULL,
-        `mother_name` VARCHAR(255) DEFAULT NULL,
-        `mobile_number` VARCHAR(20) DEFAULT NULL,
-        `dob` DATE DEFAULT NULL,
-        `aadhar_number` VARCHAR(50) DEFAULT NULL,
-        `address` TEXT DEFAULT NULL,
-        `ren_id` VARCHAR(50) DEFAULT NULL,
-        `rakshak_id` VARCHAR(50) DEFAULT NULL,
-        `pan_card` VARCHAR(50) DEFAULT NULL,
-        `police_ver` VARCHAR(100) DEFAULT NULL,
-        `police_ver_dt` DATE DEFAULT NULL,
-        `pvc` VARCHAR(100) DEFAULT NULL,
-        `pvc_ok_applied` VARCHAR(100) DEFAULT NULL,
-        `pvc_issue_month` VARCHAR(50) DEFAULT NULL,
-        `medical` VARCHAR(100) DEFAULT NULL,
-        `medical_issue_month` VARCHAR(50) DEFAULT NULL,
-        `education` VARCHAR(100) DEFAULT NULL,
-        `document_status` VARCHAR(100) DEFAULT NULL,
-        `account_name` VARCHAR(255) DEFAULT NULL,
-        `account_number` VARCHAR(50) DEFAULT NULL,
-        `ifsc_code` VARCHAR(50) DEFAULT NULL,
-        `status` VARCHAR(50) DEFAULT NULL,
-        `issue_date` DATE DEFAULT NULL,
-        `valid_upto_date` DATE DEFAULT NULL,
-        `valid_upto_month` VARCHAR(50) DEFAULT NULL,
-        `formula_valid_upto` VARCHAR(255) DEFAULT NULL,
-        `notification` VARCHAR(255) DEFAULT NULL,
-        `document_link` VARCHAR(255) DEFAULT NULL,
-        `remarks` TEXT DEFAULT NULL,
-        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;";
-    $pdo->exec($sql);
-}
+// Fetch active custom fields for this specific station
+$cfStmt = $pdo->prepare("
+    SELECT * FROM mcc_employee_custom_fields 
+    WHERE station_id = :station_id AND status = 'Active' 
+    ORDER BY sort_order ASC, id ASC
+");
+$cfStmt->execute(['station_id' => $stationId]);
+$customFields = $cfStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Ensure uploads directory exists
 $uploadDir = __DIR__ . '/uploads';
@@ -88,13 +32,32 @@ if (!is_dir($uploadDir)) {
 // Edit Mode Logic
 $isEdit = false;
 $employee = null;
+$savedCustomData = [];
+
 if (isset($_GET['id'])) {
     $stmt = $pdo->prepare("SELECT * FROM mcc_employee WHERE id = ?");
     $stmt->execute([$_GET['id']]);
-    $employee = $stmt->fetch();
+    $employee = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($employee) {
         $isEdit = true;
+        if (!empty($employee['custom_data'])) {
+            $savedCustomData = json_decode($employee['custom_data'], true);
+            if (!is_array($savedCustomData)) {
+                $savedCustomData = [];
+            }
+        }
     }
+}
+
+// Helper to get field value (supporting custom_data, direct table columns, or empty default)
+function getFieldVal($key, $employee, $savedCustomData) {
+    if (isset($savedCustomData[$key])) {
+        return htmlspecialchars((string)$savedCustomData[$key]);
+    }
+    if (isset($employee[$key])) {
+        return htmlspecialchars((string)$employee[$key]);
+    }
+    return '';
 }
 
 // POST Action Handling (AJAX Form submission)
@@ -119,42 +82,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             exit;
         }
 
-        // Parse optional numeric/date fields
-        $age = !empty($_POST['age']) ? intval($_POST['age']) : null;
-        $dob = !empty($_POST['dob']) ? $_POST['dob'] : null;
-        $police_ver_dt = !empty($_POST['police_ver_dt']) ? $_POST['police_ver_dt'] : null;
-        $issue_date = !empty($_POST['issue_date']) ? $_POST['issue_date'] : null;
-        $valid_upto_date = !empty($_POST['valid_upto_date']) ? $_POST['valid_upto_date'] : null;
-
-        // Collect string values
-        $fatherName = trim($_POST['father_name'] ?? '');
-        $motherName = trim($_POST['mother_name'] ?? '');
-        $mobileNumber = trim($_POST['mobile_number'] ?? '');
-        $aadharNumber = trim($_POST['aadhar_number'] ?? '');
-        $address = trim($_POST['address'] ?? '');
-        $renId = trim($_POST['ren_id'] ?? '');
-        $rakshakId = trim($_POST['rakshak_id'] ?? '');
-        $panCard = trim($_POST['pan_card'] ?? '');
-        $policeVer = trim($_POST['police_ver'] ?? '');
-        $pvc = trim($_POST['pvc'] ?? '');
-        $pvcOkApplied = trim($_POST['pvc_ok_applied'] ?? '');
-        $pvcIssueMonth = trim($_POST['pvc_issue_month'] ?? '');
-        $medical = trim($_POST['medical'] ?? '');
-        $medicalIssueMonth = trim($_POST['medical_issue_month'] ?? '');
-        $education = trim($_POST['education'] ?? '');
-        $documentStatus = trim($_POST['document_status'] ?? '');
-        $accountName = trim($_POST['account_name'] ?? '');
-        $accountNumber = trim($_POST['account_number'] ?? '');
-        $ifscCode = trim($_POST['ifsc_code'] ?? '');
-        $status = trim($_POST['status'] ?? '');
-        $validUptoMonth = trim($_POST['valid_upto_month'] ?? '');
-        $formulaValidUpto = trim($_POST['formula_valid_upto'] ?? '');
-        $notification = trim($_POST['notification'] ?? '');
-        $documentLink = trim($_POST['document_link'] ?? '');
-        $remarks = trim($_POST['remarks'] ?? '');
-        $bloodGroup = trim($_POST['blood_group'] ?? '');
-        $department = trim($_POST['department'] ?? '');
-
         // Photo Upload Handling
         $photoFileName = $isEdit && $employee ? $employee['employee_photo'] : null;
         if (isset($_FILES['employee_photo']) && $_FILES['employee_photo']['error'] === UPLOAD_ERR_OK) {
@@ -162,7 +89,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $origFileName = $_FILES['employee_photo']['name'];
             $fileExtension = strtolower(pathinfo($origFileName, PATHINFO_EXTENSION));
             
-            // Validate file extension
             $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
             if (!in_array($fileExtension, $allowedExtensions)) {
                 echo json_encode(['success' => false, 'message' => 'Only JPG, JPEG, PNG, GIF, and WEBP photos are allowed.']);
@@ -173,7 +99,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $destPath = $uploadDir . '/' . $newFileName;
             
             if (move_uploaded_file($fileTmpPath, $destPath)) {
-                // If editing, delete old photo to save space
                 if ($isEdit && !empty($employee['employee_photo'])) {
                     $oldPhotoPath = $uploadDir . '/' . $employee['employee_photo'];
                     if (file_exists($oldPhotoPath)) {
@@ -187,71 +112,107 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             }
         }
 
+        // Retrieve existing columns in mcc_employee to sync matching direct columns
+        $existingCols = [];
+        try {
+            $colStmt = $pdo->query("SHOW COLUMNS FROM mcc_employee");
+            while ($c = $colStmt->fetch(PDO::FETCH_ASSOC)) {
+                $existingCols[] = $c['Field'];
+            }
+        } catch (Exception $e) {}
+
+        // Collect Custom Dynamic Fields
+        $submittedCustomData = [];
+        $columnDirectUpdates = [];
+
+        foreach ($customFields as $cf) {
+            $k = $cf['field_key'];
+            $val = '';
+
+            if ($cf['field_type'] === 'file') {
+                if (isset($_FILES['custom_' . $k]) && $_FILES['custom_' . $k]['error'] === UPLOAD_ERR_OK) {
+                    $ext = strtolower(pathinfo($_FILES['custom_' . $k]['name'], PATHINFO_EXTENSION));
+                    $newFile = uniqid('cf_' . $k . '_', true) . '.' . $ext;
+                    if (move_uploaded_file($_FILES['custom_' . $k]['tmp_name'], $uploadDir . '/' . $newFile)) {
+                        $val = $newFile;
+                    }
+                } elseif ($isEdit && isset($savedCustomData[$k])) {
+                    $val = $savedCustomData[$k];
+                }
+            } else {
+                $val = trim($_POST['custom_' . $k] ?? ($_POST[$k] ?? ''));
+            }
+
+            // Check required validation
+            if (!empty($cf['is_required']) && ($val === '' || $val === null)) {
+                echo json_encode(['success' => false, 'message' => "Field '{$cf['field_label']}' is required."]);
+                exit;
+            }
+
+            $submittedCustomData[$k] = $val;
+
+            // If column exists directly in mcc_employee, sync it for backwards compatibility
+            if (in_array($k, $existingCols)) {
+                $columnDirectUpdates[$k] = ($val === '' ? null : $val);
+            }
+        }
+
         if ($isEdit) {
-            // Update
-            $updateSql = "UPDATE mcc_employee SET 
-                employee_id = :employee_id, full_name = :full_name, designation = :designation, age = :age, 
-                employee_photo = :employee_photo, father_name = :father_name, mother_name = :mother_name, 
-                mobile_number = :mobile_number, dob = :dob, aadhar_number = :aadhar_number, address = :address, 
-                ren_id = :ren_id, rakshak_id = :rakshak_id, pan_card = :pan_card, police_ver = :police_ver, 
-                police_ver_dt = :police_ver_dt, pvc = :pvc, pvc_ok_applied = :pvc_ok_applied, 
-                pvc_issue_month = :pvc_issue_month, medical = :medical, medical_issue_month = :medical_issue_month, 
-                education = :education, document_status = :document_status, account_name = :account_name, 
-                account_number = :account_number, ifsc_code = :ifsc_code, status = :status, 
-                issue_date = :issue_date, valid_upto_date = :valid_upto_date, valid_upto_month = :valid_upto_month, 
-                formula_valid_upto = :formula_valid_upto, notification = :notification, 
-                document_link = :document_link, remarks = :remarks, blood_group = :blood_group, department = :department
-                WHERE id = :id";
-            
+            // Merge with existing custom data
+            $prevCustom = !empty($employee['custom_data']) ? json_decode($employee['custom_data'], true) : [];
+            if (!is_array($prevCustom)) $prevCustom = [];
+            $finalCustom = array_merge($prevCustom, $submittedCustomData);
+
+            $updateFields = [
+                "`employee_id` = :employee_id",
+                "`full_name` = :full_name",
+                "`designation` = :designation",
+                "`employee_photo` = :employee_photo",
+                "`custom_data` = :custom_data"
+            ];
+            $params = [
+                'employee_id' => $empId,
+                'full_name' => $fullName,
+                'designation' => $designation,
+                'employee_photo' => $photoFileName,
+                'custom_data' => json_encode($finalCustom, JSON_UNESCAPED_UNICODE),
+                'id' => $id
+            ];
+
+            foreach ($columnDirectUpdates as $colName => $colVal) {
+                $updateFields[] = "`{$colName}` = :{$colName}";
+                $params[$colName] = $colVal;
+            }
+
+            $updateSql = "UPDATE mcc_employee SET " . implode(', ', $updateFields) . " WHERE id = :id";
             $stmt = $pdo->prepare($updateSql);
-            $stmt->execute([
-                'employee_id' => $empId, 'full_name' => $fullName, 'designation' => $designation, 'age' => $age,
-                'employee_photo' => $photoFileName, 'father_name' => $fatherName, 'mother_name' => $motherName,
-                'mobile_number' => $mobileNumber, 'dob' => $dob, 'aadhar_number' => $aadharNumber, 'address' => $address,
-                'ren_id' => $renId, 'rakshak_id' => $rakshakId, 'pan_card' => $panCard, 'police_ver' => $policeVer,
-                'police_ver_dt' => $police_ver_dt, 'pvc' => $pvc, 'pvc_ok_applied' => $pvcOkApplied,
-                'pvc_issue_month' => $pvcIssueMonth, 'medical' => $medical, 'medical_issue_month' => $medicalIssueMonth,
-                'education' => $education, 'document_status' => $documentStatus, 'account_name' => $accountName,
-                'account_number' => $accountNumber, 'ifsc_code' => $ifscCode, 'status' => $status,
-                'issue_date' => $issue_date, 'valid_upto_date' => $valid_upto_date, 'valid_upto_month' => $validUptoMonth,
-                'formula_valid_upto' => $formulaValidUpto, 'notification' => $notification,
-                'document_link' => $documentLink, 'remarks' => $remarks, 'blood_group' => $bloodGroup, 'department' => $department, 'id' => $id
-            ]);
+            $stmt->execute($params);
+
             echo json_encode(['success' => true, 'message' => 'Employee details updated successfully!']);
             exit;
         } else {
             // Insert
-            $insertSql = "INSERT INTO mcc_employee (
-                station_id, employee_id, full_name, designation, age, employee_photo, father_name, mother_name, 
-                mobile_number, dob, aadhar_number, address, ren_id, rakshak_id, pan_card, police_ver, 
-                police_ver_dt, pvc, pvc_ok_applied, pvc_issue_month, medical, medical_issue_month, 
-                education, document_status, account_name, account_number, ifsc_code, status, 
-                issue_date, valid_upto_date, valid_upto_month, formula_valid_upto, notification, 
-                document_link, remarks, blood_group, department
-            ) VALUES (
-                :station_id, :employee_id, :full_name, :designation, :age, :employee_photo, :father_name, :mother_name, 
-                :mobile_number, :dob, :aadhar_number, :address, :ren_id, :rakshak_id, :pan_card, :police_ver, 
-                :police_ver_dt, :pvc, :pvc_ok_applied, :pvc_issue_month, :medical, :medical_issue_month, 
-                :education, :document_status, :account_name, :account_number, :ifsc_code, :status, 
-                :issue_date, :valid_upto_date, :valid_upto_month, :formula_valid_upto, :notification, 
-                :document_link, :remarks, :blood_group, :department
-            )";
-            
-            $stmt = $pdo->prepare($insertSql);
-            $stmt->execute([
+            $insertCols = ['station_id', 'employee_id', 'full_name', 'designation', 'employee_photo', 'custom_data'];
+            $insertPlaceholders = [':station_id', ':employee_id', ':full_name', ':designation', ':employee_photo', ':custom_data'];
+            $params = [
                 'station_id' => $stationId,
-                'employee_id' => $empId, 'full_name' => $fullName, 'designation' => $designation, 'age' => $age,
-                'employee_photo' => $photoFileName, 'father_name' => $fatherName, 'mother_name' => $motherName,
-                'mobile_number' => $mobileNumber, 'dob' => $dob, 'aadhar_number' => $aadharNumber, 'address' => $address,
-                'ren_id' => $renId, 'rakshak_id' => $rakshakId, 'pan_card' => $panCard, 'police_ver' => $policeVer,
-                'police_ver_dt' => $police_ver_dt, 'pvc' => $pvc, 'pvc_ok_applied' => $pvcOkApplied,
-                'pvc_issue_month' => $pvcIssueMonth, 'medical' => $medical, 'medical_issue_month' => $medicalIssueMonth,
-                'education' => $education, 'document_status' => $documentStatus, 'account_name' => $accountName,
-                'account_number' => $accountNumber, 'ifsc_code' => $ifscCode, 'status' => $status,
-                'issue_date' => $issue_date, 'valid_upto_date' => $valid_upto_date, 'valid_upto_month' => $validUptoMonth,
-                'formula_valid_upto' => $formulaValidUpto, 'notification' => $notification,
-                'document_link' => $documentLink, 'remarks' => $remarks, 'blood_group' => $bloodGroup, 'department' => $department
-            ]);
+                'employee_id' => $empId,
+                'full_name' => $fullName,
+                'designation' => $designation,
+                'employee_photo' => $photoFileName,
+                'custom_data' => json_encode($submittedCustomData, JSON_UNESCAPED_UNICODE)
+            ];
+
+            foreach ($columnDirectUpdates as $colName => $colVal) {
+                $insertCols[] = "`{$colName}`";
+                $insertPlaceholders[] = ":{$colName}";
+                $params[$colName] = $colVal;
+            }
+
+            $insertSql = "INSERT INTO mcc_employee (" . implode(', ', $insertCols) . ") VALUES (" . implode(', ', $insertPlaceholders) . ")";
+            $stmt = $pdo->prepare($insertSql);
+            $stmt->execute($params);
+
             echo json_encode(['success' => true, 'message' => 'Employee created successfully!']);
             exit;
         }
@@ -259,11 +220,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
         exit;
     }
-}
-
-// Helper to get HTML escaped value
-function getVal($field, $employee) {
-    return htmlspecialchars($employee[$field] ?? '');
 }
 
 $pageTitle = $isEdit ? 'MCC | Edit Employee' : 'MCC | Add Employee';
@@ -290,8 +246,8 @@ $extraStyles = '
   .header-card {
     background: linear-gradient(135deg, #07203a 0%, #0c3b6d 100%);
     color: white;
-    padding: 14px 25px;
-    border-radius: 8px;
+    padding: 16px 25px;
+    border-radius: 10px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -310,11 +266,6 @@ $extraStyles = '
     font-weight: 700;
     margin: 0;
     letter-spacing: -0.2px;
-  }
-
-  .header-right {
-    font-size: 0.85rem;
-    opacity: 0.9;
   }
 
   .btn-back {
@@ -339,31 +290,40 @@ $extraStyles = '
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
   }
 
+  .btn-import-header {
+    background: #10b981;
+    color: white;
+    border: none;
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-import-header:hover {
+    background: #059669;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3);
+  }
+
   .form-container {
     width: 100%;
     padding: 10px 15px;
     margin: 0;
   }
 
-  .form-main-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-    align-items: start;
-  }
-
-  @media (max-width: 1100px) {
-    .form-main-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
   .form-section {
     background: var(--section-bg);
-    border-radius: 8px;
-    padding: 14px 18px;
-    margin-bottom: 12px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
     border: 1px solid #e5e7eb;
     width: 100%;
   }
@@ -371,19 +331,25 @@ $extraStyles = '
   .section-header {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
+    justify-content: space-between;
+    margin-bottom: 18px;
+    padding-bottom: 12px;
     border-bottom: 1px solid #f0f2f5;
   }
 
+  .section-header-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
   .section-icon {
-    font-size: 1.15rem;
+    font-size: 1.25rem;
     color: #0c3b6d;
   }
 
   .section-title {
-    font-size: 0.92rem;
+    font-size: 1rem;
     font-weight: 700;
     color: #07203a;
     margin: 0;
@@ -391,47 +357,28 @@ $extraStyles = '
     letter-spacing: 0.4px;
   }
 
-  .field-grid-4 {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-  }
-
   .field-grid-3 {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
+    gap: 16px;
+  }
+
+  .field-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
   }
 
   .form-group {
     margin-bottom: 8px;
   }
 
-  .form-column {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .flex-section {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    padding-top: 18px !important;
-    padding-bottom: 18px !important;
-  }
-
-  .flex-section .field-grid-3 {
-    flex: 1;
-    align-content: space-evenly;
-  }
-
   .form-label {
     display: block;
-    font-size: 0.76rem;
+    font-size: 0.78rem;
     font-weight: 600;
     color: #4b5563;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     text-transform: uppercase;
     letter-spacing: 0.2px;
   }
@@ -443,10 +390,10 @@ $extraStyles = '
 
   .form-control, .form-select {
     width: 100%;
-    padding: 7px 11px;
+    padding: 8px 12px;
     border: 1px solid var(--input-border);
     border-radius: 6px;
-    font-size: 0.85rem;
+    font-size: 0.88rem;
     color: #1f2937;
     background-color: #fff;
     transition: all 0.2s ease-in-out;
@@ -458,27 +405,17 @@ $extraStyles = '
     outline: none;
   }
 
-  .form-control::placeholder {
-    color: #9ca3af;
-  }
-
-  .photo-upload-container {
+  .photo-upload-box {
     border: 1.5px dashed #cbd5e1;
-    border-radius: 6px;
-    padding: 10px;
+    border-radius: 8px;
+    padding: 12px;
     background-color: #f8fafc;
     transition: all 0.2s;
   }
 
-  .photo-upload-container:hover {
+  .photo-upload-box:hover {
     border-color: #0c3b6d;
     background-color: #f0f4f8;
-  }
-
-  .photo-hint {
-    font-size: 0.8rem;
-    color: #64748b;
-    margin-top: 8px;
   }
 
   .footer-actions {
@@ -490,17 +427,16 @@ $extraStyles = '
   }
 
   .btn-action {
-    padding: 8px 22px;
+    padding: 10px 24px;
     border-radius: 6px;
     font-weight: 600;
-    font-size: 0.88rem;
+    font-size: 0.9rem;
     display: flex;
     align-items: center;
     gap: 8px;
     border: none;
     cursor: pointer;
     transition: all 0.2s ease-in-out;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
   }
 
   .btn-cancel {
@@ -510,8 +446,6 @@ $extraStyles = '
 
   .btn-cancel:hover {
     background-color: #495057;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.12);
   }
 
   .btn-create {
@@ -521,44 +455,29 @@ $extraStyles = '
 
   .btn-create:hover {
     background: linear-gradient(135deg, #07182c 0%, #07203a 100%);
-    transform: translateY(-1px);
     box-shadow: 0 4px 10px rgba(7, 32, 58, 0.25);
   }
 
-  @media (max-width: 1200px) {
-    .field-grid-4 {
-      grid-template-columns: repeat(3, 1fr);
-    }
-  }
-
   @media (max-width: 992px) {
-    .field-grid-4, .field-grid-3 {
+    .field-grid-3 {
       grid-template-columns: repeat(2, 1fr);
     }
   }
 
   @media (max-width: 576px) {
-    .field-grid-4, .field-grid-3 {
+    .field-grid-3, .field-grid-2 {
       grid-template-columns: 1fr;
-    }
-    .header-card {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 10px;
-    }
-    .header-right {
-      display: none;
     }
   }
 ';
 
 $extraScripts = '
+  // Employee Form Submit
   document.getElementById("employeeForm").addEventListener("submit", function(e) {
     e.preventDefault();
     const formData = new FormData(this);
     formData.append("action", "save_employee");
     
-    // Disable submit button to prevent double submit
     const submitBtn = this.querySelector(\'button[type="submit"]\');
     const originalBtnHTML = submitBtn.innerHTML;
     submitBtn.disabled = true;
@@ -586,6 +505,50 @@ $extraScripts = '
       submitBtn.innerHTML = originalBtnHTML;
     });
   });
+
+  // Excel Import Submit
+  document.getElementById("excelImportForm")?.addEventListener("submit", function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    formData.append("action", "import_excel");
+
+    const submitBtn = document.getElementById("importSubmitBtn");
+    const originalBtnHTML = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = \'<span class="spinner-border spinner-border-sm me-2"></span>Importing...\';
+
+    const alertBox = document.getElementById("importAlertBox");
+    alertBox.className = "alert d-none";
+
+    fetch("ajax-employee-excel.php", {
+      method: "POST",
+      body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalBtnHTML;
+
+      alertBox.classList.remove("d-none");
+      if (data.success) {
+        alertBox.className = "alert alert-success";
+        alertBox.innerHTML = \'<i class="bi bi-check-circle-fill me-2"></i>\' + data.message;
+        setTimeout(() => {
+          window.location.href = "view-employee.php";
+        }, 1500);
+      } else {
+        alertBox.className = "alert alert-danger";
+        alertBox.innerHTML = \'<i class="bi bi-exclamation-triangle-fill me-2"></i>\' + data.message;
+      }
+    })
+    .catch(err => {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalBtnHTML;
+      alertBox.classList.remove("d-none");
+      alertBox.className = "alert alert-danger";
+      alertBox.innerHTML = "An unexpected error occurred during import.";
+    });
+  });
 ';
 
 include 'header.php';
@@ -594,277 +557,232 @@ include 'sidebar.php';
 
 <main class="app-main">
   <div class="form-container">
+
+    <!-- Header Card -->
     <div class="header-card">
       <div class="header-left">
         <a href="view-employee.php" class="btn-back">
-          <i class="bi bi-arrow-left"></i> Back
+          <i class="bi bi-arrow-left"></i> Back to Directory
         </a>
         <h1 class="header-title"><?= $isEdit ? 'Edit Employee Details' : 'Create New Employee' ?></h1>
+        <span class="badge bg-light text-dark px-2 py-1 rounded-pill small" style="font-size: 0.8rem;">
+          <i class="bi bi-geo-alt-fill text-primary"></i> <?= htmlspecialchars($stationName) ?>
+        </span>
+      </div>
+      <div>
+        <button type="button" class="btn-import-header" data-bs-toggle="modal" data-bs-target="#excelImportModal">
+          <i class="bi bi-file-earmark-excel"></i> Import from Excel
+        </button>
       </div>
     </div>
 
     <form id="employeeForm" enctype="multipart/form-data">
       <input type="hidden" name="id" value="<?= $isEdit ? $employee['id'] : '' ?>">
-      <div class="form-main-grid">
-        <!-- Left Column -->
-        <div class="form-column">
-          <!-- Basic Information -->
-          <div class="form-section">
-            <div class="section-header">
-              <i class="bi bi-person section-icon"></i>
-              <h2 class="section-title">Basic Information</h2>
-            </div>
-            <div class="field-grid-4">
-              <div class="form-group" style="grid-column: span 2;">
-                <label class="form-label">Employee ID <span class="required">*</span></label>
-                <input type="text" name="employee_id" class="form-control" placeholder="ID" required value="<?= getVal('employee_id', $employee) ?>">
-              </div>
-              <div class="form-group" style="grid-column: span 2;">
-                <label class="form-label">Full Name <span class="required">*</span></label>
-                <input type="text" name="full_name" class="form-control" placeholder="Name" required value="<?= getVal('full_name', $employee) ?>">
-              </div>
-              <div class="form-group" style="grid-column: span 2;">
-                <label class="form-label">Designation <span class="required">*</span></label>
-                <select name="designation" class="form-select" required>
-                  <option value="">-- Select Designation --</option>
-                  <?php 
-                  $currentDes = $employee['designation'] ?? '';
-                  foreach ($designationOptions as $dOpt): 
-                  ?>
-                    <option value="<?= htmlspecialchars($dOpt) ?>" <?= ($currentDes === $dOpt) ? 'selected' : '' ?>>
-                      <?= htmlspecialchars($dOpt) ?>
-                    </option>
-                  <?php endforeach; ?>
-                </select>
-              </div>
-              <div class="form-group" style="grid-column: span 2;">
-                <label class="form-label">Department</label>
-                <input type="text" name="department" class="form-control" placeholder="e.g. MECHANICAL (C&W)" value="<?= getVal('department', $employee) ?>">
-              </div>
-              <div class="form-group" style="grid-column: span 2;">
-                <label class="form-label">Age</label>
-                <input type="number" name="age" class="form-control" placeholder="Age" value="<?= getVal('age', $employee) ?>">
-              </div>
-              <div class="form-group" style="grid-column: span 2;">
-                <label class="form-label">Blood Group</label>
-                <input type="text" name="blood_group" class="form-control" placeholder="e.g. B+, O-" value="<?= getVal('blood_group', $employee) ?>">
-              </div>
+
+      <!-- 1. Mandatory Core Default Information -->
+      <div class="form-section">
+        <div class="section-header">
+          <div class="section-header-title">
+            <i class="bi bi-person-badge-fill section-icon"></i>
+            <div>
+              <h2 class="section-title">Core Information (Permanent Default Inputs)</h2>
+              <span class="text-muted small">Standard mandatory identification for all employees</span>
             </div>
           </div>
+          <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-1">
+            Default Inputs
+          </span>
+        </div>
 
-          <!-- Photo -->
-          <div class="form-section">
-            <div class="section-header">
-              <i class="bi bi-camera section-icon"></i>
-              <h2 class="section-title">Photo</h2>
-            </div>
-            <div class="form-group">
-              <?php if ($isEdit && !empty($employee['employee_photo'])): ?>
-                <div style="margin-bottom: 8px;">
-                  <img src="uploads/<?= htmlspecialchars($employee['employee_photo']) ?>" style="max-height: 80px; border-radius: 4px; border: 1px solid #ddd;" alt="Current Photo">
-                  <div class="small text-muted">Current photo</div>
-                </div>
-              <?php endif; ?>
-              <div class="photo-upload-container">
-                <input type="file" name="employee_photo" class="form-control" accept="image/*">
-              </div>
-            </div>
+        <div class="field-grid-3">
+          <div class="form-group">
+            <label class="form-label">Employee ID <span class="required">*</span></label>
+            <input type="text" name="employee_id" class="form-control" placeholder="e.g. EMP1001" required value="<?= getFieldVal('employee_id', $employee, $savedCustomData) ?>">
           </div>
 
-          <!-- Personal Information -->
-          <div class="form-section flex-section">
-            <div class="section-header">
-              <i class="bi bi-person-vcard section-icon"></i>
-              <h2 class="section-title">Personal Information</h2>
-            </div>
-            <div class="field-grid-3">
-              <div class="form-group">
-                <label class="form-label">Father's Name</label>
-                <input type="text" name="father_name" class="form-control" placeholder="Father's Name" value="<?= getVal('father_name', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Mother's Name</label>
-                <input type="text" name="mother_name" class="form-control" placeholder="Mother's Name" value="<?= getVal('mother_name', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Mobile Number</label>
-                <input type="tel" name="mobile_number" class="form-control" placeholder="Mobile" value="<?= getVal('mobile_number', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Date of Birth</label>
-                <input type="date" name="dob" class="form-control" value="<?= getVal('dob', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Aadhar Number</label>
-                <input type="text" name="aadhar_number" class="form-control" placeholder="Aadhar" value="<?= getVal('aadhar_number', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Address</label>
-                <input type="text" name="address" class="form-control" placeholder="Address" value="<?= getVal('address', $employee) ?>">
-              </div>
-            </div>
+          <div class="form-group">
+            <label class="form-label">Full Name <span class="required">*</span></label>
+            <input type="text" name="full_name" class="form-control" placeholder="Employee Full Name" required value="<?= getFieldVal('full_name', $employee, $savedCustomData) ?>">
           </div>
 
-          <!-- ID Information -->
-          <div class="form-section flex-section">
-            <div class="section-header" style="padding-top: 4px">
-              <i class="bi bi-person-badge section-icon"></i>
-              <h2 class="section-title">ID Information</h2>
-            </div>
-            <div class="field-grid-3">
-              <div class="form-group">
-                <label class="form-label">REN ID</label>
-                <input type="text" name="ren_id" class="form-control" placeholder="REN ID" value="<?= getVal('ren_id', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Rakshak ID</label>
-                <input type="text" name="rakshak_id" class="form-control" placeholder="Rakshak ID" value="<?= getVal('rakshak_id', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">PAN Card</label>
-                <input type="text" name="pan_card" class="form-control" placeholder="PAN Card" value="<?= getVal('pan_card', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Police Ver.</label>
-                <input type="text" name="police_ver" class="form-control" placeholder="Status" value="<?= getVal('police_ver', $employee) ?>">
-              </div>
-              <div class="form-group" style="grid-column: span 2;">
-                <label class="form-label">Police Ver. Dt</label>
-                <input type="date" name="police_ver_dt" class="form-control" value="<?= getVal('police_ver_dt', $employee) ?>">
-              </div>
-            </div>
+          <div class="form-group">
+            <label class="form-label">Designation <span class="required">*</span></label>
+            <select name="designation" class="form-select" required>
+              <option value="">-- Select Designation --</option>
+              <?php 
+              $currentDes = $employee['designation'] ?? '';
+              foreach ($designationOptions as $dOpt): 
+              ?>
+                <option value="<?= htmlspecialchars($dOpt) ?>" <?= ($currentDes === $dOpt) ? 'selected' : '' ?>>
+                  <?= htmlspecialchars($dOpt) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
           </div>
         </div>
 
-        <!-- Right Column -->
-        <div class="form-column">
-          <!-- Documents & Medical -->
-          <div class="form-section">
-            <div class="section-header">
-              <i class="bi bi-file-earmark-plus section-icon"></i>
-              <h2 class="section-title">Documents & Medical</h2>
+        <!-- Photo Upload -->
+        <div class="form-group mt-3">
+          <label class="form-label">Employee Photo</label>
+          <div class="photo-upload-box d-flex align-items-center gap-3">
+            <?php if ($isEdit && !empty($employee['employee_photo'])): ?>
+              <div>
+                <img src="uploads/<?= htmlspecialchars($employee['employee_photo']) ?>" style="width: 70px; height: 70px; object-fit: cover; border-radius: 6px; border: 1px solid #cbd5e1;" alt="Current Photo">
+              </div>
+            <?php endif; ?>
+            <div class="flex-grow-1">
+              <input type="file" name="employee_photo" class="form-control" accept="image/*">
+              <span class="text-muted small mt-1 d-block">Supported formats: JPG, PNG, WEBP. Max recommended size: 2MB.</span>
             </div>
-            <div class="field-grid-3">
-              <div class="form-group">
-                <label class="form-label">PVC</label>
-                <input type="text" name="pvc" class="form-control" placeholder="PVC" value="<?= getVal('pvc', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">PVC Ok Applied</label>
-                <input type="text" name="pvc_ok_applied" class="form-control" placeholder="Applied?" value="<?= getVal('pvc_ok_applied', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">PVC Issue Month</label>
-                <input type="text" name="pvc_issue_month" class="form-control" placeholder="Month" value="<?= getVal('pvc_issue_month', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Medical</label>
-                <input type="text" name="medical" class="form-control" placeholder="Medical" value="<?= getVal('medical', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Medical Issue Month</label>
-                <input type="text" name="medical_issue_month" class="form-control" placeholder="Month" value="<?= getVal('medical_issue_month', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Education</label>
-                <input type="text" name="education" class="form-control" placeholder="Education" value="<?= getVal('education', $employee) ?>">
-              </div>
-              <div class="form-group" style="grid-column: span 3;">
-                <label class="form-label">Document Status</label>
-                <input type="text" name="document_status" class="form-control" placeholder="Status" value="<?= getVal('document_status', $employee) ?>">
-              </div>
-            </div>
-          </div>
-
-          <!-- Bank Information -->
-          <div class="form-section">
-            <div class="section-header">
-              <i class="bi bi-bank section-icon"></i>
-              <h2 class="section-title">Bank Information</h2>
-            </div>
-            <div class="field-grid-3">
-              <div class="form-group">
-                <label class="form-label">Account Name</label>
-                <input type="text" name="account_name" class="form-control" placeholder="Name" value="<?= getVal('account_name', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Account Number</label>
-                <input type="text" name="account_number" class="form-control" placeholder="Number" value="<?= getVal('account_number', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">IFSC Code</label>
-                <input type="text" name="ifsc_code" class="form-control" placeholder="IFSC" value="<?= getVal('ifsc_code', $employee) ?>">
-              </div>
-            </div>
-          </div>
-
-          <!-- Status & Validity -->
-          <div class="form-section">
-            <div class="section-header">
-              <i class="bi bi-check2-square section-icon"></i>
-              <h2 class="section-title">Status & Validity</h2>
-            </div>
-            <div class="field-grid-3">
-              <div class="form-group">
-                <label class="form-label">Status</label>
-                <?php $statusVal = $employee['status'] ?? ''; ?>
-                <select name="status" class="form-select">
-                  <option value="" <?= $statusVal === '' ? 'selected' : '' ?>>Status</option>
-                  <option value="Active" <?= $statusVal === 'Active' ? 'selected' : '' ?>>Active</option>
-                  <option value="Inactive" <?= $statusVal === 'Inactive' ? 'selected' : '' ?>>Inactive</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Issue Date</label>
-                <input type="date" name="issue_date" class="form-control" value="<?= getVal('issue_date', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Valid Upto</label>
-                <input type="date" name="valid_upto_date" class="form-control" value="<?= getVal('valid_upto_date', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Valid Month</label>
-                <input type="text" name="valid_upto_month" class="form-control" placeholder="Month" value="<?= getVal('valid_upto_month', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Formula</label>
-                <input type="text" name="formula_valid_upto" class="form-control" placeholder="Formula" value="<?= getVal('formula_valid_upto', $employee) ?>">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Notification</label>
-                <input type="text" name="notification" class="form-control" placeholder="Notif" value="<?= getVal('notification', $employee) ?>">
-              </div>
-              <div class="form-group" style="grid-column: span 3;">
-                <label class="form-label">Document Link</label>
-                <input type="url" name="document_link" class="form-control" placeholder="https://" value="<?= getVal('document_link', $employee) ?>">
-              </div>
-            </div>
-          </div>
-
-          <!-- Remarks -->
-          <div class="form-section">
-            <div class="section-header">
-              <i class="bi bi-chat-left-text section-icon"></i>
-              <h2 class="section-title">Remarks</h2>
-            </div>
-            <div class="form-group">
-              <textarea name="remarks" class="form-control" rows="1" placeholder="Remarks..."><?= getVal('remarks', $employee) ?></textarea>
-            </div>
-          </div>
-
-          <!-- Actions -->
-          <div class="footer-actions">
-            <button type="button" class="btn-action btn-cancel" onclick="window.location.href='view-employee.php'">
-              <i class="bi bi-x-lg"></i> Cancel
-            </button>
-            <button type="submit" class="btn-action btn-create">
-              <i class="bi bi-save"></i> <?= $isEdit ? 'Update Employee' : 'Save Employee' ?>
-            </button>
           </div>
         </div>
       </div>
+
+      <!-- 2. Location-Specific Custom Inputs -->
+      <div class="form-section">
+        <div class="section-header">
+          <div class="section-header-title">
+            <i class="bi bi-ui-checks-grid section-icon text-indigo"></i>
+            <div>
+              <h2 class="section-title">Additional Information (Configured for <?= htmlspecialchars($stationName) ?>)</h2>
+              <span class="text-muted small">Location-wise dynamic inputs configured in Admin Panel</span>
+            </div>
+          </div>
+          <span class="badge bg-indigo-subtle text-indigo border border-indigo-subtle rounded-pill px-3 py-1">
+            <?= count($customFields) ?> Custom Inputs Configured
+          </span>
+        </div>
+
+        <?php if (empty($customFields)): ?>
+          <div class="text-center py-4 bg-light rounded-3 border">
+            <i class="bi bi-info-circle text-muted fs-3 mb-2 d-block"></i>
+            <h6 class="text-secondary fw-bold mb-1">Only Standard Default Inputs Active for <?= htmlspecialchars($stationName) ?></h6>
+            <p class="text-muted small mb-0">
+              No extra custom inputs have been configured for this location yet.<br>
+              Administrators can add or remove location-specific inputs (like Mobile, Aadhar, Address, PVC, etc.) anytime from the <strong>Admin Panel &gt; Employee Custom Fields</strong>.
+            </p>
+          </div>
+        <?php else: ?>
+          <div class="field-grid-3">
+            <?php foreach ($customFields as $cf): 
+              $fieldKey = $cf['field_key'];
+              $inputName = 'custom_' . $fieldKey;
+              $val = getFieldVal($fieldKey, $employee, $savedCustomData);
+              $isRequired = !empty($cf['is_required']);
+              $placeholder = htmlspecialchars($cf['placeholder'] ?? '');
+            ?>
+              <div class="form-group <?= ($cf['field_type'] === 'textarea') ? 'grid-span-full' : '' ?>">
+                <label class="form-label">
+                  <?= htmlspecialchars($cf['field_label']) ?>
+                  <?php if ($isRequired): ?><span class="required">*</span><?php endif; ?>
+                </label>
+
+                <?php if ($cf['field_type'] === 'text'): ?>
+                  <input type="text" name="<?= $inputName ?>" class="form-control" placeholder="<?= $placeholder ?>" value="<?= $val ?>" <?= $isRequired ? 'required' : '' ?>>
+
+                <?php elseif ($cf['field_type'] === 'number'): ?>
+                  <input type="number" name="<?= $inputName ?>" class="form-control" placeholder="<?= $placeholder ?>" value="<?= $val ?>" <?= $isRequired ? 'required' : '' ?>>
+
+                <?php elseif ($cf['field_type'] === 'date'): ?>
+                  <input type="date" name="<?= $inputName ?>" class="form-control" value="<?= $val ?>" <?= $isRequired ? 'required' : '' ?>>
+
+                <?php elseif ($cf['field_type'] === 'select'): 
+                  $options = array_map('trim', explode(',', $cf['field_options'] ?? ''));
+                ?>
+                  <select name="<?= $inputName ?>" class="form-select" <?= $isRequired ? 'required' : '' ?>>
+                    <option value="">-- Select <?= htmlspecialchars($cf['field_label']) ?> --</option>
+                    <?php foreach ($options as $opt): ?>
+                      <option value="<?= htmlspecialchars($opt) ?>" <?= ($val === $opt) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($opt) ?>
+                      </option>
+                    <?php endforeach; ?>
+                  </select>
+
+                <?php elseif ($cf['field_type'] === 'textarea'): ?>
+                  <textarea name="<?= $inputName ?>" class="form-control" rows="2" placeholder="<?= $placeholder ?>" <?= $isRequired ? 'required' : '' ?>><?= $val ?></textarea>
+
+                <?php elseif ($cf['field_type'] === 'file'): ?>
+                  <?php if (!empty($val)): ?>
+                    <div class="mb-1 small">
+                      <a href="uploads/<?= htmlspecialchars($val) ?>" target="_blank" class="text-primary text-decoration-none">
+                        <i class="bi bi-file-earmark-check"></i> View uploaded file
+                      </a>
+                    </div>
+                  <?php endif; ?>
+                  <input type="file" name="<?= $inputName ?>" class="form-control" <?= ($isRequired && empty($val)) ? 'required' : '' ?>>
+
+                <?php endif; ?>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="footer-actions">
+        <button type="button" class="btn-action btn-cancel" onclick="window.location.href='view-employee.php'">
+          <i class="bi bi-x-lg"></i> Cancel
+        </button>
+        <button type="submit" class="btn-action btn-create">
+          <i class="bi bi-save"></i> <?= $isEdit ? 'Update Employee' : 'Save Employee' ?>
+        </button>
+      </div>
     </form>
+
   </div>
 </main>
+
+<!-- Modal: Excel Import -->
+<div class="modal fade" id="excelImportModal" tabindex="-1" aria-labelledby="excelImportModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <form id="excelImportForm" enctype="multipart/form-data">
+        <div class="modal-header bg-dark text-white">
+          <h5 class="modal-title fw-bold" id="excelImportModalLabel">
+            <i class="bi bi-file-earmark-excel me-1 text-success"></i> Import Employees from Excel (<?= htmlspecialchars($stationName) ?>)
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div id="importAlertBox" class="alert d-none"></div>
+
+          <!-- Step 1: Download Template -->
+          <div class="p-3 bg-light rounded-3 border mb-3">
+            <div class="d-flex align-items-center justify-content-between">
+              <div>
+                <strong class="d-block text-dark small">Step 1: Download Template</strong>
+                <span class="text-muted small">Generated specifically for <?= htmlspecialchars($stationName) ?> with active custom columns</span>
+              </div>
+              <a href="ajax-employee-excel.php?action=download_template" class="btn btn-sm btn-outline-success fw-bold text-nowrap">
+                <i class="bi bi-download me-1"></i> Sample Template (.csv)
+              </a>
+            </div>
+          </div>
+
+          <!-- Step 2: Upload File -->
+          <div class="mb-3">
+            <strong class="d-block text-dark small mb-2">Step 2: Upload Filled File</strong>
+            <input type="file" name="excel_file" class="form-control" accept=".xlsx, .csv" required>
+            <div class="form-text">Supports Microsoft Excel (.xlsx) and CSV (.csv) files.</div>
+          </div>
+
+          <!-- Options -->
+          <div class="form-check form-switch mt-3">
+            <input class="form-check-input" type="checkbox" name="update_existing" value="1" id="updateExistingCheck" checked>
+            <label class="form-check-label small fw-bold text-secondary" for="updateExistingCheck">
+              Update existing employee if Employee ID already exists (Otherwise skip duplicate)
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer bg-light">
+          <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Close</button>
+          <button type="submit" class="btn btn-success rounded-pill px-4" id="importSubmitBtn">
+            <i class="bi bi-cloud-arrow-up me-1"></i> Upload & Import
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <?php include 'footer.php'; ?>

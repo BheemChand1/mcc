@@ -100,6 +100,15 @@ $currentPage = basename($_SERVER['PHP_SELF']);
           </a>
         </li>
 
+        <!-- Employee Custom Fields Link -->
+        <li class="nav-item mb-1">
+          <a href="employee-fields.php" class="nav-link p-2 d-flex align-items-center rounded-3 <?= ($currentPage == 'employee-fields.php') ? 'active bg-indigo text-white' : 'text-secondary-emphasis' ?>" style="transition: all 0.3s ease;">
+            <i class="bi bi-person-lines-fill me-3" style="font-size: 1.15rem;"></i>
+            <p class="m-0">Employee Custom Fields</p>
+          </a>
+        </li>
+
+
         <!-- Assign Reports Link -->
         <li class="nav-item mb-1">
           <a href="assign-reports.php" class="nav-link p-2 d-flex align-items-center rounded-3 <?= ($currentPage == 'assign-reports.php') ? 'active bg-indigo text-white' : 'text-secondary-emphasis' ?>" style="transition: all 0.3s ease;">

@@ -234,10 +234,15 @@ include 'sidebar.php';
         <div class="data-card">
             <div class="table-header">
                 <h4><i class="bi bi-people-fill me-2 text-primary"></i>Employee Directory</h4>
-                <a href="add-employee.php" class="btn btn-sm btn-primary px-3 fw-bold"
-                    style="background: #1987C6; border: none; border-radius: 8px;">
-                    <i class="bi bi-plus-lg me-1"></i>Add New
-                </a>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-success px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#excelImportModal" style="border-radius: 8px;">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Import Excel
+                    </button>
+                    <a href="add-employee.php" class="btn btn-sm btn-primary px-3 fw-bold"
+                        style="background: #1987C6; border: none; border-radius: 8px;">
+                        <i class="bi bi-plus-lg me-1"></i>Add New
+                    </a>
+                </div>
             </div>
 
             <div class="table-responsive">
@@ -352,6 +357,104 @@ include 'sidebar.php';
                 searchEmployees();
             }
         });
+    });
+</script>
+
+<!-- Modal: Excel Import -->
+<div class="modal fade" id="excelImportModal" tabindex="-1" aria-labelledby="excelImportModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <form id="excelImportForm" enctype="multipart/form-data">
+        <div class="modal-header bg-dark text-white">
+          <h5 class="modal-title fw-bold" id="excelImportModalLabel">
+            <i class="bi bi-file-earmark-excel me-1 text-success"></i> Import Employees from Excel (<?= htmlspecialchars($stationName) ?>)
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div id="importAlertBox" class="alert d-none"></div>
+
+          <!-- Step 1: Download Template -->
+          <div class="p-3 bg-light rounded-3 border mb-3">
+            <div class="d-flex align-items-center justify-content-between">
+              <div>
+                <strong class="d-block text-dark small">Step 1: Download Template</strong>
+                <span class="text-muted small">Generated with active fields for <?= htmlspecialchars($stationName) ?></span>
+              </div>
+              <a href="ajax-employee-excel.php?action=download_template" class="btn btn-sm btn-outline-success fw-bold text-nowrap">
+                <i class="bi bi-download me-1"></i> Sample Template (.csv)
+              </a>
+            </div>
+          </div>
+
+          <!-- Step 2: Upload File -->
+          <div class="mb-3">
+            <strong class="d-block text-dark small mb-2">Step 2: Upload Filled File</strong>
+            <input type="file" name="excel_file" class="form-control" accept=".xlsx, .csv" required>
+            <div class="form-text">Supports Microsoft Excel (.xlsx) and CSV (.csv) files.</div>
+          </div>
+
+          <!-- Options -->
+          <div class="form-check form-switch mt-3">
+            <input class="form-check-input" type="checkbox" name="update_existing" value="1" id="updateExistingCheck" checked>
+            <label class="form-check-label small fw-bold text-secondary" for="updateExistingCheck">
+              Update existing employee if Employee ID already exists (Otherwise skip duplicate)
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer bg-light">
+          <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Close</button>
+          <button type="submit" class="btn btn-success rounded-pill px-4" id="importSubmitBtn">
+            <i class="bi bi-cloud-arrow-up me-1"></i> Upload & Import
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+    document.getElementById("excelImportForm")?.addEventListener("submit", function(e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+      formData.append("action", "import_excel");
+
+      const submitBtn = document.getElementById("importSubmitBtn");
+      const originalBtnHTML = submitBtn.innerHTML;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Importing...';
+
+      const alertBox = document.getElementById("importAlertBox");
+      alertBox.className = "alert d-none";
+
+      fetch("ajax-employee-excel.php", {
+        method: "POST",
+        body: formData
+      })
+      .then(r => r.json())
+      .then(data => {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnHTML;
+
+        alertBox.classList.remove("d-none");
+        if (data.success) {
+          alertBox.className = "alert alert-success";
+          alertBox.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>' + data.message;
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else {
+          alertBox.className = "alert alert-danger";
+          alertBox.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i>' + data.message;
+        }
+      })
+      .catch(err => {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnHTML;
+        alertBox.classList.remove("d-none");
+        alertBox.className = "alert alert-danger";
+        alertBox.innerHTML = "An unexpected error occurred during import.";
+      });
     });
 </script>
 

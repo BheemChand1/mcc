@@ -88,6 +88,16 @@ if (!empty($search)) {
 }
 $employees = $stmt->fetchAll();
 
+// Fetch active custom fields for this specific station
+$cfStmt = $pdo->prepare("
+    SELECT field_label, field_key, field_type 
+    FROM mcc_employee_custom_fields 
+    WHERE station_id = :station_id AND status = 'Active' 
+    ORDER BY sort_order ASC, id ASC
+");
+$cfStmt->execute(['station_id' => $stationId]);
+$customFields = $cfStmt->fetchAll(PDO::FETCH_ASSOC);
+
 $pageTitle = 'Employee Directory | MCC';
 $extraStyles = "
     .content-wrapper { padding: 15px; background: #f0f2f5; min-height: 100vh; }
@@ -249,78 +259,43 @@ include 'sidebar.php';
                 <table class="employee-table">
                     <thead>
                         <tr style="text-align:center; vertical-align:middle;">
-                            <th>#</th>
-                            <th>Photo</th>
-                            <th>Name</th>
-                            <th>Action</th>
+                            <th style="width: 50px;">#</th>
+                            <th style="width: 60px;">Photo</th>
                             <th>Employee ID</th>
+                            <th>Name</th>
                             <th>Designation</th>
-                            <th>Rakshak_ID</th>
-                            <th>FATHER_NAME</th>
-                            <th>MOBILE_NO</th>
-                            <th>ADHAR_NO</th>
-                            <th>DOB</th>
-                            <th>AGE</th>
-                            <th>ADDRESS</th>
-                            <th>PVC</th>
-                            <th>PVC_Ok_Applied</th>
-                            <th>PVC_Issue_Month</th>
-                            <th>MEDICAL</th>
-                            <th>MEDICAL_ISSUE_MONTH</th>
-                            <th>PAN_CARD</th>
-                            <th>AC_NAME</th>
-                            <th>AC_NO</th>
-                            <th>IFSC_CODE</th>
-                            <th>EDU</th>
-                            <th>REMARK</th>
-                            <th>STATUS</th>
-                            <th>Issue_Date</th>
-                            <th>Valid_Upto_date</th>
-                            <th>notification</th>
+                            <?php foreach ($customFields as $cf): ?>
+                                <th><?= htmlspecialchars(strtoupper($cf['field_label'])) ?></th>
+                            <?php endforeach; ?>
+                            <th style="width: 120px;">Action</th>
                         </tr>
                     </thead>
                     <tbody id="employeeTableBody">
-                        <?php if (empty($employees)): ?>
-                            <!-- Empty row handled below by emptyState div -->
-                        <?php else: ?>
+                        <?php if (!empty($employees)): ?>
                             <?php foreach ($employees as $index => $emp): 
                                 $photoSrc = !empty($emp['employee_photo']) ? 'uploads/' . $emp['employee_photo'] : 'assets/img/avatar.png';
+                                $cData = !empty($emp['custom_data']) ? json_decode($emp['custom_data'], true) : [];
+                                if (!is_array($cData)) $cData = [];
                             ?>
-                            <tr>
+                            <tr style="text-align:center; vertical-align:middle;">
                                 <td><?= $index + 1 ?></td>
-                                <td><img src="<?= htmlspecialchars($photoSrc) ?>" class="emp-photo" alt="Photo"></td>
-                                <td style="font-weight: 700; color: #1987C6;"><?= htmlspecialchars($emp['full_name']) ?></td>
+                                <td><img src="<?= htmlspecialchars($photoSrc) ?>" class="emp-photo" alt="Photo" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;"></td>
+                                <td class="fw-bold"><?= htmlspecialchars($emp['employee_id']) ?></td>
+                                <td style="font-weight: 700; color: #1987C6; text-align: left;"><?= htmlspecialchars($emp['full_name']) ?></td>
+                                <td><span class="badge bg-secondary-subtle text-secondary px-2 py-1"><?= htmlspecialchars($emp['designation']) ?></span></td>
+                                <?php foreach ($customFields as $cf): 
+                                    $k = $cf['field_key'];
+                                    $val = $cData[$k] ?? ($emp[$k] ?? '');
+                                ?>
+                                    <td><?= htmlspecialchars($val !== '' && $val !== null ? $val : '-') ?></td>
+                                <?php endforeach; ?>
                                 <td>
-                                    <div class="btn-action-group">
+                                    <div class="btn-action-group" style="justify-content: center;">
                                         <button class="btn-icon" title="Edit" onclick="window.location.href='add-employee.php?id=<?= $emp['id'] ?>'"><i class="bi bi-pencil-square"></i></button>
                                         <button class="btn-icon" title="Generate ID Card" onclick="window.open('generate-idcard.php?id=<?= $emp['id'] ?>', '_blank')"><i class="bi bi-person-badge-fill"></i></button>
                                         <button class="btn-icon delete" title="Delete" onclick="deleteEmployee(<?= $emp['id'] ?>)"><i class="bi bi-trash3"></i></button>
                                     </div>
                                 </td>
-                                <td><?= htmlspecialchars($emp['employee_id']) ?></td>
-                                <td><?= htmlspecialchars($emp['designation']) ?></td>
-                                <td><?= htmlspecialchars($emp['rakshak_id'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['father_name'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['mobile_number'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['aadhar_number'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['dob'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['age'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['address'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['pvc'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['pvc_ok_applied'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['pvc_issue_month'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['medical'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['medical_issue_month'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['pan_card'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['account_name'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['account_number'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['ifsc_code'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['education'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['remarks'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['status'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['issue_date'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['valid_upto_date'] ?: '-') ?></td>
-                                <td><?= htmlspecialchars($emp['notification'] ?: '-') ?></td>
                             </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>

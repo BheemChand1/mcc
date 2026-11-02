@@ -271,19 +271,19 @@ if ($issueDateValid && $validUptoValid) {
 
         /* Front Side */
         .ir-card.front-card {
-            padding: 0.18cm 0.22cm 0.18cm 0.22cm;
+            padding: 0.12cm 0.16cm 0.16cm 0.16cm;
             align-items: center;
         }
-        .ir-header {
+        .ir-header-top {
             width: 100%;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 0.08cm;
+            margin-bottom: 0.02cm;
         }
         .ir-logo-left {
-            width: 0.82cm;
-            height: 0.82cm;
+            width: 0.85cm;
+            height: 0.85cm;
             object-fit: contain;
             flex-shrink: 0;
         }
@@ -293,7 +293,7 @@ if ($issueDateValid && $validUptoValid) {
             object-fit: contain;
             flex-shrink: 0;
         }
-        .ir-header-text {
+        .ir-header-center {
             flex: 1;
             text-align: center;
             padding: 0 0.05cm;
@@ -304,36 +304,41 @@ if ($issueDateValid && $validUptoValid) {
             color: #000;
             line-height: 1.1;
             letter-spacing: -0.2px;
+            white-space: nowrap;
         }
         .ir-meta {
             font-size: 7.2pt;
             color: #000;
             line-height: 1.15;
             margin-top: 1px;
+            white-space: nowrap;
         }
-        .ir-contract {
-            font-size: 6.8pt;
+        .ir-contract-row {
+            width: 100%;
+            text-align: center;
+            font-size: 7pt;
             color: #000;
             line-height: 1.15;
-            margin-top: 1px;
+            margin-top: 0.04cm;
+            margin-bottom: 0.08cm;
             white-space: nowrap;
         }
 
         /* Photo and Signature Block */
         .photo-sig-block {
             width: 4.2cm;
-            height: 5.35cm;
+            height: 5.0cm;
             border-radius: 14px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
             background-color: #fff;
-            margin-top: 0.05cm;
+            margin-top: 0.04cm;
             flex-shrink: 0;
         }
         .photo-box {
             width: 100%;
-            height: 4.6cm;
+            height: 4.3cm;
             overflow: hidden;
             background-color: #f8f9fa;
             display: flex;
@@ -348,7 +353,7 @@ if ($issueDateValid && $validUptoValid) {
         }
         .holder-sig-box {
             width: 100%;
-            height: 0.75cm;
+            height: 0.7cm;
             background-color: #fff;
             display: flex;
             align-items: center;
@@ -357,7 +362,7 @@ if ($issueDateValid && $validUptoValid) {
         }
         .holder-signature {
             font-family: 'Caveat', cursive, serif;
-            font-size: 15.5pt;
+            font-size: 15pt;
             color: #000;
             line-height: 1;
         }
@@ -706,15 +711,17 @@ if ($issueDateValid && $validUptoValid) {
         <!-- FRONT VIEW -->
         <div class="card-wrapper">
             <div class="id-card ir-card front-card">
-                <!-- Header: Railway Logo, Title & Metadata, Depot Logo -->
-                <div class="ir-header">
+                <!-- Header: Logos and Title on Top Row, Contract No Below -->
+                <div class="ir-header-top">
                     <img src="assets/idcard/railway_logo_red.png" class="ir-logo-left" alt="Indian Railways">
-                    <div class="ir-header-text">
+                    <div class="ir-header-center">
                         <div class="ir-title">Indian Railway</div>
                         <div class="ir-meta">ID Card No. <?= htmlspecialchars($cardNo) ?></div>
-                        <div class="ir-contract">Contract No: <?= htmlspecialchars($contractNo) ?></div>
                     </div>
                     <img src="assets/idcard/coaching_depot_agartala.png" class="ir-logo-right" alt="<?= htmlspecialchars($depotName) ?>">
+                </div>
+                <div class="ir-contract-row">
+                    Contract No: <?= htmlspecialchars($contractNo) ?>
                 </div>
 
                 <!-- Centered Photo Box with Holder Signature Strip -->

@@ -35,7 +35,8 @@ if (!$employee) {
             'aadhar_number' => '',
             'blood_group' => 'B+',
             'department' => 'MECHANICAL',
-            'mobile_number' => ''
+            'mobile_number' => '',
+            'address' => ''
         ];
     }
 }
@@ -64,8 +65,20 @@ if ($currentStationId !== intval($stationId)) {
     }
 }
 
-// Station 4 uses the older ID card layout
-$isOldCard = ($currentStationId === 4);
+// Stations 4 (Silchar) and 5 (Agartala) use the Indian Railway Orange ID Card layout
+$isRailwayCard = in_array($currentStationId, [4, 5]);
+
+// Station code & depot metadata
+if ($currentStationId === 5) {
+    $stnCode = 'AGTL';
+    $depotName = 'Coaching Depot Agartala';
+} elseif ($currentStationId === 4) {
+    $stnCode = 'SCL';
+    $depotName = 'Coaching Depot Silchar';
+} else {
+    $stnCode = strtoupper(substr($stationName ?? 'STN', 0, 4));
+    $depotName = 'Coaching Depot ' . ($stationName ?? '');
+}
 
 // Resolve photo path
 $photoSrc = 'assets/img/avatar.png';
@@ -73,10 +86,70 @@ if (!empty($employee['employee_photo'])) {
     $customPhoto = 'uploads/' . $employee['employee_photo'];
     if (file_exists(__DIR__ . '/' . $customPhoto)) {
         $photoSrc = $customPhoto;
+    } elseif (file_exists(__DIR__ . '/../editor/' . $customPhoto)) {
+        $photoSrc = '../editor/' . $customPhoto;
+    } elseif (file_exists(__DIR__ . '/../auditor/' . $customPhoto)) {
+        $photoSrc = '../auditor/' . $customPhoto;
     }
 }
 
-// Prepare field values
+// Fields for Railway ID Card (Station 4 and 5)
+$rawName        = trim($employee['full_name'] ?? '');
+$displayName    = !empty($rawName) ? ucwords(strtolower($rawName)) : 'Employee Name';
+$bloodGroup     = !empty($employee['blood_group']) ? strtoupper(trim($employee['blood_group'])) : 'B+';
+$department     = !empty($employee['department']) ? strtoupper(trim($employee['department'])) : 'MECHANICAL';
+$mobileNumber   = !empty($employee['mobile_number']) ? trim($employee['mobile_number']) : '6009892475';
+$contractNo     = !empty($employee['contract_no']) ? $employee['contract_no'] : 'GEMC-511687798115171';
+
+// Format Aadhaar: XXXX-XXXX-XXXX
+$rawAadhar = preg_replace('/\D/', '', $employee['aadhar_number'] ?? '');
+if (strlen($rawAadhar) === 12) {
+    $aadharFormatted = substr($rawAadhar, 0, 4) . '-' . substr($rawAadhar, 4, 4) . '-' . substr($rawAadhar, 8, 4);
+} elseif (!empty($rawAadhar)) {
+    $aadharFormatted = implode('-', str_split($rawAadhar, 4));
+} else {
+    $aadharFormatted = '3534-7401-1368';
+}
+
+// Format ID Card No: e.g. 2025-005 or 2026-001
+$empIdStr = trim($employee['employee_id'] ?? '');
+if (preg_match('/(\d{2})-(\d{2})\/(\d+)/', $empIdStr, $m)) {
+    $cardNo = '20' . $m[1] . '-' . str_pad($m[3], 3, '0', STR_PAD_LEFT);
+} elseif (preg_match('/(\d{4})[-_](\d+)/', $empIdStr, $m)) {
+    $cardNo = $m[1] . '-' . str_pad($m[2], 3, '0', STR_PAD_LEFT);
+} elseif (preg_match('/(\d+)/', $empIdStr, $m)) {
+    $cardNo = date('Y') . '-' . str_pad($m[1], 3, '0', STR_PAD_LEFT);
+} elseif (!empty($empIdStr)) {
+    $cardNo = $empIdStr;
+} else {
+    $cardNo = '2025-005';
+}
+
+// Format dates
+$issueDateValid = !empty($employee['issue_date']) && $employee['issue_date'] !== '0000-00-00';
+$validUptoValid = !empty($employee['valid_upto_date']) && $employee['valid_upto_date'] !== '0000-00-00';
+
+$issueDateFormatted = $issueDateValid ? date('d M Y', strtotime($employee['issue_date'])) : '22 Aug 2025';
+$validUptoFormatted = $validUptoValid ? date('d M Y', strtotime($employee['valid_upto_date'])) : '22 Jan 2026';
+
+// QR Code text data as specified in Railway Board Annexure-'B'
+$policeVerStr = (!empty($employee['police_ver_dt']) && $employee['police_ver_dt'] !== '0000-00-00')
+    ? date('d/m/Y', strtotime($employee['police_ver_dt']))
+    : (!empty($employee['police_ver']) ? $employee['police_ver'] : 'Verified');
+
+$qrLines = [
+    "Name: " . ($employee['full_name'] ?? ''),
+    "Address: " . (!empty($employee['address']) ? $employee['address'] : 'Badharghat, West Tripura - 799003'),
+    "Aadhaar No: " . $aadharFormatted,
+    "Date of Issue: " . $issueDateFormatted,
+    "Validity Upto: " . $validUptoFormatted,
+    "Police Verification: " . $policeVerStr,
+    "Agency: " . ($contractorName ?? 'BIPS'),
+    "Issuing Authority: SSE/IC/CHG/" . $stnCode
+];
+$qrDataText = implode("\n", $qrLines);
+
+// Fields for SMC Card (Station 1 etc.)
 $fullName     = !empty($employee['full_name']) ? htmlspecialchars(strtoupper(trim($employee['full_name']))) : '';
 $regNo        = !empty($employee['employee_id']) ? htmlspecialchars(strtoupper(trim($employee['employee_id']))) : '';
 $designation  = !empty($employee['designation']) ? htmlspecialchars(strtoupper(trim($employee['designation']))) : '';
@@ -84,11 +157,7 @@ $empTempId    = !empty($employee['ren_id']) ? htmlspecialchars(strtoupper(trim($
 $unitName     = 'SMC';
 $siteLocation = !empty($stationName) ? htmlspecialchars(strtoupper(trim($stationName))) : 'MYSORE';
 
-// Validity format for SMC Card
 $validityStr = '';
-$issueDateValid = !empty($employee['issue_date']) && $employee['issue_date'] !== '0000-00-00';
-$validUptoValid = !empty($employee['valid_upto_date']) && $employee['valid_upto_date'] !== '0000-00-00';
-
 if ($issueDateValid && $validUptoValid) {
     $validityStr = date('d/m/y', strtotime($employee['issue_date'])) . ' to ' . date('d/m/y', strtotime($employee['valid_upto_date']));
 } elseif ($validUptoValid) {
@@ -96,10 +165,6 @@ if ($issueDateValid && $validUptoValid) {
 } elseif ($issueDateValid) {
     $validityStr = date('d/m/y', strtotime($employee['issue_date']));
 }
-
-// Old card specific titles
-$officeName = 'OFFICE OF THE CDO / ' . strtoupper($stationName);
-$officeSub  = !empty($railwayName) ? $railwayName : 'SOUTH WESTERN RAILWAY';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -108,331 +173,10 @@ $officeSub  = !empty($railwayName) ? $railwayName : 'SOUTH WESTERN RAILWAY';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ID Card - <?= !empty($employee['full_name']) ? htmlspecialchars($employee['full_name']) : 'Employee' ?></title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    
-    <?php if ($isOldCard): ?>
-    <style>
-        body {
-            font-family: 'Times New Roman', Times, serif;
-            background-color: #f3f4f6;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .no-print-area {
-            margin-bottom: 30px;
-            background: white;
-            padding: 15px 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            display: flex;
-            gap: 15px;
-            align-items: center;
-        }
-        .btn-print {
-            background-color: #1987C6;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            transition: background 0.2s;
-        }
-        .btn-print:hover {
-            background-color: #146ea3;
-        }
-        .btn-back {
-            background-color: #6c757d;
-            color: white;
-            text-decoration: none;
-            padding: 10px 20px;
-            border-radius: 6px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            transition: background 0.2s;
-        }
-        .btn-back:hover {
-            background-color: #5a6268;
-        }
-        .cards-container {
-            display: flex;
-            gap: 40px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        
-        /* Absolute dimensions in cm matching user blueprint */
-        .id-card {
-            width: 5.4cm;
-            height: 8.75cm;
-            border: 1.5px solid #000;
-            border-radius: 0.25cm;
-            background-color: #fff;
-            box-shadow: 0 6px 15px rgba(0,0,0,0.1);
-            position: relative;
-            overflow: hidden;
-            display: flex;
-            box-sizing: border-box;
-        }
-        .vertical-sidebar {
-            width: 0.7cm;
-            height: 100%;
-            background-color: #e2e8f0;
-            border-right: 1.5px solid #000;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            align-items: center;
-            font-weight: bold;
-            font-size: 11pt;
-            padding: 0.3cm 0;
-            box-sizing: border-box;
-            letter-spacing: 1px;
-        }
-        .vertical-sidebar span {
-            display: block;
-            line-height: 1.1;
-            text-align: center;
-        }
-        .card-content {
-            flex: 1;
-            height: 100%;
-            padding: 0.1cm;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        
-        /* Front View Styles */
-        .header-office {
-            font-size: 13.5pt;
-            font-weight: bold;
-            text-align: center;
-            margin-top: 0.05cm;
-            line-height: 1;
-        }
-        .header-office-sub {
-            font-size: 5pt;
-            text-align: center;
-            margin-bottom: 0.1cm;
-            font-weight: bold;
-            color: #333;
-        }
-        .photo-box {
-            width: 4.2cm;
-            height: 4.85cm;
-            border: 1.2px solid #000;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: #fafafa;
-            box-sizing: border-box;
-        }
-        .photo-img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        .signature-holder-box {
-            width: 4.2cm;
-            height: 0.75cm;
-            border: 1.2px solid #000;
-            border-top: none;
-            position: relative;
-            display: flex;
-            justify-content: center;
-            align-items: flex-end;
-            padding-bottom: 1px;
-            box-sizing: border-box;
-            background-color: #fff;
-        }
-        .signature-label {
-            font-size: 4.5pt;
-            color: #555;
-            text-align: center;
-            width: 100%;
-            line-height: 1;
-        }
-        .emp-name-row {
-            font-size: 11pt;
-            font-weight: bold;
-            margin-top: 0.15cm;
-            width: 100%;
-            text-align: left;
-            padding-left: 0.15cm;
-            box-sizing: border-box;
-        }
-        .authority-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            width: 100%;
-            margin-top: auto;
-            padding: 0 0.15cm 0.1cm 0.15cm;
-            box-sizing: border-box;
-        }
-        .auth-sig-placeholder {
-            font-size: 5.5pt;
-            text-align: right;
-            color: #555;
-            line-height: 1.1;
-        }
-        .auth-title {
-            font-size: 5.5pt;
-            font-weight: bold;
-            text-align: right;
-            margin-top: 1px;
-        }
-
-        /* Back View Styles */
-        .back-top-row {
-            display: flex;
-            justify-content: space-between;
-            width: 100%;
-            height: 2cm;
-            margin-bottom: 0.15cm;
-        }
-        .qr-box {
-            width: 2cm;
-            height: 2cm;
-            border: 1.2px solid #000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            box-sizing: border-box;
-            padding: 1px;
-        }
-        .blood-box {
-            width: 2cm;
-            height: 2cm;
-            border: 1.2px solid #000;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            box-sizing: border-box;
-        }
-        .blood-label {
-            font-size: 6.5pt;
-            color: #333;
-            font-weight: bold;
-            margin-bottom: 2px;
-        }
-        .blood-value {
-            font-size: 32pt;
-            font-weight: bold;
-            color: #dc3545;
-            line-height: 0.9;
-        }
-        .dept-box {
-            width: 100%;
-            height: 1.2cm;
-            border: 1.2px solid #000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-weight: bold;
-            font-size: 13.5pt;
-            text-align: center;
-            margin-bottom: 0.15cm;
-            background-color: #f8fafc;
-            box-sizing: border-box;
-        }
-        .phone-box {
-            font-size: 14.5pt;
-            font-weight: bold;
-            text-align: center;
-            width: 100%;
-            margin-bottom: 0.15cm;
-            letter-spacing: 0.5px;
-        }
-        .details-box {
-            width: 100%;
-            font-size: 6.5pt;
-            line-height: 1.4;
-            text-align: left;
-            margin-bottom: auto;
-            padding-left: 0.1cm;
-            box-sizing: border-box;
-        }
-        .detail-item {
-            margin-bottom: 1.5px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .detail-item span {
-            font-weight: bold;
-        }
-        .instruction-box {
-            width: 100%;
-            border: 1.2px solid #000;
-            background-color: #f1f5f9;
-            padding: 3px 2px;
-            box-sizing: border-box;
-            text-align: center;
-        }
-        .instruction-title {
-            font-size: 6.5pt;
-            font-weight: bold;
-            margin-bottom: 1px;
-        }
-        .instruction-text {
-            font-size: 5pt;
-            line-height: 1.2;
-        }
-
-        .view-label {
-            text-align: center;
-            margin-top: 10px;
-            font-size: 14px;
-            font-weight: bold;
-            background: #fff;
-            padding: 4px 12px;
-            border-radius: 4px;
-            border: 1px solid #ddd;
-            width: fit-content;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        @media print {
-            body {
-                background-color: #fff;
-                padding: 0;
-                margin: 0;
-            }
-            .no-print-area {
-                display: none !important;
-            }
-            .cards-container {
-                gap: 2cm;
-                padding: 1cm;
-            }
-            .id-card {
-                box-shadow: none !important;
-                page-break-inside: avoid;
-            }
-            .view-label {
-                display: none !important;
-            }
-        }
-    </style>
-    <?php else: ?>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    
     <style>
         * {
             box-sizing: border-box;
@@ -440,7 +184,6 @@ $officeSub  = !empty($railwayName) ? $railwayName : 'SOUTH WESTERN RAILWAY';
             print-color-adjust: exact !important;
         }
         body {
-            font-family: 'Roboto', Arial, sans-serif;
             background-color: #f1f5f9;
             margin: 0;
             padding: 25px;
@@ -506,7 +249,287 @@ $officeSub  = !empty($railwayName) ? $railwayName : 'SOUTH WESTERN RAILWAY';
             border: 1px solid #cbd5e1;
         }
 
-        /* Standard CR80 Size Card (5.4cm x 8.75cm) */
+        <?php if ($isRailwayCard): ?>
+        /* ==========================================================================
+           INDIAN RAILWAY ORANGE ID CARD STYLES (STATION 4 & 5)
+           Specifications matching Railway Board Annexure-'B' & Coaching Depot AGTL
+           ========================================================================== */
+        .ir-card {
+            width: 5.4cm;
+            height: 8.75cm;
+            background-color: #FFA500;
+            border-radius: 12px;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.15);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            font-family: 'Times New Roman', Times, serif;
+            color: #000;
+        }
+
+        /* Front Side */
+        .ir-card.front-card {
+            padding: 0.18cm 0.22cm 0.18cm 0.22cm;
+            align-items: center;
+        }
+        .ir-header {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.08cm;
+        }
+        .ir-logo-left {
+            width: 0.82cm;
+            height: 0.82cm;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+        .ir-logo-right {
+            width: 0.95cm;
+            height: 0.95cm;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+        .ir-header-text {
+            flex: 1;
+            text-align: center;
+            padding: 0 0.05cm;
+        }
+        .ir-title {
+            font-size: 13pt;
+            font-weight: bold;
+            color: #000;
+            line-height: 1.1;
+            letter-spacing: -0.2px;
+        }
+        .ir-meta {
+            font-size: 7.2pt;
+            color: #000;
+            line-height: 1.15;
+            margin-top: 1px;
+        }
+        .ir-contract {
+            font-size: 6.8pt;
+            color: #000;
+            line-height: 1.15;
+            margin-top: 1px;
+            white-space: nowrap;
+        }
+
+        /* Photo and Signature Block */
+        .photo-sig-block {
+            width: 4.2cm;
+            height: 5.35cm;
+            border-radius: 14px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            background-color: #fff;
+            margin-top: 0.05cm;
+            flex-shrink: 0;
+        }
+        .photo-box {
+            width: 100%;
+            height: 4.6cm;
+            overflow: hidden;
+            background-color: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .photo-box .photo-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: top center;
+        }
+        .holder-sig-box {
+            width: 100%;
+            height: 0.75cm;
+            background-color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-top: 1px solid #f1f1f1;
+        }
+        .holder-signature {
+            font-family: 'Caveat', cursive, serif;
+            font-size: 15.5pt;
+            color: #000;
+            line-height: 1;
+        }
+
+        /* Name */
+        .emp-name-row {
+            font-size: 15.5pt;
+            font-weight: bold;
+            color: #000;
+            text-align: center;
+            margin-top: 0.12cm;
+            line-height: 1.1;
+            width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Issuing Authority */
+        .issuing-authority-block {
+            margin-top: auto;
+            margin-left: auto;
+            margin-right: 0.05cm;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 2.75cm;
+        }
+        .issuing-pill {
+            width: 100%;
+            height: 0.45cm;
+            background-color: #ffffff;
+            border-radius: 8px;
+        }
+        .issuing-label {
+            font-size: 7.5pt;
+            color: #000;
+            text-align: center;
+            margin-top: 2px;
+            line-height: 1;
+        }
+
+        /* Back Side */
+        .ir-card.back-card {
+            padding: 0.25cm 0.35cm 0.2cm 0.35cm;
+            align-items: center;
+        }
+        .back-top-row {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.2cm;
+        }
+        .qr-box {
+            width: 2.15cm;
+            height: 2.25cm;
+            background-color: #fff;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 2px;
+            box-sizing: border-box;
+        }
+        .qr-box canvas {
+            width: 1.85cm !important;
+            height: 1.85cm !important;
+        }
+        .qr-stn-code {
+            position: absolute;
+            bottom: 2px;
+            right: 3px;
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 5.5pt;
+            font-weight: bold;
+            color: #000;
+            line-height: 1;
+        }
+        .blood-box {
+            width: 2.15cm;
+            height: 2.25cm;
+            background-color: #fff;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+        }
+        .blood-group-text {
+            font-size: 40pt;
+            font-weight: normal;
+            color: #000;
+            line-height: 1;
+        }
+
+        .dept-box {
+            width: 100%;
+            height: 0.68cm;
+            background-color: #fff;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15.5pt;
+            font-weight: bold;
+            color: #000;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.25cm;
+        }
+
+        .phone-box {
+            font-size: 19pt;
+            font-weight: bold;
+            color: #000;
+            text-align: center;
+            line-height: 1.1;
+            margin-bottom: 0.12cm;
+            letter-spacing: 0.5px;
+        }
+
+        .aadhar-box {
+            font-size: 13pt;
+            font-weight: bold;
+            color: #000;
+            text-align: center;
+            line-height: 1.1;
+            margin-bottom: 0.18cm;
+            letter-spacing: 0.5px;
+        }
+
+        .card-divider {
+            width: 80%;
+            height: 1.5px;
+            background-color: #000;
+            border: none;
+            margin: 0 auto 0.18cm auto;
+        }
+
+        .dates-block {
+            text-align: center;
+            margin-bottom: 0.22cm;
+        }
+        .dates-block .date-row {
+            font-size: 7.8pt;
+            font-weight: bold;
+            color: #000;
+            line-height: 1.35;
+        }
+
+        .instruction-block {
+            text-align: center;
+            color: #000;
+            margin-top: auto;
+        }
+        .instruction-block .inst-title {
+            font-size: 6pt;
+            line-height: 1.2;
+        }
+        .instruction-block .inst-line {
+            font-size: 5.2pt;
+            line-height: 1.25;
+        }
+
+        <?php else: ?>
+        /* ==========================================================================
+           SMC INTEGRATED ID CARD STYLES (STATION 1 ETC.)
+           ========================================================================== */
+        body {
+            font-family: 'Roboto', Arial, sans-serif;
+        }
         .id-card {
             width: 5.4cm;
             height: 8.75cm;
@@ -521,8 +544,6 @@ $officeSub  = !empty($railwayName) ? $railwayName : 'SOUTH WESTERN RAILWAY';
             padding: 0.22cm 0.25cm 0.18cm 0.25cm;
             box-sizing: border-box;
         }
-
-        /* ------------------ FRONT SIDE ------------------ */
         .smc-header {
             text-align: center;
             margin-bottom: 0.12cm;
@@ -550,13 +571,12 @@ $officeSub  = !empty($railwayName) ? $railwayName : 'SOUTH WESTERN RAILWAY';
             color: #475569;
             line-height: 1.1;
         }
-
         .photo-container {
             display: flex;
             justify-content: center;
             margin-bottom: 0.18cm;
         }
-        .photo-box {
+        .photo-box-smc {
             width: 2.35cm;
             height: 2.85cm;
             border: 1px solid #000;
@@ -566,13 +586,12 @@ $officeSub  = !empty($railwayName) ? $railwayName : 'SOUTH WESTERN RAILWAY';
             justify-content: center;
             align-items: center;
         }
-        .photo-img {
+        .photo-box-smc .photo-img {
             width: 100%;
             height: 100%;
             object-fit: cover;
             display: block;
         }
-
         .info-fields {
             display: flex;
             flex-direction: column;
@@ -605,7 +624,6 @@ $officeSub  = !empty($railwayName) ? $railwayName : 'SOUTH WESTERN RAILWAY';
             text-align: left;
             font-size: 6.2pt;
         }
-
         .auth-sign-container {
             margin-top: auto;
             display: flex;
@@ -618,9 +636,7 @@ $officeSub  = !empty($railwayName) ? $railwayName : 'SOUTH WESTERN RAILWAY';
             color: #000;
             line-height: 1;
         }
-
-        /* ------------------ BACK SIDE ------------------ */
-        .id-card.back-card {
+        .id-card.back-card-smc {
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
@@ -648,8 +664,9 @@ $officeSub  = !empty($railwayName) ? $railwayName : 'SOUTH WESTERN RAILWAY';
             color: #000;
             line-height: 1.2;
         }
+        <?php endif; ?>
 
-        /* ------------------ PRINT STYLES ------------------ */
+        /* Print Settings */
         @media print {
             body {
                 background: #fff;
@@ -665,115 +682,108 @@ $officeSub  = !empty($railwayName) ? $railwayName : 'SOUTH WESTERN RAILWAY';
             }
             .id-card {
                 box-shadow: none !important;
-                border: 1px solid #000 !important;
                 page-break-inside: avoid;
             }
         }
     </style>
-    <?php endif; ?>
 </head>
 <body>
 
     <div class="no-print-area">
-        <a href="view-employee.php" class="<?= $isOldCard ? 'btn-back' : 'btn-action btn-back' ?>">
+        <a href="view-employee.php" class="btn-action btn-back">
             <i class="bi bi-arrow-left"></i> Back to Directory
         </a>
-        <button class="<?= $isOldCard ? 'btn-print' : 'btn-action btn-print' ?>" onclick="window.print()">
+        <button class="btn-action btn-print" onclick="window.print()">
             <i class="bi bi-printer"></i> Print ID Card
         </button>
     </div>
 
-    <?php if ($isOldCard): ?>
-    <!-- OLD ID CARD LAYOUT FOR STATION ID 4 -->
+    <?php if ($isRailwayCard): ?>
+    <!-- =====================================================================
+         INDIAN RAILWAY ORANGE ID CARD LAYOUT (FOR STATION ID 4 & 5)
+         ===================================================================== -->
     <div class="cards-container">
-        <!-- Front View Card -->
-        <div>
-            <div class="id-card">
-                <div class="vertical-sidebar">
-                    <span>O</span>
-                    <span>N</span>
-                    <span>C</span>
-                    <span>O</span>
-                    <span>N</span>
-                    <span>T</span>
-                    <span>R</span>
-                    <span>A</span>
-                    <span>C</span>
-                    <span>T</span>
+        <!-- FRONT VIEW -->
+        <div class="card-wrapper">
+            <div class="id-card ir-card front-card">
+                <!-- Header: Railway Logo, Title & Metadata, Depot Logo -->
+                <div class="ir-header">
+                    <img src="assets/idcard/railway_logo_red.png" class="ir-logo-left" alt="Indian Railways">
+                    <div class="ir-header-text">
+                        <div class="ir-title">Indian Railway</div>
+                        <div class="ir-meta">ID Card No. <?= htmlspecialchars($cardNo) ?></div>
+                        <div class="ir-contract">Contract No: <?= htmlspecialchars($contractNo) ?></div>
+                    </div>
+                    <img src="assets/idcard/coaching_depot_agartala.png" class="ir-logo-right" alt="<?= htmlspecialchars($depotName) ?>">
                 </div>
-                <div class="card-content">
-                    <div class="header-office"><?= htmlspecialchars($officeName) ?></div>
-                    <div class="header-office-sub"><?= htmlspecialchars($officeSub) ?></div>
-                    
+
+                <!-- Centered Photo Box with Holder Signature Strip -->
+                <div class="photo-sig-block">
                     <div class="photo-box">
                         <img src="<?= htmlspecialchars($photoSrc) ?>" class="photo-img" alt="Photo">
                     </div>
-                    <div class="signature-holder-box">
-                        <div class="signature-label">Signature of card Holder</div>
+                    <div class="holder-sig-box">
+                        <span class="holder-signature"><?= htmlspecialchars($displayName) ?></span>
                     </div>
-                    
-                    <div class="emp-name-row">
-                        Name : <?= htmlspecialchars($employee['full_name']) ?>
-                    </div>
-                    
-                    <div class="authority-row">
-                        <div></div>
-                        <div class="auth-sig-placeholder">
-                            (Signature)<br>
-                            <div class="auth-title">Senior DME / CDO</div>
-                        </div>
-                    </div>
+                </div>
+
+                <!-- Employee Name in Bold 16pt -->
+                <div class="emp-name-row">
+                    <?= htmlspecialchars($displayName) ?>
+                </div>
+
+                <!-- Issuing Authority Pill & Title -->
+                <div class="issuing-authority-block">
+                    <div class="issuing-pill"></div>
+                    <div class="issuing-label">Issuing Authority</div>
                 </div>
             </div>
             <div class="view-label">Front View</div>
         </div>
 
-        <!-- Back View Card -->
-        <div>
-            <div class="id-card">
-                <div class="vertical-sidebar">
-                    <span>O</span>
-                    <span>N</span>
-                    <span>C</span>
-                    <span>O</span>
-                    <span>N</span>
-                    <span>T</span>
-                    <span>R</span>
-                    <span>A</span>
-                    <span>C</span>
-                    <span>T</span>
+        <!-- BACK VIEW -->
+        <div class="card-wrapper">
+            <div class="id-card ir-card back-card">
+                <!-- Top Row: Dynamic QR Canvas + Station Code, Blood Group Box -->
+                <div class="back-top-row">
+                    <div class="qr-box">
+                        <canvas id="qrCanvas"></canvas>
+                        <div class="qr-stn-code"><?= htmlspecialchars($stnCode) ?></div>
+                    </div>
+                    <div class="blood-box">
+                        <span class="blood-group-text"><?= htmlspecialchars($bloodGroup) ?></span>
+                    </div>
                 </div>
-                <div class="card-content">
-                    <div class="back-top-row">
-                        <div class="qr-box">
-                            <canvas id="qrCanvas"></canvas>
-                        </div>
-                        <div class="blood-box">
-                            <div class="blood-label">B.Group</div>
-                            <div class="blood-value"><?= htmlspecialchars(!empty($employee['blood_group']) ? $employee['blood_group'] : 'B+') ?></div>
-                        </div>
-                    </div>
-                    
-                    <div class="dept-box">
-                        <?= htmlspecialchars(!empty($employee['department']) ? $employee['department'] : 'MECHANICAL') ?>
-                    </div>
-                    
-                    <div class="phone-box">
-                        <?= htmlspecialchars(!empty($employee['mobile_number']) ? $employee['mobile_number'] : '9989999999') ?>
-                    </div>
-                    
-                    <div class="details-box">
-                        <div class="detail-item"><span>Name of Contractor:</span> <?= htmlspecialchars($contractorName) ?></div>
-                        <div class="detail-item"><span>Validity of Contract:</span></div>
-                        <div class="detail-item">&nbsp;&nbsp;From: <?= htmlspecialchars(!empty($employee['issue_date']) && $employee['issue_date'] !== '0000-00-00' ? date('d.m.Y', strtotime($employee['issue_date'])) : '15.01.2026') ?> To: <?= htmlspecialchars(!empty($employee['valid_upto_date']) && $employee['valid_upto_date'] !== '0000-00-00' ? date('d.m.Y', strtotime($employee['valid_upto_date'])) : '14.01.2027') ?></div>
-                        <div class="detail-item"><span>Date of Issue:</span> <?= htmlspecialchars(!empty($employee['issue_date']) && $employee['issue_date'] !== '0000-00-00' ? date('d.m.Y', strtotime($employee['issue_date'])) : date('d.m.Y')) ?></div>
-                        <div class="detail-item"><span>Validity:</span> 01 year from the date of issue</div>
-                    </div>
-                    
-                    <div class="instruction-box">
-                        <div class="instruction-title">Instruction</div>
-                        <div class="instruction-text">Please surrender to issuing authority on completion/termination of contractual services</div>
-                    </div>
+
+                <!-- Department Banner Strip -->
+                <div class="dept-box">
+                    <?= htmlspecialchars($department) ?>
+                </div>
+
+                <!-- Mobile Number -->
+                <div class="phone-box">
+                    <?= htmlspecialchars($mobileNumber) ?>
+                </div>
+
+                <!-- Aadhaar Number -->
+                <div class="aadhar-box">
+                    <?= htmlspecialchars($aadharFormatted) ?>
+                </div>
+
+                <!-- Dividing Line -->
+                <hr class="card-divider">
+
+                <!-- Dates -->
+                <div class="dates-block">
+                    <div class="date-row">Date of Issue : <?= htmlspecialchars($issueDateFormatted) ?></div>
+                    <div class="date-row">Validity Upto:  <?= htmlspecialchars($validUptoFormatted) ?></div>
+                </div>
+
+                <!-- Footer Instructions -->
+                <div class="instruction-block">
+                    <div class="inst-title">Instruction:</div>
+                    <div class="inst-line">Please surrender to issuing authority on</div>
+                    <div class="inst-line">Completion/Termination of contractual services</div>
                 </div>
             </div>
             <div class="view-label">Back View</div>
@@ -784,35 +794,28 @@ $officeSub  = !empty($railwayName) ? $railwayName : 'SOUTH WESTERN RAILWAY';
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            // Generate dynamic text for QR Code
-            const qrText = "Emp ID: <?= htmlspecialchars($employee['employee_id'] ?? '') ?>\n" +
-                           "Name: <?= htmlspecialchars($employee['full_name'] ?? '') ?>\n" +
-                           "Designation: <?= htmlspecialchars($employee['designation'] ?? '') ?>\n" +
-                           "Validity: <?= htmlspecialchars($employee['valid_upto_date'] ?? '') ?>";
-
+            const qrText = <?= json_encode($qrDataText) ?>;
             new QRious({
                 element: document.getElementById('qrCanvas'),
                 value: qrText,
-                size: 70,
+                size: 72,
                 level: 'M'
             });
         });
     </script>
 
     <?php else: ?>
-    <!-- NEW SMC ID CARD LAYOUT (OTHER STATIONS) -->
+    <!-- =====================================================================
+         SMC INTEGRATED ID CARD LAYOUT (FOR OTHER STATIONS LIKE STATION 1)
+         ===================================================================== -->
     <div class="cards-container">
         <!-- FRONT SIDE -->
         <div class="card-wrapper">
             <div class="id-card">
-                <!-- Header Logo -->
                 <div class="smc-header">
                     <svg class="smc-logo-svg" viewBox="0 0 140 38" width="105" height="28">
-                        <!-- S in Green -->
                         <text x="18" y="30" font-family="'Roboto', 'Arial Black', sans-serif" font-weight="900" font-size="34" fill="#2d882d" letter-spacing="-1">S</text>
-                        <!-- M in Gold/Amber -->
                         <text x="47" y="30" font-family="'Roboto', 'Arial Black', sans-serif" font-weight="900" font-size="34" fill="#f59e0b" letter-spacing="-1">M</text>
-                        <!-- C in Green -->
                         <text x="89" y="30" font-family="'Roboto', 'Arial Black', sans-serif" font-weight="900" font-size="34" fill="#2d882d" letter-spacing="-1">C</text>
                     </svg>
                     <div class="smc-tag-sub1">DIGITISE | AUTOMATE | MECHANISE</div>
@@ -820,14 +823,12 @@ $officeSub  = !empty($railwayName) ? $railwayName : 'SOUTH WESTERN RAILWAY';
                     <div class="smc-tag-sub3">An SIS Group Enterprise</div>
                 </div>
 
-                <!-- Photo Box (No Stamp, No Sign) -->
                 <div class="photo-container">
-                    <div class="photo-box">
+                    <div class="photo-box-smc">
                         <img src="<?= htmlspecialchars($photoSrc) ?>" class="photo-img" alt="Photo">
                     </div>
                 </div>
 
-                <!-- Info Fields with Dotted Underlines -->
                 <div class="info-fields">
                     <div class="field-row">
                         <span class="field-label">Employee Name:</span>
@@ -859,7 +860,6 @@ $officeSub  = !empty($railwayName) ? $railwayName : 'SOUTH WESTERN RAILWAY';
                     </div>
                 </div>
 
-                <!-- Auth Sign (Text Only, No Stamp) -->
                 <div class="auth-sign-container">
                     <div class="auth-sign-text">Auth Sign</div>
                 </div>
@@ -869,7 +869,7 @@ $officeSub  = !empty($railwayName) ? $railwayName : 'SOUTH WESTERN RAILWAY';
 
         <!-- BACK SIDE -->
         <div class="card-wrapper">
-            <div class="id-card back-card">
+            <div class="id-card back-card-smc">
                 <div class="back-company-title">
                     Smc Integrated Facility Management Solutions Limited
                 </div>

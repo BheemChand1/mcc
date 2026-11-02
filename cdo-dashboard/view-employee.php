@@ -74,14 +74,21 @@ if (!empty($search)) {
     $stmt = $pdo->prepare("
         SELECT * FROM mcc_employee 
         WHERE station_id = :station_id 
-          AND (employee_id LIKE :search 
-            OR full_name LIKE :search 
-            OR designation LIKE :search 
-            OR mobile_number LIKE :search 
-            OR aadhar_number LIKE :search)
+          AND (employee_id LIKE :s1 
+            OR full_name LIKE :s2 
+            OR designation LIKE :s3 
+            OR mobile_number LIKE :s4 
+            OR aadhar_number LIKE :s5)
         ORDER BY id DESC
     ");
-    $stmt->execute(['station_id' => $stationId, 'search' => $searchWild]);
+    $stmt->execute([
+        'station_id' => $stationId,
+        's1'         => $searchWild,
+        's2'         => $searchWild,
+        's3'         => $searchWild,
+        's4'         => $searchWild,
+        's5'         => $searchWild
+    ]);
 } else {
     $stmt = $pdo->prepare("SELECT * FROM mcc_employee WHERE station_id = :station_id ORDER BY id DESC");
     $stmt->execute(['station_id' => $stationId]);

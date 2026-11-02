@@ -291,6 +291,9 @@ include 'sidebar.php';
                         <?php foreach ($daySheets as $ds): ?>
                           <div class="mb-1">
                             <span class="badge bg-indigo-subtle text-indigo font-weight-bold"><?= number_format($ds['average_score'], 1); ?>%</span>
+                            <?php if (!empty($ds['train_no'])): ?>
+                              <small class="text-muted ms-1">(Train: <?= htmlspecialchars($ds['train_no']) ?>)</small>
+                            <?php endif; ?>
                           </div>
                         <?php endforeach; ?>
                       <?php endif; ?>

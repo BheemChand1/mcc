@@ -160,8 +160,12 @@ if ($filterDirection !== '') {
 }
 
 if ($filterSearch !== '') {
-    $sql .= " AND (a.employee_code LIKE :q OR a.employee_name LIKE :q OR e.full_name LIKE :q OR a.device_name LIKE :q)";
-    $params['q'] = '%' . $filterSearch . '%';
+    $sql .= " AND (a.employee_code LIKE :q1 OR a.employee_name LIKE :q2 OR e.full_name LIKE :q3 OR a.device_name LIKE :q4)";
+    $searchWild = '%' . $filterSearch . '%';
+    $params['q1'] = $searchWild;
+    $params['q2'] = $searchWild;
+    $params['q3'] = $searchWild;
+    $params['q4'] = $searchWild;
 }
 
 $sql .= " ORDER BY a.punch_time DESC, a.id DESC";

@@ -772,12 +772,14 @@ $has_billing      = (in_array('billing_management', $active_app_keys) || in_arra
         </li>
 
         <!-- User Management -->
+        <?php if (empty($isViewer)): ?>
         <li class="nav-item">
           <a href="auditors.php" class="nav-link <?= ($currentPage == 'auditors.php') ? 'active' : '' ?>">
             <i class="nav-icon bi bi-person-badge"></i>
             <p>Manage Users</p>
           </a>
         </li>
+        <?php endif; ?>
 
         <!-- Inventory Dropdown -->
         <?php 

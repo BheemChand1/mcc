@@ -21,7 +21,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $punchTime = trim($_POST['punch_time'] ?? '');
         $punchTimeOut = trim($_POST['punch_time_out'] ?? '');
         $direction = trim($_POST['direction'] ?? '0');
-        $deviceName = trim($_POST['device_name'] ?? 'coaching');
+        $deviceName = trim($_POST['device_name'] ?? 'Coaching');
+        $deviceName = in_array(strtolower($deviceName), ['coaching', 'prt'], true)
+            ? (strtolower($deviceName) === 'prt' ? 'PRT' : 'Coaching')
+            : 'Coaching';
         // Entries edited from this page are manual entries; do not trust a client-supplied mode.
         $verMode = 'Manual';
 
@@ -62,7 +65,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $empName = trim($_POST['employee_name'] ?? '');
         $punchTime = trim($_POST['punch_time'] ?? '');
         $direction = trim($_POST['direction'] ?? '0');
-        $deviceName = trim($_POST['device_name'] ?? 'coaching');
+        $deviceName = trim($_POST['device_name'] ?? 'Coaching');
+        $deviceName = in_array(strtolower($deviceName), ['coaching', 'prt'], true)
+            ? (strtolower($deviceName) === 'prt' ? 'PRT' : 'Coaching')
+            : 'Coaching';
         // Entries created from this page are manual entries; do not trust a client-supplied mode.
         $verMode = 'Manual';
 
@@ -496,10 +502,8 @@ include 'sidebar.php';
                 <i class="bi bi-hdd-network me-1"></i> Area / Device Name:
               </label>
               <select class="form-select" id="modalEditDevice" name="device_name">
-                <option value="coaching">Coaching Depot</option>
-                <option value="prt">Platform Return (PRT)</option>
-                <option value="vande_bharat">Vande Bharat</option>
-                <option value="pit_office">Pit &amp; Office</option>
+                <option value="Coaching">Coaching</option>
+                <option value="PRT">PRT</option>
               </select>
             </div>
           </div>
@@ -581,10 +585,8 @@ include 'sidebar.php';
                 <i class="bi bi-hdd-network me-1"></i> Area / Device:
               </label>
               <select class="form-select" id="addDevice" name="device_name">
-                <option value="coaching">Coaching Depot</option>
-                <option value="prt">Platform Return (PRT)</option>
-                <option value="vande_bharat">Vande Bharat</option>
-                <option value="pit_office">Pit &amp; Office</option>
+                <option value="Coaching">Coaching</option>
+                <option value="PRT">PRT</option>
               </select>
             </div>
           </div>
@@ -635,7 +637,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       }
       if (!devMatched) {
-        devSelect.value = "coaching";
+        devSelect.value = "Coaching";
       }
 
       editModal.show();

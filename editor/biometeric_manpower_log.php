@@ -650,6 +650,18 @@ document.addEventListener("DOMContentLoaded", function () {
   const addDirection = document.getElementById("addDirection");
   const addPunchTimeOutWrap = document.getElementById("addPunchTimeOutWrap");
   const addPunchTimeOut = document.getElementById("addPunchTimeOut");
+  const addLogModal = document.getElementById("addLogModal");
+  const addPunchTime = document.getElementById("addPunchTime");
+  const setCurrentPunchTime = (input) => {
+    if (!input) return;
+    const now = new Date();
+    const pad = value => String(value).padStart(2, "0");
+    input.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  };
+  setCurrentPunchTime(addPunchTime);
+  if (addLogModal) {
+    addLogModal.addEventListener("show.bs.modal", () => setCurrentPunchTime(addPunchTime));
+  }
   if (addDirection && addPunchTimeOutWrap && addPunchTimeOut) {
     addDirection.addEventListener("change", function () {
       const both = this.value === "both";

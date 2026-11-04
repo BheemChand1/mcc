@@ -19,6 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $empCode = trim($_POST['employee_code'] ?? '');
         $empName = trim($_POST['employee_name'] ?? '');
         $punchTime = trim($_POST['punch_time'] ?? '');
+        $punchTimeOut = trim($_POST['punch_time_out'] ?? '');
         $direction = trim($_POST['direction'] ?? '0');
         $deviceName = trim($_POST['device_name'] ?? 'coaching');
         // Entries edited from this page are manual entries; do not trust a client-supplied mode.
@@ -65,31 +66,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Entries created from this page are manual entries; do not trust a client-supplied mode.
         $verMode = 'Manual';
 
-        if (!empty($empCode) && !empty($punchTime)) {
+        if (!empty($empCode) && !empty($punchTime) && ($direction !== 'both' || !empty($punchTimeOut))) {
             try {
-                $formattedPunchTime = date('Y-m-d H:i:s', strtotime($punchTime));
-
                 $insStmt = $pdo->prepare("
                     INSERT INTO attendance_logs (employee_code, employee_name, punch_time, direction, device_name, verification_mode, device_id)
                     VALUES (:emp_code, :emp_name, :punch_time, :direction, :device_name, :ver_mode, :device_id)
                 ");
-                $insStmt->execute([
-                    'emp_code' => $empCode,
-                    'emp_name' => $empName,
-                    'punch_time' => $formattedPunchTime,
-                    'direction' => $direction,
-                    'device_name' => $deviceName,
-                    'ver_mode' => $verMode,
-                    'device_id' => 'DEV_' . strtoupper(substr(preg_replace('/[^a-zA-Z0-9]/', '', $deviceName), 0, 8))
-                ]);
-
-                $newId = $pdo->lastInsertId();
-                $flashSuccess = "New attendance log entry #{$newId} for [{$empCode} - {$empName}] created successfully!";
+                $directions = $direction === 'both' ? [['time' => $punchTime, 'direction' => '0'], ['time' => $punchTimeOut, 'direction' => '1']] : [['time' => $punchTime, 'direction' => $direction]];
+                $newIds = [];
+                foreach ($directions as $entry) {
+                    $insStmt->execute([
+                        'emp_code' => $empCode,
+                        'emp_name' => $empName,
+                        'punch_time' => date('Y-m-d H:i:s', strtotime($entry['time'])),
+                        'direction' => $entry['direction'],
+                        'device_name' => $deviceName,
+                        'ver_mode' => $verMode,
+                        'device_id' => 'DEV_' . strtoupper(substr(preg_replace('/[^a-zA-Z0-9]/', '', $deviceName), 0, 8))
+                    ]);
+                    $newIds[] = $pdo->lastInsertId();
+                }
+                $flashSuccess = "New attendance log entr" . (count($newIds) > 1 ? "ies" : "y") . " #" . implode(', #', $newIds) . " created successfully for [{$empCode} - {$empName}].";
             } catch (Exception $e) {
                 $flashError = "Failed to add attendance log: " . $e->getMessage();
             }
         } else {
-            $flashError = "Please provide Employee ID and Punch Date/Time.";
+            $flashError = "Please provide Employee ID and the required punch date/time fields.";
         }
     } elseif ($action === 'delete_log') {
         $logId = intval($_POST['log_id'] ?? 0);
@@ -554,8 +556,16 @@ include 'sidebar.php';
               <select class="form-select fw-bold" id="addDirection" name="direction" required>
                 <option value="0">IN (Login / Shift Start)</option>
                 <option value="1">OUT (Logout / Shift End)</option>
+                <option value="both">Both IN &amp; OUT</option>
               </select>
             </div>
+          </div>
+
+          <div class="mb-3 d-none" id="addPunchTimeOutWrap">
+            <label for="addPunchTimeOut" class="form-label small fw-bold text-secondary mb-1">
+              <i class="bi bi-calendar-event me-1"></i> OUT Punch Date &amp; Time: <span class="text-danger">*</span>
+            </label>
+            <input type="datetime-local" step="1" class="form-control" id="addPunchTimeOut" name="punch_time_out">
           </div>
 
           <div class="mb-3">
@@ -635,6 +645,16 @@ document.addEventListener("DOMContentLoaded", function () {
   // Auto-fill employee name when selecting employee_code in add modal
   const addEmpCodeInput = document.getElementById("addEmpCode");
   const addEmpNameInput = document.getElementById("addEmpName");
+  const addDirection = document.getElementById("addDirection");
+  const addPunchTimeOutWrap = document.getElementById("addPunchTimeOutWrap");
+  const addPunchTimeOut = document.getElementById("addPunchTimeOut");
+  if (addDirection && addPunchTimeOutWrap && addPunchTimeOut) {
+    addDirection.addEventListener("change", function () {
+      const both = this.value === "both";
+      addPunchTimeOutWrap.classList.toggle("d-none", !both);
+      addPunchTimeOut.required = both;
+    });
+  }
   if (addEmpCodeInput && addEmpNameInput) {
     addEmpCodeInput.addEventListener("input", function() {
       const val = this.value.trim();

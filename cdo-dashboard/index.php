@@ -162,7 +162,10 @@ $mccAggregate = function (string $table, string $from, string $to, ?string $filt
             $st = $pdo->prepare("
                 SELECT COUNT(DISTINCT train_no)  AS trains,
                        COUNT(DISTINCT token_id)  AS rakes,
-                       COUNT(DISTINCT coach_no)  AS coaches,
+                       COUNT(DISTINCT CASE
+                           WHEN NULLIF(TRIM(coach_no), '') IS NOT NULL
+                           THEN CONCAT(report_date, '|', COALESCE(token_id, ''), '|', TRIM(coach_no))
+                       END) AS coaches,
                        AVG(CASE WHEN score_value REGEXP '{$scoreRe}'
                            THEN CAST(score_value AS DECIMAL(8,2)) ELSE NULL END) AS avg_score
                 FROM {$table}

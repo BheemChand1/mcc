@@ -184,6 +184,18 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Display one row per employee per date, with IN and OUT together.
+$attendanceRows = [];
+foreach ($logs as $row) {
+    $key = $row['employee_code'] . '|' . date('Y-m-d', strtotime($row['punch_time']));
+    if (!isset($attendanceRows[$key])) {
+        $attendanceRows[$key] = ['base' => $row, 'in' => null, 'out' => null];
+    }
+    $isIn = in_array(strtolower(trim((string)$row['direction'])), ['0', 'in', 'checkin'], true);
+    $attendanceRows[$key][$isIn ? 'in' : 'out'] = $row;
+}
+$attendanceRows = array_values($attendanceRows);
+
 // Metrics calculation
 $totalLogs = count($logs);
 $uniqueEmployees = [];
@@ -316,7 +328,7 @@ include 'sidebar.php';
               <i class="bi bi-table text-primary me-1"></i> Attendance Logs Records
             </h5>
             <span class="badge bg-primary-subtle text-primary rounded-pill px-3">
-              Showing <?= count($logs) ?> Entries
+              Showing <?= count($attendanceRows) ?> Entries
             </span>
           </div>
           <div class="small text-muted">
@@ -340,7 +352,7 @@ include 'sidebar.php';
                 </tr>
               </thead>
               <tbody>
-                <?php if (empty($logs)): ?>
+                <?php if (empty($attendanceRows)): ?>
                   <tr>
                     <td colspan="8" class="text-center py-5 text-muted">
                       <div class="py-4">
@@ -351,13 +363,12 @@ include 'sidebar.php';
                     </td>
                   </tr>
                 <?php else: ?>
-                  <?php foreach ($logs as $row): 
-                    $dir = strtolower(trim((string)$row['direction']));
-                    $isIN = ($dir === '0' || $dir === 'in' || $dir === 'checkin');
+                  <?php foreach ($attendanceRows as $attendanceRow): 
+                    $row = $attendanceRow['base'];
                     $displayName = !empty($row['full_name_resolved']) ? $row['full_name_resolved'] : (!empty($row['employee_name']) ? $row['employee_name'] : $row['employee_code']);
-                    $punchFormatted = date('d-M-Y H:i:s', strtotime($row['punch_time']));
-                    $punchTimeOnly = date('h:i:s A', strtotime($row['punch_time']));
                     $punchDateOnly = date('d-M-Y', strtotime($row['punch_time']));
+                    $inRow = $attendanceRow['in'];
+                    $outRow = $attendanceRow['out'];
                   ?>
                     <tr>
                       <td class="ps-3 fw-bold text-muted">#<?= $row['id'] ?></td>
@@ -366,9 +377,8 @@ include 'sidebar.php';
                           <span class="badge bg-light text-dark border px-2 py-1">
                             <i class="bi bi-calendar3 me-1 text-primary"></i> <?= $punchDateOnly ?>
                           </span>
-                          <span class="fw-bold text-dark">
-                            <i class="bi bi-clock-fill text-info me-1"></i> <?= $punchTimeOnly ?>
-                          </span>
+                          <span class="fw-bold text-success">IN: <?= $inRow ? date('h:i:s A', strtotime($inRow['punch_time'])) : '--' ?></span>
+                          <span class="fw-bold text-warning">OUT: <?= $outRow ? date('h:i:s A', strtotime($outRow['punch_time'])) : '--' ?></span>
                         </div>
                       </td>
                       <td>
@@ -383,15 +393,8 @@ include 'sidebar.php';
                         <?php endif; ?>
                       </td>
                       <td class="text-center">
-                        <?php if ($isIN): ?>
-                          <span class="badge bg-success text-white px-3 py-1 rounded-pill" style="font-size: 11.5px; font-weight: 700;">
-                            <i class="bi bi-box-arrow-in-right me-1"></i> IN
-                          </span>
-                        <?php else: ?>
-                          <span class="badge bg-warning text-dark px-3 py-1 rounded-pill" style="font-size: 11.5px; font-weight: 700;">
-                            <i class="bi bi-box-arrow-right me-1"></i> OUT
-                          </span>
-                        <?php endif; ?>
+                        <span class="badge bg-success text-white px-2 py-1 rounded-pill">IN</span>
+                        <span class="badge bg-warning text-dark px-2 py-1 rounded-pill">OUT</span>
                       </td>
                       <td>
                         <span class="badge bg-secondary-subtle text-secondary px-2 py-1 text-uppercase" style="font-size: 11.5px; font-weight: 600;">

@@ -214,7 +214,7 @@ foreach ($logs as $l) {
 $distinctEmpCount = count($uniqueEmployees);
 
 // Fetch active employees for autocomplete dropdown
-$empListStmt = $pdo->query("SELECT employee_id, full_name, designation FROM mcc_employee ORDER BY full_name ASC");
+$empListStmt = $pdo->query("SELECT employee_id, full_name, designation, department FROM mcc_employee ORDER BY full_name ASC");
 $allEmployees = $empListStmt ? $empListStmt->fetchAll(PDO::FETCH_ASSOC) : [];
 
 include 'header.php';
@@ -561,7 +561,7 @@ include 'sidebar.php';
               <input type="text" class="form-control font-monospace fw-bold" id="addEmpCode" name="employee_code" placeholder="e.g. DEP101" required list="employeesDatalist">
               <datalist id="employeesDatalist">
                 <?php foreach ($allEmployees as $emp): ?>
-                  <option value="<?= htmlspecialchars($emp['employee_id']) ?>" data-name="<?= htmlspecialchars($emp['full_name']) ?>"><?= htmlspecialchars($emp['full_name']) ?> (<?= htmlspecialchars($emp['designation']) ?>)</option>
+                  <option value="<?= htmlspecialchars($emp['employee_id']) ?>" data-name="<?= htmlspecialchars($emp['full_name']) ?>" data-location="<?= htmlspecialchars($emp['department'] ?? '') ?>"><?= htmlspecialchars($emp['full_name']) ?> (<?= htmlspecialchars($emp['designation']) ?>)</option>
                 <?php endforeach; ?>
               </datalist>
             </div>
@@ -659,6 +659,25 @@ document.addEventListener("DOMContentLoaded", function () {
   // Auto-fill employee name when selecting employee_code in add modal
   const addEmpCodeInput = document.getElementById("addEmpCode");
   const addEmpNameInput = document.getElementById("addEmpName");
+  const addDevice = document.getElementById("addDevice");
+  const employeesDatalist = document.getElementById("employeesDatalist");
+  const allEmployeeOptions = employeesDatalist ? Array.from(employeesDatalist.options).map(option => option.cloneNode(true)) : [];
+  const filterEmployeesByLocation = () => {
+    if (!addDevice || !employeesDatalist) return;
+    const location = addDevice.value.toLowerCase();
+    employeesDatalist.replaceChildren(...allEmployeeOptions.filter(option => {
+      const employeeLocation = (option.dataset.location || '').toLowerCase();
+      return employeeLocation === location;
+    }).map(option => option.cloneNode(true)));
+    if (addEmpCodeInput && !Array.from(employeesDatalist.options).some(option => option.value === addEmpCodeInput.value)) {
+      addEmpCodeInput.value = "";
+      if (addEmpNameInput) addEmpNameInput.value = "";
+    }
+  };
+  if (addDevice) {
+    addDevice.addEventListener("change", filterEmployeesByLocation);
+    filterEmployeesByLocation();
+  }
   const addDirection = document.getElementById("addDirection");
   const addPunchTimeOutWrap = document.getElementById("addPunchTimeOutWrap");
   const addPunchTimeOut = document.getElementById("addPunchTimeOut");

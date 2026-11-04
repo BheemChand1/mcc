@@ -342,10 +342,11 @@ include 'sidebar.php';
               <thead class="table-dark" style="background: #07203a; border-color: #0b476a;">
                 <tr>
                   <th class="ps-3 py-3" style="width: 70px;">Log ID</th>
-                  <th class="py-3">Date &amp; Punch Time</th>
+                  <th class="py-3">Date</th>
+                  <th class="py-3 text-center">IN</th>
+                  <th class="py-3 text-center">OUT</th>
                   <th class="py-3">Employee ID</th>
                   <th class="py-3">Employee Name</th>
-                  <th class="py-3 text-center" style="width: 110px;">Direction</th>
                   <th class="py-3">Location / Device</th>
                   <th class="py-3">Verification</th>
                   <th class="py-3 text-end pe-3 no-print" style="width: 140px;">Action</th>
@@ -354,7 +355,7 @@ include 'sidebar.php';
               <tbody>
                 <?php if (empty($attendanceRows)): ?>
                   <tr>
-                    <td colspan="8" class="text-center py-5 text-muted">
+                    <td colspan="9" class="text-center py-5 text-muted">
                       <div class="py-4">
                         <i class="bi bi-inbox fs-1 text-secondary opacity-50 d-block mb-2"></i>
                         <h6 class="fw-bold text-secondary">No attendance logs found</h6>
@@ -373,13 +374,25 @@ include 'sidebar.php';
                     <tr>
                       <td class="ps-3 fw-bold text-muted">#<?= $row['id'] ?></td>
                       <td>
-                        <div class="d-flex align-items-center gap-2">
-                          <span class="badge bg-light text-dark border px-2 py-1">
-                            <i class="bi bi-calendar3 me-1 text-primary"></i> <?= $punchDateOnly ?>
-                          </span>
-                          <span class="fw-bold text-success">IN: <?= $inRow ? date('h:i:s A', strtotime($inRow['punch_time'])) : '--' ?></span>
-                          <span class="fw-bold text-warning">OUT: <?= $outRow ? date('h:i:s A', strtotime($outRow['punch_time'])) : '--' ?></span>
-                        </div>
+                        <span class="badge bg-light text-dark border px-2 py-1">
+                          <i class="bi bi-calendar3 me-1 text-primary"></i> <?= $punchDateOnly ?>
+                        </span>
+                      </td>
+                      <td class="text-center">
+                        <?php if ($inRow): ?>
+                          <div class="fw-bold text-success"><?= date('h:i:s A', strtotime($inRow['punch_time'])) ?></div>
+                          <div class="small text-muted"><?= date('d-M-Y', strtotime($inRow['punch_time'])) ?></div>
+                        <?php else: ?>
+                          <span class="badge bg-secondary-subtle text-secondary">Pending</span>
+                        <?php endif; ?>
+                      </td>
+                      <td class="text-center">
+                        <?php if ($outRow): ?>
+                          <div class="fw-bold text-warning"><?= date('h:i:s A', strtotime($outRow['punch_time'])) ?></div>
+                          <div class="small text-muted"><?= date('d-M-Y', strtotime($outRow['punch_time'])) ?></div>
+                        <?php else: ?>
+                          <span class="badge bg-secondary-subtle text-secondary">Pending</span>
+                        <?php endif; ?>
                       </td>
                       <td>
                         <span class="badge bg-dark-subtle text-dark px-2 py-1 font-monospace fw-bold">
@@ -391,10 +404,6 @@ include 'sidebar.php';
                         <?php if (!empty($row['designation'])): ?>
                           <div class="small text-muted" style="font-size: 11.5px;"><?= htmlspecialchars($row['designation']) ?></div>
                         <?php endif; ?>
-                      </td>
-                      <td class="text-center">
-                        <span class="badge bg-success text-white px-2 py-1 rounded-pill">IN</span>
-                        <span class="badge bg-warning text-dark px-2 py-1 rounded-pill">OUT</span>
                       </td>
                       <td>
                         <span class="badge bg-secondary-subtle text-secondary px-2 py-1 text-uppercase" style="font-size: 11.5px; font-weight: 600;">

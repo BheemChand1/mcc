@@ -4,6 +4,7 @@ require_once 'auth.php';
 // Target month & year selection
 $selectedMonth = $_GET['month'] ?? date('m');
 $selectedYear  = $_GET['year']  ?? date('Y');
+$selectedTrain = trim($_GET['train_no'] ?? '');
 
 // Standardize
 $selectedMonth = str_pad($selectedMonth, 2, '0', STR_PAD_LEFT);
@@ -29,14 +30,22 @@ $divisionName   = strtoupper($stnData['division_name'] ?? 'LUCKNOW - NER');
 $stationName    = ucfirst($stnData['station_name'] ?? 'Gorakhpur');
 $contractorName = $stnData['contractor_name'] ?? 'Prime Cleaning Services';
 
+// Fetch trains available in selected month
+$trainsStmt = $pdo->prepare("SELECT DISTINCT train_no FROM mcc_intensive_scorecard_2_report WHERE station_id = :station_id AND report_date BETWEEN :start_date AND :end_date AND train_no IS NOT NULL AND train_no <> '' ORDER BY train_no ASC");
+$trainsStmt->execute(['station_id' => $stationId, 'start_date' => $startDate, 'end_date' => $endDate]);
+$availableTrains = $trainsStmt->fetchAll(PDO::FETCH_COLUMN);
+
 // Fetch distinct tokens in selected month from mcc_intensive_scorecard_2_report
-$stmt = $pdo->prepare("
+$tokenSql = "
     SELECT DISTINCT token_id, train_no, report_date 
     FROM mcc_intensive_scorecard_2_report 
     WHERE station_id = :station_id AND report_date BETWEEN :start_date AND :end_date 
-    ORDER BY report_date ASC, token_id ASC
-");
-$stmt->execute(['station_id' => $stationId, 'start_date' => $startDate, 'end_date' => $endDate]);
+";
+$tokenParams = ['station_id' => $stationId, 'start_date' => $startDate, 'end_date' => $endDate];
+if ($selectedTrain !== '') { $tokenSql .= " AND train_no = :train_no"; $tokenParams['train_no'] = $selectedTrain; }
+$tokenSql .= " ORDER BY report_date ASC, token_id ASC";
+$stmt = $pdo->prepare($tokenSql);
+$stmt->execute($tokenParams);
 $tokens = $stmt->fetchAll();
 
 $sheets = [];
@@ -162,6 +171,12 @@ include 'sidebar.php';
                 }
                 ?>
               </select>
+            </div>
+            <div class="col-auto">
+              <label for="train_no" class="form-label mb-0 fw-bold">Train:</label>
+            </div>
+            <div class="col-auto">
+              <select name="train_no" id="train_no" class="form-select form-select-sm" style="min-width: 130px;"><option value="">All Trains</option><?php foreach ($availableTrains as $train): ?><option value="<?= htmlspecialchars($train, ENT_QUOTES, 'UTF-8'); ?>" <?= ((string)$train === $selectedTrain) ? 'selected' : ''; ?>><?= htmlspecialchars($train); ?></option><?php endforeach; ?></select>
             </div>
             <div class="col-auto">
               <button type="submit" class="btn btn-primary btn-sm px-3 fw-bold">Open Summary</button>

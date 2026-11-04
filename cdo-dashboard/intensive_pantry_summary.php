@@ -8,6 +8,7 @@ require_once 'auth.php';
 // Target month & year selection
 $selectedMonth = $_GET['month'] ?? date('m');
 $selectedYear  = $_GET['year']  ?? date('Y');
+$selectedTrain = trim($_GET['train_no'] ?? '');
 
 // Standardize
 $selectedMonth = str_pad($selectedMonth, 2, '0', STR_PAD_LEFT);
@@ -32,6 +33,10 @@ $railwayName    = strtoupper($stnData['zone_name'] ?? 'NORTH EASTERN RAILWAY');
 $divisionName   = strtoupper($stnData['division_name'] ?? 'LUCKNOW - NER');
 $stationName    = ucfirst($stnData['station_name'] ?? 'Gorakhpur');
 $contractorName = $stnData['contractor_name'] ?? 'Prime Cleaning Services';
+
+$trainsStmt = $pdo->prepare("SELECT DISTINCT train_no FROM mcc_intensive_pantry_report WHERE station_id = :station_id AND report_date BETWEEN :start_date AND :end_date AND train_no IS NOT NULL AND train_no <> '' ORDER BY train_no ASC");
+$trainsStmt->execute(['station_id' => $stationId, 'start_date' => $startDate, 'end_date' => $endDate]);
+$availableTrains = $trainsStmt->fetchAll(PDO::FETCH_COLUMN);
 
 // 1. Fetch active parameters and subparameters from database (mcc_intensive_pantry_param & sub_param)
 $paramStmt = $pdo->prepare("
@@ -80,6 +85,7 @@ $tokensStmt = $pdo->prepare("
     SELECT DISTINCT token_id, train_no 
     FROM mcc_intensive_pantry_report
     WHERE station_id = :station_id AND report_date = :report_date
+      AND (:train_no = '' OR train_no = :train_no)
     ORDER BY id ASC
 ");
 
@@ -98,7 +104,8 @@ $totalMonthlyInspections = 0;
 foreach ($activeDates as $rDate) {
     $tokensStmt->execute([
         'station_id'  => $stationId,
-        'report_date' => $rDate
+        'report_date' => $rDate,
+        'train_no' => $selectedTrain
     ]);
     $tokensOnDate = $tokensStmt->fetchAll();
 
@@ -277,6 +284,12 @@ include 'sidebar.php';
                     <form method="GET" action="intensive_pantry_summary.php" class="row g-3 align-items-center justify-content-center">
                         <div class="col-auto">
                             <label for="month" class="form-label mb-0 fw-bold"><i class="bi bi-calendar3 text-primary me-1"></i> Month:</label>
+                        </div>
+                        <div class="col-auto">
+                            <label for="train_no" class="form-label mb-0 fw-bold">Train:</label>
+                        </div>
+                        <div class="col-auto">
+                            <select name="train_no" id="train_no" class="form-select form-select-sm" style="min-width: 130px;"><option value="">All Trains</option><?php foreach ($availableTrains as $train): ?><option value="<?= htmlspecialchars($train, ENT_QUOTES, 'UTF-8'); ?>" <?= ((string)$train === $selectedTrain) ? 'selected' : ''; ?>><?= htmlspecialchars($train); ?></option><?php endforeach; ?></select>
                         </div>
                         <div class="col-auto">
                             <select name="month" id="month" class="form-select form-select-sm" style="min-width: 130px;">

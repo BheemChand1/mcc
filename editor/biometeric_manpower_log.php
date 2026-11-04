@@ -21,7 +21,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $punchTime = trim($_POST['punch_time'] ?? '');
         $direction = trim($_POST['direction'] ?? '0');
         $deviceName = trim($_POST['device_name'] ?? 'coaching');
-        $verMode = trim($_POST['verification_mode'] ?? 'Fingerprint');
+        // Entries edited from this page are manual entries; do not trust a client-supplied mode.
+        $verMode = 'Manual';
 
         if ($logId > 0 && !empty($empCode) && !empty($punchTime)) {
             try {
@@ -61,7 +62,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $punchTime = trim($_POST['punch_time'] ?? '');
         $direction = trim($_POST['direction'] ?? '0');
         $deviceName = trim($_POST['device_name'] ?? 'coaching');
-        $verMode = trim($_POST['verification_mode'] ?? 'Manual');
+        // Entries created from this page are manual entries; do not trust a client-supplied mode.
+        $verMode = 'Manual';
 
         if (!empty($empCode) && !empty($punchTime)) {
             try {
@@ -403,7 +405,6 @@ include 'sidebar.php';
                                 data-time="<?= date('Y-m-d\TH:i:s', strtotime($row['punch_time'])) ?>"
                                 data-direction="<?= htmlspecialchars($row['direction']) ?>"
                                 data-device="<?= htmlspecialchars($row['device_name'] ?: 'coaching') ?>"
-                                data-vermode="<?= htmlspecialchars($row['verification_mode'] ?: 'Fingerprint') ?>"
                                 title="Edit this punch log">
                           <i class="bi bi-pencil-square" style="color: #000000 !important; font-size: 13px;"></i> 
                           <span style="color: #000000 !important; font-weight: 700 !important;">Edit</span>
@@ -499,17 +500,6 @@ include 'sidebar.php';
                 <option value="pit_office">Pit &amp; Office</option>
               </select>
             </div>
-            <div class="col-sm-6">
-              <label for="modalEditVerMode" class="form-label small fw-bold text-secondary mb-1">
-                <i class="bi bi-shield-lock me-1"></i> Verification:
-              </label>
-              <select class="form-select" id="modalEditVerMode" name="verification_mode">
-                <option value="Fingerprint">Fingerprint</option>
-                <option value="Face">Face Recognition</option>
-                <option value="Card">RFID Card</option>
-                <option value="Manual">Manual Entry</option>
-              </select>
-            </div>
           </div>
         </div>
 
@@ -575,8 +565,8 @@ include 'sidebar.php';
             <input type="text" class="form-control" id="addEmpName" name="employee_name" placeholder="e.g. Ramesh Kumar">
           </div>
 
-          <div class="row g-2 mb-2">
-            <div class="col-sm-6">
+          <div class="mb-2">
+            <div class="col-sm-6 px-0">
               <label for="addDevice" class="form-label small fw-bold text-secondary mb-1">
                 <i class="bi bi-hdd-network me-1"></i> Area / Device:
               </label>
@@ -585,17 +575,6 @@ include 'sidebar.php';
                 <option value="prt">Platform Return (PRT)</option>
                 <option value="vande_bharat">Vande Bharat</option>
                 <option value="pit_office">Pit &amp; Office</option>
-              </select>
-            </div>
-            <div class="col-sm-6">
-              <label for="addVerMode" class="form-label small fw-bold text-secondary mb-1">
-                <i class="bi bi-shield-lock me-1"></i> Verification Mode:
-              </label>
-              <select class="form-select" id="addVerMode" name="verification_mode">
-                <option value="Manual" selected>Manual Entry</option>
-                <option value="Fingerprint">Fingerprint</option>
-                <option value="Face">Face Recognition</option>
-                <option value="Card">RFID Card</option>
               </select>
             </div>
           </div>
@@ -626,7 +605,6 @@ document.addEventListener("DOMContentLoaded", function () {
       const time = this.dataset.time;
       const dir = this.dataset.direction;
       const dev = this.dataset.device;
-      const vermode = this.dataset.vermode;
 
       document.getElementById("modalEditLogId").value = logId;
       document.getElementById("modalEditLogIdDisplay").innerText = "#" + logId;
@@ -649,8 +627,6 @@ document.addEventListener("DOMContentLoaded", function () {
       if (!devMatched) {
         devSelect.value = "coaching";
       }
-
-      document.getElementById("modalEditVerMode").value = vermode || "Fingerprint";
 
       editModal.show();
     });

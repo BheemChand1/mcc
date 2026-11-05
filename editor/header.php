@@ -413,6 +413,33 @@ if (isset($page_report_mapping[$currentPage])) {
       opacity: 0.95 !important;
     }
 
+    /* Keep the desktop date filter compact; mobile rules below may stack it. */
+    @media (min-width: 769px) {
+      form.report-filter {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        justify-content: center !important;
+        align-items: center !important;
+      }
+
+      form.report-filter > label {
+        display: inline-flex !important;
+        width: auto !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+      }
+
+      form.report-filter > input[type="date"] {
+        display: inline-block !important;
+        width: 170px !important;
+        min-width: 170px !important;
+        max-width: 170px !important;
+        height: 42px !important;
+        flex: 0 0 170px !important;
+        margin: 0 !important;
+      }
+    }
+
     /* Force remove inner vertical scrollbars globally */
     html,
     body {

@@ -461,7 +461,7 @@ $extraStyles = "
     font-size:12px;
     font-weight:600;
     white-space:nowrap;
-    line-height:.5;
+    line-height:1.4;
 }
 
 .meta-item span{
@@ -794,7 +794,7 @@ include 'sidebar.php';
                                                                 class="btn btn-danger btn-sm py-0 px-1 mt-1 no-print shadow-xs" 
                                                                 onclick="return confirm('Are you sure you want to permanently remove coach <?= htmlspecialchars($coach) ?> from this scorecard?')" 
                                                                 title="Remove coach <?= htmlspecialchars($coach) ?>" 
-                                                                style="font-size: 10px; line-height: 1.3; font-weight: 700; border-radius: 3px;">
+                                                                style="font-size: 10px; line-height: 1.3; font-weight: 700; border-radius: 3px; color: #ffffff !important; background-color: #dc3545 !important; border-color: #dc3545 !important; display: inline-flex; align-items: center; gap: 3px;">
                                                             <i class="bi bi-x-circle"></i> Remove
                                                         </button>
                                                     <?php else: ?>

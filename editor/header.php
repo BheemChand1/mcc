@@ -304,7 +304,8 @@ if (isset($page_report_mapping[$currentPage])) {
       width: 100% !important;
       max-width: 100% !important;
       box-sizing: border-box !important;
-      flex-wrap: nowrap !important;
+      flex-wrap: wrap !important;
+      row-gap: 10px !important;
     }
 
     .report-filter label {
@@ -337,6 +338,28 @@ if (isset($page_report_mapping[$currentPage])) {
       flex: 0 0 auto !important;
       color: #334155 !important;
       background-color: #f8fafc !important;
+    }
+
+    .meta-row {
+      flex-wrap: wrap !important;
+      row-gap: 12px !important;
+    }
+
+    .meta-item {
+      line-height: 1.4 !important;
+      min-height: 32px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+    }
+
+    .meta-item input[type="date"] {
+      width: 145px !important;
+      min-width: 145px !important;
+      height: 32px !important;
+      margin: 0 !important;
+      padding: 4px 7px !important;
+      line-height: 1.2 !important;
     }
 
     .report-filter .btn-go,

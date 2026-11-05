@@ -142,14 +142,13 @@ function processShiftRecords($records) {
         $firstPunch = $punches[0]['time'];
         $lastPunch = count($punches) > 1 ? $punches[count($punches) - 1]['time'] : null;
 
-        // Check if explicit IN (0) / OUT (1) punches exist
+        // Direction rule: exactly 0 is IN; every other value is OUT.
         $inPunch = null;
         $outPunch = null;
         foreach ($punches as $p) {
-            if ($p['direction'] === '0' && $inPunch === null) {
+            if ((string)$p['direction'] === '0' && $inPunch === null) {
                 $inPunch = $p['time'];
-            }
-            if ($p['direction'] === '1') {
+            } elseif ((string)$p['direction'] !== '0') {
                 $outPunch = $p['time'];
             }
         }

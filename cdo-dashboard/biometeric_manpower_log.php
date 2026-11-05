@@ -156,9 +156,10 @@ function processShiftRecords($records) {
         $loginTime = $inPunch ?: $firstPunch;
         $logoutTime = $outPunch ?: ($lastPunch !== $firstPunch ? $lastPunch : null);
 
-        $loginDisplay = date('H:i:s', strtotime($loginTime));
-        $logoutDisplay = $logoutTime ? date('H:i:s', strtotime($logoutTime)) : '-';
-        $loginDateDisplay = date('d-m-Y', strtotime($loginTime));
+        // Keep the complete database timestamp in each punch column so overnight
+        // IN/OUT records retain their actual calendar dates.
+        $loginDisplay = date('d-m-Y H:i:s', strtotime($loginTime));
+        $logoutDisplay = $logoutTime ? date('d-m-Y H:i:s', strtotime($logoutTime)) : '-';
 
         $diffSeconds = 0;
         // Calculate total shift hours
@@ -176,7 +177,6 @@ function processShiftRecords($records) {
 
         $rows[] = [
             'cycle_date' => $item['cycle_date'],
-            'date_display' => $loginDateDisplay,
             'shift' => $item['shift'],
             'employee_code' => $item['employee_code'],
             'employee_name' => $item['employee_name'],
@@ -280,15 +280,14 @@ function renderReportSheets($datesInRange, $dataRows, $reportTitle, $railwayName
                   <th>S.No</th>
                   <th>Employee Name</th>
                   <th>Employee ID</th>
-                  <th>Date</th>
-                  <th>Login Time</th>
-                  <th>Logout Time</th>
+                  <th>Login Date &amp; Time</th>
+                  <th>Logout Date &amp; Time</th>
                   <th>Total Shift Hours</th>
                 </tr>
               </thead>
               <tbody>
                 <?php if (empty($sheetRows)): ?>
-                  <tr><td colspan="7" class="empty-data-row">No attendance records found for <?= htmlspecialchars($emptyCategoryName) ?> on <?= $sheetDateDisplay ?>.</td></tr>
+                  <tr><td colspan="6" class="empty-data-row">No attendance records found for <?= htmlspecialchars($emptyCategoryName) ?> on <?= $sheetDateDisplay ?>.</td></tr>
                 <?php else: ?>
                   <?php 
                   $serial = 1;
@@ -296,17 +295,16 @@ function renderReportSheets($datesInRange, $dataRows, $reportTitle, $railwayName
                       $shiftRows = array_filter($sheetRows, function($r) use ($s) { return $r['shift'] === $s; });
                   ?>
                     <tr class="shift-row">
-                      <td colspan="7"><?= $shiftLabels[$s] ?> &mdash; (<?= count($shiftRows) ?> Present)</td>
+                      <td colspan="6"><?= $shiftLabels[$s] ?> &mdash; (<?= count($shiftRows) ?> Present)</td>
                     </tr>
                     <?php if (empty($shiftRows)): ?>
-                      <tr><td colspan="7" style="color:#888; font-style:italic;">No records for Shift <?= $s ?></td></tr>
+                      <tr><td colspan="6" style="color:#888; font-style:italic;">No records for Shift <?= $s ?></td></tr>
                     <?php else: ?>
                       <?php foreach ($shiftRows as $row): ?>
                         <tr>
                           <td><?= $serial++ ?></td>
                           <td class="name"><?= htmlspecialchars($row['employee_name']) ?></td>
                           <td><?= htmlspecialchars($row['employee_code']) ?></td>
-                          <td><?= htmlspecialchars($row['date_display']) ?></td>
                           <td><?= htmlspecialchars($row['login']) ?></td>
                           <td><?= htmlspecialchars($row['logout']) ?></td>
                           <td><?= htmlspecialchars($row['hours']) ?></td>

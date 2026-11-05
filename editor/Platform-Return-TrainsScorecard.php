@@ -333,43 +333,42 @@ if ($isFallback) {
 
         // Calculations using dynamically loaded parameters
         $internalSum = 0;
-        $internalSubParamCount = 0;
+        $internalValidCount = 0;
         if ($internalParamId && isset($dynamicParameters[$internalParamId])) {
-            $internalSubParamCount = count($dynamicParameters[$internalParamId]['sub_parameters']);
             foreach ($coaches as $coach) {
                 if ($coach === '') continue;
                 foreach ($dynamicParameters[$internalParamId]['sub_parameters'] as $sp) {
                     $val = $scoresData[$sp['id']][$coach] ?? null;
                     if ($val !== null && is_numeric($val)) {
                         $internalSum += intval($val);
+                        $internalValidCount++;
                     }
                 }
             }
         }
-        $internalMax = $attendedCount * $internalSubParamCount * 3;
+        $internalMax = $internalValidCount * 3;
         $internalPercentage = $internalMax > 0 ? round(($internalSum / $internalMax) * 100, 1) : 0;
 
         $externalSum = 0;
-        $externalSubParamCount = 0;
+        $externalValidCount = 0;
         if ($externalParamId && isset($dynamicParameters[$externalParamId])) {
-            $externalSubParamCount = count($dynamicParameters[$externalParamId]['sub_parameters']);
             foreach ($coaches as $coach) {
                 if ($coach === '') continue;
                 foreach ($dynamicParameters[$externalParamId]['sub_parameters'] as $sp) {
                     $val = $scoresData[$sp['id']][$coach] ?? null;
                     if ($val !== null && is_numeric($val)) {
                         $externalSum += intval($val);
+                        $externalValidCount++;
                     }
                 }
             }
         }
-        $externalMax = $attendedCount * $externalSubParamCount * 3;
+        $externalMax = $externalValidCount * 3;
         $externalPercentage = $externalMax > 0 ? round(($externalSum / $externalMax) * 100, 1) : 0;
 
         $wateringYes = 0;
-        $wateringSubParamCount = 0;
+        $wateringValidCount = 0;
         if ($wateringParamId && isset($dynamicParameters[$wateringParamId])) {
-            $wateringSubParamCount = count($dynamicParameters[$wateringParamId]['sub_parameters']);
             foreach ($coaches as $coach) {
                 if ($coach === '') continue;
                 foreach ($dynamicParameters[$wateringParamId]['sub_parameters'] as $sp) {
@@ -377,11 +376,14 @@ if ($isFallback) {
                     $valUpper = strtoupper(trim((string)$val));
                     if ($valUpper === 'Y' || $valUpper === '1') {
                         $wateringYes++;
+                        $wateringValidCount++;
+                    } elseif ($valUpper !== 'NA' && $valUpper !== '') {
+                        $wateringValidCount++;
                     }
                 }
             }
         }
-        $wateringMaxCount = $attendedCount * $wateringSubParamCount;
+        $wateringMaxCount = $wateringValidCount;
         $wateringPercentage = $wateringMaxCount > 0 ? round(($wateringYes / $wateringMaxCount) * 100, 1) : 0;
 
         $auditById = $firstRow['audit_by'] ?? null;
